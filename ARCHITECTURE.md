@@ -143,7 +143,10 @@ FloLabs_Chronos/
 │   │       ├── projects/route.ts
 │   │       ├── tags/route.ts
 │   │       ├── users/route.ts       # Admin user management
-│   │       └── sse/route.ts         # SSE endpoint for live updates
+│   │       ├── sse/route.ts          # SSE endpoint for live updates
+│   │       └── cron/
+│   │           ├── notion-sync/route.ts   # Batch sync to Notion (every 5 min)
+│   │           └── daily-summary/route.ts # Discord daily summaries (daily 18:00)
 │   ├── components/
 │   │   ├── ui/              # Design system primitives
 │   │   ├── timer/           # Timer display, controls
@@ -157,6 +160,8 @@ FloLabs_Chronos/
 │   │   │   └── migrations/ # SQL migrations
 │   │   ├── redis.ts         # Redis/KV client
 │   │   ├── auth.ts          # Auth.js config
+│   │   ├── notion.ts        # Notion API sync client
+│   │   ├── discord.ts       # Discord webhook helper
 │   │   └── utils.ts         # Shared helpers
 │   ├── hooks/
 │   │   ├── use-timer.ts     # Timer state + local tick
@@ -166,6 +171,7 @@ FloLabs_Chronos/
 ├── drizzle.config.ts
 ├── tailwind.config.ts       # Vellum Ink design tokens
 ├── next.config.ts
+├── vercel.json              # Cron jobs (Notion sync, daily summary)
 ├── package.json
 └── .env.example
 ```
@@ -220,7 +226,128 @@ KV_REST_API_URL=        # Vercel KV REST URL
 KV_REST_API_TOKEN=      # Vercel KV REST token
 NEXTAUTH_SECRET=        # Auth.js secret
 NEXTAUTH_URL=           # App URL
+NOTION_API_KEY=         # Notion internal integration token
+NOTION_DATABASE_ID=     # Notion database ID for time entries backup
+CRON_SECRET=            # Secret to protect cron endpoints
 ```
+
+---
+
+## Notion Backup
+
+Notion serves as a **secondary backup** of all time entries — not the source of truth. The sync is async and batch-oriented to respect Notion's API rate limits (~3 requests/second).
+
+### How It Works
+
+A Vercel Cron job runs every 5 minutes:
+
+1. `SELECT * FROM time_entries WHERE synced_at IS NULL OR synced_at < updated_at`
+2. For each entry:
+   - No `notion_page_id` → **Create** page in Notion database
+   - Has `notion_page_id` → **Update** existing page
+3. Set `synced_at = now()` and store `notion_page_id` on the entry
+
+### Schema Additions
+
+```sql
+ALTER TABLE time_entries ADD COLUMN notion_page_id TEXT;
+ALTER TABLE time_entries ADD COLUMN synced_at TIMESTAMPTZ;
+ALTER TABLE time_entries ADD COLUMN updated_at TIMESTAMPTZ DEFAULT now();
+```
+
+### Notion Database Properties
+
+| Property | Type | Maps to |
+|---|---|---|
+| Description | Title | `description` |
+| User | Select | `user.name` |
+| Project | Select | `project.name` |
+| Tag | Select | `tag.name` |
+| Started | Date | `started_at` |
+| Stopped | Date | `stopped_at` |
+| Duration (h) | Number | `duration_ms / 3600000` |
+| Chronos ID | Rich Text | `id` (for deduplication) |
+
+### Failure Handling
+
+- If Notion is down, entries accumulate with `synced_at IS NULL` and sync on the next successful run
+- Rate limit (429) → exponential backoff within the batch
+- No data loss — PostgreSQL is always authoritative
+
+### Environment Variables
+
+```
+NOTION_API_KEY=           # Notion internal integration token
+NOTION_DATABASE_ID=       # Target database ID for time entries
+```
+
+### Files
+
+- `src/lib/notion.ts` — Notion API client (create/update pages, batch sync logic)
+- `src/app/api/cron/notion-sync/route.ts` — Vercel Cron handler
+
+---
+
+## Discord Notifications
+
+Each user can have a Discord webhook URL configured by admins. Notifications fire on timer events and optionally as a daily summary.
+
+### User Schema Additions
+
+```sql
+ALTER TABLE users ADD COLUMN discord_webhook_url TEXT;
+ALTER TABLE users ADD COLUMN notify_on_start BOOLEAN DEFAULT false;
+ALTER TABLE users ADD COLUMN notify_on_stop BOOLEAN DEFAULT true;
+ALTER TABLE users ADD COLUMN daily_summary BOOLEAN DEFAULT true;
+```
+
+### Notification Events
+
+| Event | Trigger | Example Message |
+|---|---|---|
+| Timer started | `POST /api/timer/start` | 🟢 **Oliver** started: *Brand Guidelines* (Aesthetic Co.) — Design |
+| Timer stopped | `POST /api/timer/stop` | 🔴 **Oliver** stopped: *Brand Guidelines* — 2h 30m |
+| Daily summary | Vercel Cron (daily 18:00 CET) | 📊 **Oliver** logged 6.2h today across 4 entries |
+
+### Implementation
+
+- **Start/Stop:** Fire-and-forget `fetch()` call to the user's webhook URL inline in the API route. Non-blocking — failures are silently caught.
+- **Daily summary:** Vercel Cron aggregates the day's entries per user and sends a summary embed to users with `daily_summary = true`.
+- **Embeds use Chronos branding:** Primary color `#366769`, clean field layout.
+
+### Rate Limits
+
+Discord webhooks allow ~30 requests/minute per URL. With start/stop events, even a very active user won't approach this. Daily summaries are one message per user.
+
+### Files
+
+- `src/lib/discord.ts` — Webhook helper (send embed, format timer events)
+- `src/app/api/cron/daily-summary/route.ts` — Vercel Cron handler for daily summaries
+- Admin team UI includes Discord webhook URL and notification toggle fields per user
+
+---
+
+## Vercel Cron Jobs
+
+Defined in `vercel.json`:
+
+```json
+{
+  "crons": [
+    {
+      "path": "/api/cron/notion-sync",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/daily-summary",
+      "schedule": "0 17 * * *"
+    }
+  ]
+}
+```
+
+- **Notion sync:** Every 5 minutes, batch sync new/updated entries
+- **Daily summary:** 17:00 UTC (18:00 CET) — Discord summary for each user
 
 ---
 

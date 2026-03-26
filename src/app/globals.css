@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@theme {
+  /* Vellum Ink Color System */
+  --color-surface-bright: #fbf9f5;
+  --color-tertiary-fixed: #fed9b8;
+  --color-on-primary-fixed: #104648;
+  --color-on-tertiary-fixed-variant: #6f553b;
+  --color-tertiary-fixed-dim: #efcbab;
+  --color-on-secondary-fixed-variant: #595a6b;
+  --color-primary: #366769;
+  --color-surface-container-high: #e9e8e3;
+  --color-surface-container: #efeee9;
+  --color-surface-container-low: #f5f4ef;
+  --color-secondary: #5c5e6e;
+  --color-on-secondary-container: #4f5161;
+  --color-on-primary-container: #27595b;
+  --color-secondary-fixed: #e1e1f5;
+  --color-outline: #7a7b76;
+  --color-primary-dim: #295a5d;
+  --color-secondary-dim: #505262;
+  --color-error-container: #fd795a;
+  --color-secondary-container: #e1e1f5;
+  --color-background: #fbf9f5;
+  --color-surface: #fbf9f5;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-dim: #dadad4;
+  --color-primary-fixed: #b9ecee;
+  --color-surface-container-highest: #e3e3dc;
+  --color-error: #a73b21;
+  --color-error-dim: #791903;
+  --color-on-background: #31332f;
+  --color-on-primary-fixed-variant: #326365;
+  --color-surface-variant: #e3e3dc;
+  --color-on-secondary-fixed: #3d3e4e;
+  --color-on-error: #fff7f6;
+  --color-on-error-container: #6e1400;
+  --color-on-primary: #e3feff;
+  --color-tertiary-dim: #684e35;
+  --color-tertiary-container: #fed9b8;
+  --color-primary-container: #b9ecee;
+  --color-outline-variant: #b2b2ad;
+  --color-on-tertiary: #fff7f4;
+  --color-on-surface: #31332f;
+  --color-on-secondary: #faf8ff;
+  --color-secondary-fixed-dim: #d3d3e6;
+  --color-on-tertiary-fixed: #503921;
+  --color-inverse-surface: #0e0e0d;
+  --color-tertiary: #755a40;
+  --color-primary-fixed-dim: #abdddf;
+  --color-on-tertiary-container: #644b32;
+  --color-surface-tint: #366769;
+  --color-on-surface-variant: #5e605b;
+  --color-inverse-on-surface: #9e9d99;
+  --color-inverse-primary: #cafdff;
+
+  /* Typography */
+  --font-headline: "Newsreader", serif;
+  --font-body: "Work Sans", sans-serif;
+  --font-label: "Work Sans", sans-serif;
+
+  /* Border radius — editorial "slightly softened" */
+  --radius: 0.125rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.5rem;
+  --radius-full: 0.75rem;
+}
+
+:root {
+  --background: #fbf9f5;
+  --foreground: #31332f;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: #fbf9f5;
+  color: #31332f;
+  font-family: "Work Sans", sans-serif;
+}
+
+.paper-shadow {
+  box-shadow: 0 12px 32px -4px rgba(49, 51, 47, 0.06);
+}
+
+.text-ink {
+  color: #31332f;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  display: inline-block;
+  vertical-align: middle;
+}

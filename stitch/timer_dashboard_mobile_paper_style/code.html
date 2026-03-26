@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FolioTime - Minimal Timer</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Work+Sans:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-bright": "#fbf9f5",
+                        "tertiary-fixed": "#fed9b8",
+                        "on-primary-fixed": "#104648",
+                        "on-tertiary-fixed-variant": "#6f553b",
+                        "tertiary-fixed-dim": "#efcbab",
+                        "on-secondary-fixed-variant": "#595a6b",
+                        "primary": "#366769",
+                        "surface-container-high": "#e9e8e3",
+                        "surface-container": "#efeee9",
+                        "surface-container-low": "#f5f4ef",
+                        "secondary": "#5c5e6e",
+                        "on-secondary-container": "#4f5161",
+                        "on-primary-container": "#27595b",
+                        "secondary-fixed": "#e1e1f5",
+                        "outline": "#7a7b76",
+                        "primary-dim": "#295a5d",
+                        "secondary-dim": "#505262",
+                        "error-container": "#fd795a",
+                        "secondary-container": "#e1e1f5",
+                        "background": "#fbf9f5",
+                        "surface": "#fbf9f5",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-dim": "#dadad4",
+                        "primary-fixed": "#b9ecee",
+                        "surface-container-highest": "#e3e3dc",
+                        "error": "#a73b21",
+                        "error-dim": "#791903",
+                        "on-background": "#31332f",
+                        "on-primary-fixed-variant": "#326365",
+                        "surface-variant": "#e3e3dc",
+                        "on-secondary-fixed": "#3d3e4e",
+                        "on-error": "#fff7f6",
+                        "on-error-container": "#6e1400",
+                        "on-primary": "#e3feff",
+                        "tertiary-dim": "#684e35",
+                        "tertiary-container": "#fed9b8",
+                        "primary-container": "#b9ecee",
+                        "outline-variant": "#b2b2ad",
+                        "on-tertiary": "#fff7f4",
+                        "on-surface": "#31332f",
+                        "on-secondary": "#faf8ff",
+                        "secondary-fixed-dim": "#d3d3e6",
+                        "on-tertiary-fixed": "#503921",
+                        "inverse-surface": "#0e0e0d",
+                        "tertiary": "#755a40",
+                        "primary-fixed-dim": "#abdddf",
+                        "on-tertiary-container": "#644b32",
+                        "surface-tint": "#366769",
+                        "on-surface-variant": "#5e605b",
+                        "inverse-on-surface": "#9e9d99",
+                        "inverse-primary": "#cafdff"
+                    },
+                    fontFamily: {
+                        "headline": ["Newsreader"],
+                        "body": ["Work Sans"],
+                        "label": ["Work Sans"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #fbf9f5;
+            color: #31332f;
+            font-family: 'Work Sans', sans-serif;
+        }
+        .paper-shadow {
+            box-shadow: 0 12px 32px -4px rgba(49, 51, 47, 0.06);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="bg-[#fbf9f5] dark:bg-stone-900 flex justify-between items-center w-full px-8 py-4 mx-auto fixed top-0 z-40">
+<div class="text-2xl font-serif italic text-[#31332f] dark:text-stone-100 headline">FolioTime</div>
+<nav class="hidden md:flex gap-8">
+<a class="text-[#366769] dark:text-emerald-400 font-semibold border-b-2 border-[#366769] pb-1 font-headline newsreader italic tracking-tight" href="#">Dashboard</a>
+<a class="text-[#5e605b] dark:text-stone-400 hover:text-[#31332f] font-headline newsreader italic tracking-tight" href="#">Reports</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined p-2 hover:bg-[#e9e8e3]/50 dark:hover:bg-stone-800 transition-colors duration-300 rounded-lg text-on-surface-variant">settings</button>
+<button class="material-symbols-outlined p-2 hover:bg-[#e9e8e3]/50 dark:hover:bg-stone-800 transition-colors duration-300 rounded-lg text-on-surface-variant">account_circle</button>
+</div>
+</header>
+<div class="bg-[#e9e8e3] h-[1px] w-full dark:bg-stone-800 fixed top-[72px] z-40"></div>
+<!-- Main Content Canvas -->
+<main class="pt-24 px-6 max-w-2xl mx-auto space-y-10">
+<!-- Active Timer Section (The "Floating Folio") -->
+<section class="relative">
+<div class="bg-surface-container-lowest rounded-xl paper-shadow p-8 flex flex-col items-center space-y-6 border border-outline-variant/15">
+<span class="text-secondary font-medium tracking-widest text-xs uppercase body">Current Session</span>
+<div class="text-6xl md:text-8xl font-headline italic text-on-background tracking-tighter">
+                    00:42:<span class="text-primary">18</span>
+</div>
+<div class="w-full space-y-4">
+<input class="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-on-surface placeholder-on-surface-variant/50 focus:ring-1 focus:ring-primary/20 body transition-all" placeholder="What are you working on?" type="text"/>
+<div class="flex flex-wrap gap-2">
+<span class="bg-primary-container/40 text-on-primary-container px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">label</span> Editorial
+                        </span>
+<span class="bg-tertiary-container/40 text-on-tertiary-container px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">folder</span> Q4 Report
+                        </span>
+<button class="text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-xl">add_circle</span>
+</button>
+</div>
+</div>
+<div class="flex items-center gap-6 pt-2">
+<button class="w-16 h-16 rounded-full bg-error-container/10 text-error flex items-center justify-center hover:bg-error-container/20 transition-colors">
+<span class="material-symbols-outlined text-3xl">stop</span>
+</button>
+<button class="w-20 h-20 rounded-full bg-primary text-on-primary flex items-center justify-center hover:scale-95 transition-transform duration-150 paper-shadow">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1;">pause</span>
+</button>
+<button class="w-16 h-16 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center hover:bg-surface-dim transition-colors">
+<span class="material-symbols-outlined text-3xl">refresh</span>
+</button>
+</div>
+</div>
+<!-- Asymmetrical Background Element -->
+<div class="absolute -z-10 -top-4 -right-4 w-32 h-32 bg-tertiary-fixed-dim/20 rounded-full blur-3xl"></div>
+</section>
+<!-- Activities Section -->
+<section class="space-y-6">
+<div class="flex justify-between items-end">
+<h2 class="font-headline text-3xl italic text-on-surface-variant tracking-tight">Recent Activity</h2>
+<span class="text-secondary text-sm font-medium body">Total: 6h 12m</span>
+</div>
+<div class="space-y-4">
+<!-- Activity Card 1 -->
+<div class="group bg-surface-container-low hover:bg-surface-container-lowest transition-all duration-300 rounded-xl p-5 flex items-center justify-between border-l-4 border-primary">
+<div class="flex gap-4 items-center">
+<div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">edit_note</span>
+</div>
+<div>
+<h3 class="text-on-surface font-semibold body">Copy Editing: Brand Manual</h3>
+<p class="text-on-surface-variant text-sm">Client: Studio Arlo</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-headline text-xl italic text-on-surface">2:15:00</p>
+<p class="text-xs text-outline font-medium uppercase tracking-wider">Yesterday</p>
+</div>
+</div>
+<!-- Activity Card 2 -->
+<div class="group bg-surface-container-low hover:bg-surface-container-lowest transition-all duration-300 rounded-xl p-5 flex items-center justify-between border-l-4 border-tertiary">
+<div class="flex gap-4 items-center">
+<div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined">payments</span>
+</div>
+<div>
+<h3 class="text-on-surface font-semibold body">Invoice Reconciliation</h3>
+<p class="text-on-surface-variant text-sm">Internal</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-headline text-xl italic text-on-surface">0:45:12</p>
+<p class="text-xs text-outline font-medium uppercase tracking-wider">Yesterday</p>
+</div>
+</div>
+<!-- Activity Card 3 -->
+<div class="group bg-surface-container-low hover:bg-surface-container-lowest transition-all duration-300 rounded-xl p-5 flex items-center justify-between border-l-4 border-secondary">
+<div class="flex gap-4 items-center">
+<div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">hub</span>
+</div>
+<div>
+<h3 class="text-on-surface font-semibold body">Team Sync: Editorial Board</h3>
+<p class="text-on-surface-variant text-sm">Internal</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-headline text-xl italic text-on-surface">1:00:00</p>
+<p class="text-xs text-outline font-medium uppercase tracking-wider">Oct 24</p>
+</div>
+</div>
+</div>
+<!-- View All Link -->
+<div class="pt-4 flex justify-center">
+<button class="text-primary font-medium text-sm border-b-2 border-primary/30 pb-1 hover:border-primary transition-all flex items-center gap-2">
+                    View full history <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+</section>
+<!-- Stats Bento Mini -->
+<section class="grid grid-cols-2 gap-4">
+<div class="bg-primary-container/20 p-6 rounded-xl space-y-2">
+<span class="text-on-primary-container font-medium text-xs uppercase tracking-widest body">Focus Score</span>
+<p class="font-headline text-4xl italic text-on-primary-container">92%</p>
+<div class="h-1 w-full bg-primary/10 rounded-full overflow-hidden">
+<div class="h-full bg-primary w-11/12"></div>
+</div>
+</div>
+<div class="bg-tertiary-container/20 p-6 rounded-xl space-y-2">
+<span class="text-on-tertiary-container font-medium text-xs uppercase tracking-widest body">Efficiency</span>
+<p class="font-headline text-4xl italic text-on-tertiary-container">+14m</p>
+<p class="text-xs text-on-tertiary-fixed-variant">Vs last week</p>
+</div>
+</section>
+</main>
+<!-- SideNavBar (Hidden on Mobile) -->
+<aside class="fixed left-0 top-0 h-full hidden md:flex flex-col py-8 bg-[#fbf9f5] dark:bg-stone-900 h-screen w-20 items-center border-r border-[#e9e8e3] dark:border-stone-800 z-50">
+<div class="text-xl font-serif text-[#31332f] dark:text-stone-100 mb-12">F</div>
+<div class="flex flex-col gap-8 flex-1">
+<button class="text-[#366769] dark:text-emerald-400 bg-[#e9e8e3] dark:bg-stone-800 rounded-lg p-3 transition-all scale-95 duration-150">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">schedule</span>
+</button>
+<button class="text-[#5c5e6e] dark:text-stone-500 p-3 hover:text-[#366769] dark:hover:text-emerald-300 transition-all">
+<span class="material-symbols-outlined">folder</span>
+</button>
+<button class="text-[#5c5e6e] dark:text-stone-500 p-3 hover:text-[#366769] dark:hover:text-emerald-300 transition-all">
+<span class="material-symbols-outlined">group</span>
+</button>
+<button class="text-[#5c5e6e] dark:text-stone-500 p-3 hover:text-[#366769] dark:hover:text-emerald-300 transition-all">
+<span class="material-symbols-outlined">hub</span>
+</button>
+</div>
+<div class="mt-auto">
+<button class="text-outline hover:text-on-surface transition-colors p-3">
+<span class="material-symbols-outlined">logout</span>
+</button>
+</div>
+</aside>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex justify-between items-center px-6 py-3 bg-[#ffffff] dark:bg-stone-800/90 backdrop-blur-md w-[90%] max-w-2xl rounded-xl border border-[#b2b2ad]/15 shadow-[0_12px_32px_-4px_rgba(49,51,47,0.06)]">
+<div class="flex items-center gap-4 px-6 py-4 text-[#31332f] dark:text-stone-100 scale-[1.02] transition-transform duration-500 ease-out">
+<span class="material-symbols-outlined text-[#366769] dark:text-emerald-400" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+<span class="font-serif newsreader text-lg">Active Timer</span>
+</div>
+<div class="flex gap-6 pr-4">
+<button class="material-symbols-outlined text-secondary">bar_chart</button>
+<button class="material-symbols-outlined text-secondary">person</button>
+</div>
+</nav>
+<!-- Decorative Bleeding Image -->
+<div class="fixed -bottom-10 -right-10 w-64 h-64 opacity-10 pointer-events-none rotate-12">
+<img class="w-full h-full object-cover rounded-3xl" data-alt="vintage manual typewriter on cream paper with soft morning sunlight casting long shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQiprfALEFf2973-k9nSGkwRD4sWNg34Vh_ayaNM1NdYkUezXK43qb1UedpLGYhkZmuhCtqAyFSRLz12Dp5BLkUVlWVq4G-CzVDXDjek5XZUucl5O1Bnl6h6lkGMLA0Ae2OfA2OQoBvEJKUAWvVSALnlKb9HUm3Mr6h3D4OZ1Sr53hEpNNH-dpIEB8TLKyYrlAfxxtBpJ8VE2_XKDKXArO6vi3sa8EucWzLn2OiNDuNui_1NHyZqvZXfQLaGAX3mP1_xuDhsJQ3y8"/>
+</div>
+</body></html>

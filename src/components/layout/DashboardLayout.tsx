@@ -1,0 +1,28 @@
+import React from "react";
+import { Sidebar } from "./Sidebar";
+import { TopBar } from "./TopBar";
+import { BottomNav } from "./BottomNav";
+
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+export function DashboardLayout({ children }: DashboardLayoutProps) {
+  return (
+    <div className="min-h-screen bg-[#fbf9f5]">
+      {/* Fixed left sidebar — hidden on mobile */}
+      <div className="hidden md:block">
+        <Sidebar />
+      </div>
+
+      {/* Main content area, offset by sidebar width on md+ */}
+      <div className="md:ml-20 flex flex-col min-h-screen">
+        <TopBar />
+        <main className="flex-1 px-4 md:px-8 py-6">{children}</main>
+      </div>
+
+      {/* Mobile bottom nav */}
+      <BottomNav />
+    </div>
+  );
+}

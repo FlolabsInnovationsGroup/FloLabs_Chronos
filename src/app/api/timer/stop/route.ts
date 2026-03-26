@@ -1,0 +1,57 @@
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { getActiveTimer, deleteActiveTimer, broadcastTimerEvent } from "@/lib/redis";
+import { db } from "@/lib/db";
+import { timeEntries } from "@/lib/db/schema";
+import { eq, and, isNull } from "drizzle-orm";
+import { z } from "zod";
+
+const stopSchema = z.object({ discard: z.boolean().optional() });
+
+export async function POST(req: Request) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json().catch(() => ({}));
+  const { discard } = stopSchema.parse(body);
+  const userId = session.user.id;
+
+  const timer = await getActiveTimer(userId);
+  if (!timer) return NextResponse.json({ error: "No active timer" }, { status: 404 });
+
+  const stoppedAt = Date.now();
+  const durationMs = stoppedAt - timer.startedAt;
+
+  await deleteActiveTimer(userId);
+
+  if (db && !discard) {
+    // Update the running entry
+    await db
+      .update(timeEntries)
+      .set({
+        stoppedAt: new Date(stoppedAt),
+        durationMs,
+      })
+      .where(
+        and(
+          eq(timeEntries.userId, userId),
+          eq(timeEntries.projectId, timer.projectId),
+          isNull(timeEntries.stoppedAt)
+        )
+      );
+  } else if (db && discard) {
+    // Delete the running entry
+    await db
+      .delete(timeEntries)
+      .where(
+        and(
+          eq(timeEntries.userId, userId),
+          isNull(timeEntries.stoppedAt)
+        )
+      );
+  }
+
+  broadcastTimerEvent({ type: "timer:stop", userId, data: null });
+
+  return NextResponse.json({ ok: true, durationMs });
+}

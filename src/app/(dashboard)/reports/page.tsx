@@ -25,7 +25,7 @@ async function getFilterData() {
     db.select().from(tags).orderBy(tags.name),
     db.select({ id: users.id, name: users.name, email: users.email, role: users.role, createdAt: users.createdAt, updatedAt: users.updatedAt }).from(users),
   ]);
-  return { projects: projectRows as Project[], tags: tagRows as Tag[], users: userRows };
+  return { projects: projectRows as Project[], tags: tagRows as Tag[], users: userRows as import("@/types").User[] };
 }
 
 async function getEntries(params: SearchParams, sessionUserId: string, isAdmin: boolean) {

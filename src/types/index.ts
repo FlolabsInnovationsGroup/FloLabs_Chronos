@@ -33,6 +33,7 @@ export interface TimeEntry {
   startedAt: Date;
   stoppedAt: Date | null;
   durationMs: number | null;
+  notionPageId?: string | null;
   createdAt: Date;
   // Joined fields
   user?: Pick<User, "id" | "name" | "email">;

@@ -6,7 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
-import type { User } from "@/types";
+import type { User, Role } from "@/types";
 
 interface TeamUser extends User {
   discordWebhookUrl?: string;
@@ -46,7 +46,7 @@ function InviteForm({ onSave, onCancel }: { onSave: (data: Partial<TeamUser>) =>
       <Input label="Full Name" placeholder="Jane Smith" value={name} onChange={(e) => setName(e.target.value)} />
       <Input label="Email" type="email" placeholder="jane@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
       <Input label="Temporary Password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
-      <Select label="Role" options={ROLE_OPTIONS} value={role} onChange={setRole} />
+      <Select label="Role" options={ROLE_OPTIONS} value={role} onChange={(v) => setRole(v as Role)} />
       {error && <p className="text-sm text-[#a73b21]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{error}</p>}
       <div className="flex justify-end gap-3 pt-2">
         <Button variant="ghost" type="button" onClick={onCancel}>Cancel</Button>
@@ -103,7 +103,7 @@ function EditUserForm({
         </div>
       </div>
 
-      <Select label="Role" options={ROLE_OPTIONS} value={role} onChange={setRole} />
+      <Select label="Role" options={ROLE_OPTIONS} value={role} onChange={(v) => setRole(v as Role)} />
 
       <div className="flex flex-col gap-2">
         <label className="text-xs font-medium text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>

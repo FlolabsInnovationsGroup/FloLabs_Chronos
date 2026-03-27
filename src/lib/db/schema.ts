@@ -15,6 +15,11 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   password: text("password").notNull(),
   role: text("role").notNull().default("member"),
+  // Discord integration
+  discordWebhookUrl: text("discord_webhook_url"),
+  notifyOnStart: boolean("notify_on_start").default(false),
+  notifyOnStop: boolean("notify_on_stop").default(false),
+  dailySummary: boolean("daily_summary").default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
@@ -49,6 +54,9 @@ export const timeEntries = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     stoppedAt: timestamp("stopped_at", { withTimezone: true }),
     durationMs: bigint("duration_ms", { mode: "number" }),
+    // Notion backup integration
+    notionPageId: text("notion_page_id"),
+    syncedAt: timestamp("synced_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [

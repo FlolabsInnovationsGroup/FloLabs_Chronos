@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getActiveTimer, deleteActiveTimer, broadcastTimerEvent } from "@/lib/redis";
 import { db } from "@/lib/db";
-import { timeEntries } from "@/lib/db/schema";
+import { timeEntries, users, projects } from "@/lib/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { sendDiscordEmbed, buildTimerStopEmbed } from "@/lib/discord";
 
 const stopSchema = z.object({ discard: z.boolean().optional() });
 
@@ -52,6 +53,30 @@ export async function POST(req: Request) {
   }
 
   broadcastTimerEvent({ type: "timer:stop", userId, data: null });
+
+  // Fire Discord stop notification fire-and-forget
+  if (!discard) {
+    (async () => {
+      if (!db) return;
+      const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      if (user[0]?.discordWebhookUrl && user[0]?.notifyOnStop) {
+        const project = await db
+          .select()
+          .from(projects)
+          .where(eq(projects.id, timer.projectId))
+          .limit(1);
+        await sendDiscordEmbed(
+          user[0].discordWebhookUrl,
+          buildTimerStopEmbed(
+            user[0].name,
+            project[0]?.name ?? "Unknown",
+            timer.description,
+            durationMs
+          )
+        );
+      }
+    })().catch(() => {});
+  }
 
   return NextResponse.json({ ok: true, durationMs });
 }

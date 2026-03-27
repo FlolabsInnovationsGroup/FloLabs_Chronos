@@ -108,10 +108,10 @@ function groupEntries(entries: TimeEntry[], groupBy: string): ReportRow[] {
   }
 
   return Array.from(map.entries())
-    .map(([label, { totalMs, entryCount: _c, ...rest }]) => ({
+    .map(([label, { totalMs, count }]) => ({
       label,
       totalMs,
-      entryCount: map.get(label)!.count,
+      entryCount: count,
     }))
     .sort((a, b) => b.totalMs - a.totalMs);
 }

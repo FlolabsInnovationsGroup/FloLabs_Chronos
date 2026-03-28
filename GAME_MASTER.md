@@ -24,11 +24,11 @@
 
 ## Remaining V1 Gaps (Wave 2)
 
-### AGENT 4: CSV Export + Settings Page + Entry CRUD
-- [ ] Add CSV export button to reports page (download filtered entries as CSV)
-- [ ] Create /api/entries/[id]/route.ts with PUT (edit) and DELETE
-- [ ] Create settings page at src/app/(dashboard)/settings/page.tsx (user profile, password change)
-- [ ] Ensure EntryCard has edit/delete actions that call the new entry API
+### AGENT 4: CSV Export + Settings Page + Entry CRUD ✅
+- [x] Add CSV export button to reports page (ExportCSVButton client component, variant=secondary)
+- [x] Create /api/entries/[id]/route.ts with PATCH (edit) and DELETE (owner or admin)
+- [x] Create settings page at src/app/(dashboard)/settings/page.tsx (name + password change)
+- [x] EntryCard has edit modal (description/project/tag) + delete confirmation modal
 
 ### AGENT 5: End-to-End Flow Polish + Testing
 - [ ] Verify login→register→dashboard flow logic
@@ -45,7 +45,7 @@
 | Agent 1 | clear-reef | ✅ DONE | Core UI/UX Polish |
 | Agent 2 | marine-mist | ✅ DONE | Integration & Backend |
 | Agent 3 | briny-crest | ✅ DONE | Design Fidelity |
-| Agent 4 | swift-breeze | RUNNING | CSV Export + Settings + Entry CRUD |
+| Agent 4 | swift-breeze | ✅ DONE | CSV Export + Settings + Entry CRUD |
 | Agent 5 | crisp-dune | RUNNING | End-to-End Flow + Polish |
 
 ## Completion Criteria (V1)

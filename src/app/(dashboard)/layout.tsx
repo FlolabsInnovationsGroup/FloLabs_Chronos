@@ -1,6 +1,7 @@
 import { SessionProvider } from "next-auth/react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { auth } from "@/lib/auth";
+import { TimerProvider } from "@/hooks/use-timer";
 import { redirect } from "next/navigation";
 
 export default async function Layout({ children }: { children: React.ReactNode }) {
@@ -11,7 +12,9 @@ export default async function Layout({ children }: { children: React.ReactNode }
 
   return (
     <SessionProvider session={session}>
-      <DashboardLayout>{children}</DashboardLayout>
+      <TimerProvider userId={session.user.id}>
+        <DashboardLayout>{children}</DashboardLayout>
+      </TimerProvider>
     </SessionProvider>
   );
 }

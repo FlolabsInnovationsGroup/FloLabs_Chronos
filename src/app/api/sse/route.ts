@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { timerBroadcaster } from "@/lib/redis";
+import { ensureTimerSubscription, timerBroadcaster } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +9,8 @@ export async function GET() {
   if (!session?.user) {
     return new Response("Unauthorized", { status: 401 });
   }
+
+  await ensureTimerSubscription();
 
   const encoder = new TextEncoder();
   let onTimer: ((event: object) => void) | null = null;

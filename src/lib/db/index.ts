@@ -2,7 +2,10 @@ import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
 import * as schema from "./schema";
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString =
+  process.env.DATABASE_URL ??
+  process.env.FL_CHRONOS_DATABASE_URL ??
+  process.env.FL_CHRONOS_DATABASE_URL_UNPOOLED;
 
 // Allow app to run without DB for development
 function createDb() {

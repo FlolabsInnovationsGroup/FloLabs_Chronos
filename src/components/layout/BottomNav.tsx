@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useTimer } from "@/hooks/use-timer";
 import { formatDuration } from "@/lib/utils";
 
 export function BottomNav() {
-  const { activeTimer, elapsed, start, stop, loading } = useTimer();
+  const { activeTimer, elapsed, stop, loading } = useTimer();
 
   if (loading) return null;
 
@@ -40,7 +41,10 @@ export function BottomNav() {
         </div>
       ) : (
         // Idle pill — tapping opens timer page (or triggers a quick start)
-        <div className="flex items-center gap-2 bg-surface-container-lowest text-[#31332f] rounded-full px-5 py-3 paper-shadow">
+        <Link
+          href="/timer"
+          className="flex items-center gap-2 bg-surface-container-lowest text-[#31332f] rounded-full px-5 py-3 paper-shadow"
+        >
           <span className="material-symbols-outlined text-[#366769]" style={{ fontSize: "18px" }}>
             play_circle
           </span>
@@ -50,7 +54,7 @@ export function BottomNav() {
           >
             Start new session
           </span>
-        </div>
+        </Link>
       )}
     </div>
   );

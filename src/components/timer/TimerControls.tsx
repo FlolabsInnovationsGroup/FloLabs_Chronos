@@ -19,7 +19,6 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
   const [submitting, setSubmitting] = useState(false);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
-  const selectedTag = tags.find((t) => t.id === selectedTagId);
 
   async function handleStart() {
     if (!selectedProjectId) return;
@@ -40,6 +39,8 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
     try {
       await stop(false);
       setDescription("");
+      setSelectedProjectId("");
+      setSelectedTagId("");
     } finally {
       setSubmitting(false);
     }

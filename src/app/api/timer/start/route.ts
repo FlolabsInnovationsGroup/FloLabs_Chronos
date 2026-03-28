@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     });
   }
 
-  broadcastTimerEvent({ type: "timer:start", userId, data: timer });
+  await broadcastTimerEvent({ type: "timer:start", userId, data: timer });
 
   // Fire Discord notification fire-and-forget
   (async () => {

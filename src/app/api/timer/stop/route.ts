@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       );
   }
 
-  broadcastTimerEvent({ type: "timer:stop", userId, data: null });
+  await broadcastTimerEvent({ type: "timer:stop", userId, data: null });
 
   // Fire Discord stop notification fire-and-forget
   if (!discard) {

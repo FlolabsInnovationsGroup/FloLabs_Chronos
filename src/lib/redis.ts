@@ -1,19 +1,44 @@
 import { kv } from "@vercel/kv";
+import { createClient } from "redis";
 import type { ActiveTimer } from "@/types";
 
 // Fallback in-memory store for local dev without Vercel KV
 const memStore = new Map<string, string>();
+const TIMER_CHANNEL = "timers:updates";
+const redisUrl = process.env.FL_KV_REDIS_URL ?? process.env.KV_URL;
 
 const isKvAvailable = Boolean(
   process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN
 );
 
+type CommandClient = ReturnType<typeof createClient>;
+
+let commandClientPromise: Promise<CommandClient> | null = null;
+let subscriptionPromise: Promise<void> | null = null;
+
+function getRedisClient() {
+  if (!redisUrl) return null;
+  if (!commandClientPromise) {
+    const client = createClient({ url: redisUrl });
+    client.on("error", () => {});
+    commandClientPromise = client.connect().then(() => client);
+  }
+  return commandClientPromise;
+}
+
 async function kvGet(key: string): Promise<string | null> {
+  const client = getRedisClient();
+  if (client) return (await client).get(key);
   if (isKvAvailable) return kv.get<string>(key);
   return memStore.get(key) ?? null;
 }
 
 async function kvSet(key: string, value: string): Promise<void> {
+  const client = getRedisClient();
+  if (client) {
+    await (await client).set(key, value);
+    return;
+  }
   if (isKvAvailable) {
     await kv.set(key, value);
   } else {
@@ -22,6 +47,11 @@ async function kvSet(key: string, value: string): Promise<void> {
 }
 
 async function kvDel(key: string): Promise<void> {
+  const client = getRedisClient();
+  if (client) {
+    await (await client).del(key);
+    return;
+  }
   if (isKvAvailable) {
     await kv.del(key);
   } else {
@@ -30,6 +60,8 @@ async function kvDel(key: string): Promise<void> {
 }
 
 async function kvKeys(pattern: string): Promise<string[]> {
+  const client = getRedisClient();
+  if (client) return (await client).keys(pattern);
   if (isKvAvailable) return kv.keys(pattern);
   const prefix = pattern.replace("*", "");
   return [...memStore.keys()].filter((k) => k.startsWith(prefix));
@@ -79,6 +111,33 @@ class TimerBroadcaster extends EventEmitter {}
 export const timerBroadcaster = new TimerBroadcaster();
 timerBroadcaster.setMaxListeners(1000);
 
-export function broadcastTimerEvent(event: object) {
+export async function ensureTimerSubscription() {
+  if (!redisUrl) return;
+  if (!subscriptionPromise) {
+    subscriptionPromise = (async () => {
+      const subscriber = createClient({ url: redisUrl });
+      subscriber.on("error", () => {});
+      await subscriber.connect();
+      await subscriber.subscribe(TIMER_CHANNEL, (message) => {
+        try {
+          timerBroadcaster.emit("timer", JSON.parse(message));
+        } catch {
+          // ignore malformed payloads
+        }
+      });
+    })().catch((error) => {
+      subscriptionPromise = null;
+      throw error;
+    });
+  }
+
+  await subscriptionPromise;
+}
+
+export async function broadcastTimerEvent(event: object) {
   timerBroadcaster.emit("timer", event);
+  const client = getRedisClient();
+  if (client) {
+    await (await client).publish(TIMER_CHANNEL, JSON.stringify(event));
+  }
 }

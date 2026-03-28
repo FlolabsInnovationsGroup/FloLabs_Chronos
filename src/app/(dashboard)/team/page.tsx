@@ -157,14 +157,32 @@ export default function TeamPage() {
   const [showInvite, setShowInvite] = useState(false);
   const [editUser, setEditUser] = useState<TeamUser | null>(null);
 
-  async function loadUsers() {
+  async function refreshUsers() {
     const res = await fetch("/api/users");
     const { users: data } = await res.json();
     setUsers(data ?? []);
     setLoading(false);
   }
 
-  useEffect(() => { loadUsers(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadInitialUsers() {
+      try {
+        const res = await fetch("/api/users");
+        const { users: data } = await res.json();
+        if (!cancelled) setUsers(data ?? []);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadInitialUsers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleInvite(data: Partial<TeamUser>) {
     await fetch("/api/users", {
@@ -173,7 +191,7 @@ export default function TeamPage() {
       body: JSON.stringify(data),
     });
     setShowInvite(false);
-    loadUsers();
+    await refreshUsers();
   }
 
   async function handleEdit(data: Partial<TeamUser>) {
@@ -183,7 +201,7 @@ export default function TeamPage() {
       body: JSON.stringify(data),
     });
     setEditUser(null);
-    loadUsers();
+    await refreshUsers();
   }
 
   async function handleDeactivate(user: TeamUser) {
@@ -191,7 +209,7 @@ export default function TeamPage() {
     await fetch(`/api/users/${user.id}`, {
       method: "DELETE",
     });
-    loadUsers();
+    await refreshUsers();
   }
 
   return (

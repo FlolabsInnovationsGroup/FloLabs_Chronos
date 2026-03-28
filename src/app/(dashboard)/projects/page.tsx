@@ -103,14 +103,32 @@ export default function ProjectsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
 
-  async function load() {
+  async function refreshProjects() {
     const res = await fetch("/api/projects");
     const { projects: data } = await res.json();
     setProjects(data ?? []);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadInitialProjects() {
+      try {
+        const res = await fetch("/api/projects");
+        const { projects: data } = await res.json();
+        if (!cancelled) setProjects(data ?? []);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadInitialProjects();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleCreate(data: Partial<Project>) {
     await fetch("/api/projects", {
@@ -119,7 +137,7 @@ export default function ProjectsPage() {
       body: JSON.stringify(data),
     });
     setShowModal(false);
-    load();
+    await refreshProjects();
   }
 
   async function handleEdit(data: Partial<Project>) {
@@ -129,7 +147,7 @@ export default function ProjectsPage() {
       body: JSON.stringify(data),
     });
     setEditProject(null);
-    load();
+    await refreshProjects();
   }
 
   async function handleArchive(project: Project) {
@@ -138,7 +156,7 @@ export default function ProjectsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ archived: !project.archived }),
     });
-    load();
+    await refreshProjects();
   }
 
   const activeProjects = projects.filter((p) => !p.archived);

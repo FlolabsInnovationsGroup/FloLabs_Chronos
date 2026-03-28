@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTimer } from "@/hooks/use-timer";
 import { Card } from "@/components/ui/Card";
 import type { TimeEntry } from "@/types";
@@ -12,7 +11,6 @@ interface ActiveTimerCardProps {
 
 export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTimerCardProps) {
   const { activeTimer, elapsed } = useTimer();
-  const [sessionCount, setSessionCount] = useState(todayEntries.length);
 
   // Total ms logged today from completed entries
   const completedMs = todayEntries.reduce((sum, e) => sum + (e.durationMs ?? 0), 0);
@@ -33,10 +31,7 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
       ? todayEntries.find((e) => e.projectId === activeTimer.projectId)?.project?.name ??
         "Unknown Project"
       : null;
-
-  useEffect(() => {
-    setSessionCount(todayEntries.length + (activeTimer ? 1 : 0));
-  }, [todayEntries.length, activeTimer]);
+  const sessionCount = todayEntries.length + (activeTimer ? 1 : 0);
 
   return (
     <Card className="p-6 flex flex-col gap-6">

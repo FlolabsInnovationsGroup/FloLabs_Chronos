@@ -42,7 +42,8 @@ async function main() {
   const db = drizzle(sql);
   console.log("Seeding database...");
 
-  const adminEmail = "admin@flolabs.io";
+  const adminEmail = "admin@flolabsinnovations.com";
+  const legacyAdminEmail = "admin@flolabs.io";
   const defaultTeamName = "FloLabs Core";
   const defaultTeamSlug = createTeamSlug(defaultTeamName);
 
@@ -64,9 +65,38 @@ async function main() {
     console.log("Created team:", defaultTeamName);
   }
 
-  const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, adminEmail)).limit(1);
+  const existing = await db
+    .select({ id: users.id, email: users.email, teamId: users.teamId, isActive: users.isActive })
+    .from(users)
+    .where(eq(users.email, adminEmail))
+    .limit(1);
+
+  const legacyExisting = await db
+    .select({ id: users.id, email: users.email, teamId: users.teamId, isActive: users.isActive })
+    .from(users)
+    .where(eq(users.email, legacyAdminEmail))
+    .limit(1);
+
   if (existing.length > 0) {
     console.log("Admin already exists");
+    if (!existing[0].teamId || existing[0].isActive === false) {
+      await db
+        .update(users)
+        .set({ teamId, isActive: true, updatedAt: new Date() })
+        .where(eq(users.id, existing[0].id));
+      console.log("Updated existing admin team assignment");
+    }
+  } else if (legacyExisting.length > 0) {
+    await db
+      .update(users)
+      .set({
+        email: adminEmail,
+        teamId,
+        isActive: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, legacyExisting[0].id));
+    console.log(`Migrated admin email: ${legacyAdminEmail} -> ${adminEmail}`);
   } else {
     const hash = await bcrypt.hash("flchron2026", 12);
     await db.insert(users).values({
@@ -77,7 +107,7 @@ async function main() {
       teamId,
       isActive: true,
     });
-    console.log("Created admin: admin@flolabs.io / flchron2026");
+    console.log(`Created admin: ${adminEmail} / flchron2026`);
   }
 
   const sampleProjects = [

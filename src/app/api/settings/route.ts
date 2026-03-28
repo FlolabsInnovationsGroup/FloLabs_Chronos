@@ -1,0 +1,58 @@
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
+import { z } from "zod";
+
+const nameSchema = z.object({
+  name: z.string().min(1),
+});
+
+const passwordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
+export async function PATCH(req: Request) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
+
+  const body = await req.json();
+
+  // Name update
+  const nameParsed = nameSchema.safeParse(body);
+  if (nameParsed.success && !("currentPassword" in body)) {
+    const [user] = await db
+      .update(users)
+      .set({ name: nameParsed.data.name, updatedAt: new Date() })
+      .where(eq(users.id, session.user.id))
+      .returning({ id: users.id, name: users.name, email: users.email });
+    return NextResponse.json({ user });
+  }
+
+  // Password update
+  const pwParsed = passwordSchema.safeParse(body);
+  if (pwParsed.success) {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, session.user.id))
+      .limit(1);
+    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+    const valid = await bcrypt.compare(pwParsed.data.currentPassword, user.password);
+    if (!valid) return NextResponse.json({ error: "Current password incorrect" }, { status: 400 });
+
+    const hashed = await bcrypt.hash(pwParsed.data.newPassword, 12);
+    await db
+      .update(users)
+      .set({ password: hashed, updatedAt: new Date() })
+      .where(eq(users.id, session.user.id));
+    return NextResponse.json({ success: true });
+  }
+
+  return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+}

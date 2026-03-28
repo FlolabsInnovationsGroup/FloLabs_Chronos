@@ -10,7 +10,7 @@ import { ExportCSVButton } from "@/components/reports/ExportCSVButton";
 import { Suspense } from "react";
 import type { Project, Tag, ReportRow, TimeEntry } from "@/types";
 
-export const metadata: Metadata = { title: "Reports | Chronos" };
+export const metadata: Metadata = { title: "Reports | FloLabs Chronos" };
 
 interface SearchParams {
   from?: string;

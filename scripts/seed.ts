@@ -43,9 +43,9 @@ async function main() {
   if (existing.length > 0) {
     console.log("Admin already exists");
   } else {
-    const hash = await bcrypt.hash("chronos2026", 12);
+    const hash = await bcrypt.hash("flchron2026", 12);
     await db.insert(users).values({ name: "Admin", email: adminEmail, password: hash, role: "admin" });
-    console.log("Created admin: admin@flolabs.io / chronos2026");
+    console.log("Created admin: admin@flolabs.io / flchron2026");
   }
 
   const sampleProjects = [

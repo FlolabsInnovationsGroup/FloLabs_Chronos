@@ -65,7 +65,7 @@ export async function GET(req: Request) {
     return new Response(csvLines, {
       headers: {
         "Content-Type": "text/csv",
-        "Content-Disposition": `attachment; filename="chronos-report.csv"`,
+        "Content-Disposition": `attachment; filename="flchron-report.csv"`,
       },
     });
   }

@@ -9,7 +9,7 @@ import { ActiveTimerCard } from "@/components/timer/ActiveTimerCard";
 import { EntryList } from "@/components/entries/EntryList";
 import type { Project, Tag, TimeEntry } from "@/types";
 
-export const metadata: Metadata = { title: "Timer | Chronos" };
+export const metadata: Metadata = { title: "Timer | FloLabs Chronos" };
 
 async function getProjects(): Promise<Project[]> {
   if (!db) return [];

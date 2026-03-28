@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { SettingsForm } from "./SettingsForm";
 
-export const metadata: Metadata = { title: "Settings | Chronos" };
+export const metadata: Metadata = { title: "Settings | FloLabs Chronos" };
 
 export default async function SettingsPage() {
   const session = await auth();

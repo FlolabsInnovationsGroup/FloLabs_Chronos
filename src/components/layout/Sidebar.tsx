@@ -29,13 +29,13 @@ export function Sidebar() {
       <Link
         href="/timer"
         className="w-12 h-12 flex items-center justify-center rounded-xl mb-3 hover:bg-[#f5f4ef] transition-colors"
-        aria-label="Chronos home"
+        aria-label="FloLabs Chronos home"
       >
         <span
           className="text-2xl font-bold italic text-[#366769] select-none"
           style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
         >
-          C.
+          FL
         </span>
       </Link>
 

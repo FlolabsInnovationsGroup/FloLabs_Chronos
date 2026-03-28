@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Projects | Chronos" };
+export const metadata: Metadata = { title: "Projects | FloLabs Chronos" };
 
 export default function ProjectsLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;

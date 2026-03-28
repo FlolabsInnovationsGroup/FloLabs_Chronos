@@ -26,7 +26,7 @@ export function TopBar() {
           className="text-xl font-semibold italic text-[#31332f] select-none"
           style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
         >
-          Chronos
+          FloLabs Chronos
         </span>
 
         {/* Right side */}

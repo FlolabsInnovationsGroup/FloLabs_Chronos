@@ -23,7 +23,7 @@ function notionHeaders() {
  *   Started      — Date
  *   Stopped      — Date
  *   Duration (h) — Number
- *   Chronos ID   — Rich Text (used for deduplication)
+ *   FL-Chron ID  — Rich Text (used for deduplication)
  */
 export async function syncEntryToNotion(entry: TimeEntry): Promise<string> {
   const dbId = process.env.NOTION_DATABASE_ID;
@@ -61,7 +61,7 @@ export async function syncEntryToNotion(entry: TimeEntry): Promise<string> {
     "Duration (h)": {
       number: durationHours,
     },
-    "Chronos ID": {
+    "FL-Chron ID": {
       rich_text: [
         {
           text: {

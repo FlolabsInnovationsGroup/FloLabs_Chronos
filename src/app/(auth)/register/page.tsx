@@ -70,7 +70,7 @@ export default function RegisterPage() {
             className="text-4xl font-light italic text-[#31332f]"
             style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
           >
-            Chronos
+            FloLabs Chronos
           </h1>
           <p
             className="text-sm text-[#5e605b] mt-2"

@@ -28,7 +28,7 @@ export function ExportCSVButton({ entries }: ExportCSVButtonProps) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "chronos-report.csv";
+    a.download = "flchron-report.csv";
     a.click();
     URL.revokeObjectURL(url);
   };

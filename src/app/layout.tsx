@@ -19,7 +19,7 @@ const workSans = Work_Sans({
 
 export const metadata: Metadata = {
   title: "FloLabs Chronos",
-  description: "Team time tracking, refined.",
+  description: "FloLabs Chronos — team time tracking, refined.",
 };
 
 export default function RootLayout({

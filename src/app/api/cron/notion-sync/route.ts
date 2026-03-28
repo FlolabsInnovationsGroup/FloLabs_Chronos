@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { timeEntries, projects, tags, users } from "@/lib/db/schema";
-import { isNull, isNotNull, and, eq } from "drizzle-orm";
+import { isNull, isNotNull, and, or, eq, lt } from "drizzle-orm";
 import { syncEntryToNotion } from "@/lib/notion";
 
 export const runtime = "nodejs";
@@ -39,7 +39,10 @@ export async function GET(req: Request) {
     .where(
       and(
         isNotNull(timeEntries.stoppedAt),
-        isNull(timeEntries.notionPageId)
+        or(
+          isNull(timeEntries.notionPageId),
+          lt(timeEntries.syncedAt, timeEntries.updatedAt)
+        )
       )
     )
     .limit(50);

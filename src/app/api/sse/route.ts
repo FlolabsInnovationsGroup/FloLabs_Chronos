@@ -10,10 +10,12 @@ export async function GET() {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  const encoder = new TextEncoder();
+  let onTimer: ((event: object) => void) | null = null;
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+
   const stream = new ReadableStream({
     start(controller) {
-      const encoder = new TextEncoder();
-
       const send = (data: object) => {
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
@@ -25,16 +27,15 @@ export async function GET() {
       // Send initial heartbeat
       send({ type: "heartbeat" });
 
-      const onTimer = (event: object) => send(event);
+      onTimer = (event: object) => send(event);
       timerBroadcaster.on("timer", onTimer);
 
       // Heartbeat every 25s to keep connection alive
-      const heartbeat = setInterval(() => send({ type: "heartbeat" }), 25000);
-
-      return () => {
-        timerBroadcaster.off("timer", onTimer);
-        clearInterval(heartbeat);
-      };
+      heartbeat = setInterval(() => send({ type: "heartbeat" }), 25000);
+    },
+    cancel() {
+      if (onTimer) timerBroadcaster.off("timer", onTimer);
+      if (heartbeat) clearInterval(heartbeat);
     },
   });
 

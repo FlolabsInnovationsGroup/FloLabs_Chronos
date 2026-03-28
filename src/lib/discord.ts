@@ -92,6 +92,34 @@ export function buildTimerStopEmbed(
 }
 
 /**
+ * Convenience: send timer start notification to a webhook.
+ */
+export async function sendTimerStartNotification(
+  webhookUrl: string,
+  userName: string,
+  projectName: string,
+  description: string
+): Promise<void> {
+  await sendDiscordEmbed(webhookUrl, buildTimerStartEmbed(userName, projectName, description));
+}
+
+/**
+ * Convenience: send timer stop notification to a webhook.
+ */
+export async function sendTimerStopNotification(
+  webhookUrl: string,
+  userName: string,
+  projectName: string,
+  description: string,
+  durationMs: number
+): Promise<void> {
+  await sendDiscordEmbed(
+    webhookUrl,
+    buildTimerStopEmbed(userName, projectName, description, durationMs)
+  );
+}
+
+/**
  * Build a daily summary embed from a list of completed entries.
  */
 export function buildDailySummaryEmbed(
@@ -127,4 +155,15 @@ export function buildDailySummaryEmbed(
     },
     timestamp: new Date().toISOString(),
   };
+}
+
+/**
+ * Convenience: send daily summary to a webhook.
+ */
+export async function sendDailySummary(
+  webhookUrl: string,
+  userName: string,
+  entries: TimeEntry[]
+): Promise<void> {
+  await sendDiscordEmbed(webhookUrl, buildDailySummaryEmbed(userName, entries));
 }

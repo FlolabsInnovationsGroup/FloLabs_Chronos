@@ -32,6 +32,7 @@ export async function POST(req: Request) {
       .set({
         stoppedAt: new Date(stoppedAt),
         durationMs,
+        updatedAt: new Date(stoppedAt),
       })
       .where(
         and(

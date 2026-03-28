@@ -4,7 +4,6 @@ import { NextResponse } from "next/server";
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth;
-  const isAdmin = req.auth?.user?.role === "admin";
 
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/register");
   const isApiRoute = pathname.startsWith("/api");
@@ -18,10 +17,6 @@ export default auth((req) => {
 
   if (isDashboardRoute && !isLoggedIn) {
     return NextResponse.redirect(new URL("/login", req.url));
-  }
-
-  if (pathname.startsWith("/team") && !isAdmin) {
-    return NextResponse.redirect(new URL("/timer", req.url));
   }
 
   if (isAuthRoute && isLoggedIn) {

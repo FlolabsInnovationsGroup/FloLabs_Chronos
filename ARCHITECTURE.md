@@ -2,7 +2,64 @@
 
 ## Overview
 
-Chronos is a team time-tracking tool built as a replacement for Toggl. It provides individual user accounts managed by admins, live timers visible across devices and the admin dashboard, detailed reports with flexible filtering, and a refined editorial UI ("Vellum Ink" design system).
+Chronos is FloLabs' internal time-tracking and team-management tool. It replaces Toggl for time capture, but the product goal is broader: admins need a controlled way to create projects, invite people into teams, and review team-wide time usage without exposing the same management surface to every account.
+
+The V1 operating model is:
+- Projects are global, but only admins can create or modify them.
+- Every non-admin account belongs to one primary team.
+- Access is role-scoped across three roles: `admin`, `team_lead`, `member`.
+- Account creation is invite-only. There is no open self-registration.
+- Invitations assign the invited user to a team automatically at account creation time.
+
+---
+
+## Product Model
+
+### Roles
+
+#### Admin
+- Can create, edit, archive, and restore projects.
+- Can create teams and manage all team memberships.
+- Can invite users into any team.
+- Can see all teams, all users, all time entries, and all reports.
+
+#### Team Lead
+- Belongs to exactly one team in V1.
+- Can see all members of their team.
+- Can see all time entries and reports for users in their team.
+- Cannot create or modify projects.
+- Cannot see users or reports outside their team.
+
+#### Member
+- Belongs to exactly one team in V1.
+- Can see which team they belong to.
+- Can see only their own entries and reports.
+- Cannot create or modify projects.
+- Cannot manage team membership or invitations.
+
+### Team Model
+
+V1 uses a **single primary team per user**. That keeps permissions and reporting simple:
+- `users.team_id` stores the team assignment.
+- A user can be in zero or one team.
+- `team_lead` is expressed by `users.role = 'team_lead'`, not by a second membership table.
+
+If multi-team membership becomes necessary later, the migration path is clear: replace `users.team_id` with a `team_memberships` join table and keep the rest of the authorization rules intact.
+
+### Invitations
+
+User onboarding is invite-based:
+1. An admin creates an invitation for an email address and selects a team + role.
+2. The system generates a one-time registration token.
+3. The invite link points to `/register?invite=<token>`.
+4. Registration is only allowed when the token is valid, unexpired, and matches the invite email.
+5. On success, the new user is created and assigned to the invite's team automatically.
+
+Delivery should be abstracted behind an invitation service:
+- If an email provider is configured, send the email directly.
+- If email delivery is not configured, still create the invite and return a shareable invite URL.
+
+That keeps the onboarding workflow operational without coupling the core product to one email vendor.
 
 ---
 
@@ -10,69 +67,96 @@ Chronos is a team time-tracking tool built as a replacement for Toggl. It provid
 
 | Layer | Technology | Why |
 |---|---|---|
-| Frontend + API | **Next.js 15** (App Router) on **Vercel** | SSR, edge caching, zero-config deploys |
-| Auth | **NextAuth.js v5** (Auth.js) | Role-based (admin/member), credentials provider |
-| Database | **PostgreSQL** (Neon Serverless or Vercel Postgres) | Complex queries, aggregations, serverless-friendly |
-| ORM | **Drizzle ORM** | Type-safe, lightweight, great migrations |
-| Real-time | **Vercel KV (Redis)** + **Server-Sent Events (SSE)** | Active timer state in Redis, SSE for live updates |
-| Styling | **Tailwind CSS** with Vellum Ink design tokens | Matches Stitch AI designs exactly |
-| Validation | **Zod** | Shared schemas between client and server |
-| Domain | Custom domain via Vercel | Team-wide access |
+| Frontend + API | **Next.js 16** (App Router) on **Vercel** | SSR, App Router, route handlers, zero-config deploys |
+| Auth | **NextAuth.js v5** (Auth.js credentials) | Existing auth foundation, easy role/session enrichment |
+| Database | **PostgreSQL** (Neon Serverless / Vercel-managed Neon) | Durable source of truth, strong relational querying |
+| ORM | **Drizzle ORM** | Type-safe schema and queries |
+| Real-time | **Redis** + **Server-Sent Events (SSE)** | Active timer state in Redis, fan-out through SSE |
+| Styling | **Tailwind CSS** with Vellum Ink tokens | Matches the editorial product language |
+| Validation | **Zod** | Shared input validation |
+| Optional email | **Resend** or equivalent | Invitation email delivery without building SMTP plumbing |
 
 ### Why SSE over WebSocket?
 
-For this use case, **Server-Sent Events (SSE)** are simpler and sufficient:
-- Timers are **write-rare, read-frequent** — users start/stop occasionally, dashboard reads constantly
-- SSE works over standard HTTP (no special infrastructure like API Gateway WebSocket)
-- Vercel Edge Functions support SSE natively
-- Falls back gracefully; no connection registry needed
-- For thousands of concurrent viewers, a Redis pub/sub + SSE fan-out is lightweight
-
-If we later need bidirectional real-time (e.g., collaborative editing), we can add WebSocket via a small AWS API Gateway layer.
+For Chronos, **Server-Sent Events (SSE)** are simpler and sufficient:
+- Timers are write-rare and read-frequent.
+- Clients only need server-to-client updates for timer state changes.
+- The UI computes elapsed time locally from `startedAt`.
+- Redis pub/sub plus SSE fan-out remains lightweight for the expected scale.
 
 ---
 
 ## How Live Timers Work
 
-**Timers are timestamps, not ticks.** This is the key insight.
+**Timers are timestamps, not ticks.**
 
 ### Start Timer
-1. User clicks "Start" → API writes to **Redis**: `timer:{userId}` = `{ projectId, tag, description, startedAt }`
-2. Also writes a `running` row in PostgreSQL (crash recovery)
-3. Redis `PUBLISH` on `timers:updates` channel
-4. SSE endpoint picks up the publish → fans out to all connected clients
+1. User clicks "Start" -> API writes to Redis: `timer:{userId}` = `{ projectId, tagId, description, startedAt }`
+2. API broadcasts a timer-start event on the Redis pub/sub channel
+3. Connected SSE clients receive the event and update their local state
 
-### Display Timer (Any Device)
-- Client connects to SSE endpoint, receives `startedAt` timestamp
-- **Client counts up locally** using `Date.now() - startedAt`
-- No per-second server messages. One event on start, one on stop.
+### Display Timer
+- Client receives `startedAt`
+- Client computes elapsed time locally with `Date.now() - startedAt`
+- No per-second server events
 
 ### Stop Timer
-1. API calculates `duration = now - startedAt`
-2. Writes completed entry to PostgreSQL (with `stoppedAt` and `durationMs`)
-3. Removes from Redis
-4. Publishes stop event → SSE broadcast
+1. API loads the active timer from Redis
+2. API computes `durationMs`
+3. API writes the completed entry to PostgreSQL
+4. API removes the active timer from Redis
+5. API broadcasts a timer-stop event
 
-### Admin Dashboard
-- On load: fetch all active timers from Redis (one call)
-- Subscribe to SSE for real-time adds/stops
-- Each timer card ticks locally from `startedAt`
-- **Thousands of timers, zero server ticking cost**
+### Visibility Rules
+- Admins can inspect all active timers
+- Team leads can inspect active timers for users in their team
+- Members can inspect only their own active timer
+
+Authorization must be enforced in the route handlers, not only in `proxy.ts`.
 
 ---
 
 ## Data Model
 
 ```sql
--- Users & auth
-CREATE TABLE users (
+-- Teams
+CREATE TABLE teams (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email       TEXT UNIQUE NOT NULL,
   name        TEXT NOT NULL,
-  password    TEXT NOT NULL,  -- bcrypt hash
-  role        TEXT NOT NULL DEFAULT 'member',  -- 'admin' | 'member'
+  slug        TEXT UNIQUE NOT NULL,
   created_at  TIMESTAMPTZ DEFAULT now(),
   updated_at  TIMESTAMPTZ DEFAULT now()
+);
+
+-- Users
+CREATE TABLE users (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email                 TEXT UNIQUE NOT NULL,
+  name                  TEXT NOT NULL,
+  password              TEXT NOT NULL,
+  role                  TEXT NOT NULL DEFAULT 'member', -- 'admin' | 'team_lead' | 'member'
+  team_id               UUID REFERENCES teams(id),
+  is_active             BOOLEAN NOT NULL DEFAULT true,
+  discord_webhook_url   TEXT,
+  notify_on_start       BOOLEAN DEFAULT false,
+  notify_on_stop        BOOLEAN DEFAULT false,
+  daily_summary         BOOLEAN DEFAULT false,
+  created_at            TIMESTAMPTZ DEFAULT now(),
+  updated_at            TIMESTAMPTZ DEFAULT now()
+);
+
+-- Invitations
+CREATE TABLE invitations (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email          TEXT NOT NULL,
+  name           TEXT NOT NULL,
+  role           TEXT NOT NULL DEFAULT 'member', -- 'team_lead' | 'member'
+  team_id        UUID NOT NULL REFERENCES teams(id),
+  token          TEXT UNIQUE NOT NULL,
+  invited_by_id  UUID NOT NULL REFERENCES users(id),
+  expires_at     TIMESTAMPTZ NOT NULL,
+  accepted_at    TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ DEFAULT now()
 );
 
 -- Projects
@@ -92,26 +176,70 @@ CREATE TABLE tags (
   color       TEXT DEFAULT '#755a40'
 );
 
--- Time entries (the big table)
+-- Time entries
 CREATE TABLE time_entries (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     UUID NOT NULL REFERENCES users(id),
-  project_id  UUID NOT NULL REFERENCES projects(id),
-  tag_id      UUID REFERENCES tags(id),
-  description TEXT NOT NULL,
-  started_at  TIMESTAMPTZ NOT NULL,
-  stopped_at  TIMESTAMPTZ,          -- NULL = still running
-  duration_ms BIGINT,               -- computed on stop
-  created_at  TIMESTAMPTZ DEFAULT now()
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id        UUID NOT NULL REFERENCES users(id),
+  project_id     UUID NOT NULL REFERENCES projects(id),
+  tag_id         UUID REFERENCES tags(id),
+  description    TEXT NOT NULL,
+  started_at     TIMESTAMPTZ NOT NULL,
+  stopped_at     TIMESTAMPTZ,
+  duration_ms    BIGINT,
+  notion_page_id TEXT,
+  synced_at      TIMESTAMPTZ,
+  updated_at     TIMESTAMPTZ DEFAULT now(),
+  created_at     TIMESTAMPTZ DEFAULT now()
 );
 
--- Indexes for performance
-CREATE INDEX idx_entries_user     ON time_entries(user_id, started_at DESC);
-CREATE INDEX idx_entries_project  ON time_entries(project_id, started_at DESC);
-CREATE INDEX idx_entries_date     ON time_entries(started_at DESC);
-CREATE INDEX idx_entries_running  ON time_entries(stopped_at) WHERE stopped_at IS NULL;
-CREATE INDEX idx_entries_tag      ON time_entries(tag_id) WHERE tag_id IS NOT NULL;
+CREATE INDEX idx_entries_user    ON time_entries(user_id, started_at DESC);
+CREATE INDEX idx_entries_project ON time_entries(project_id, started_at DESC);
+CREATE INDEX idx_entries_date    ON time_entries(started_at DESC);
+CREATE INDEX idx_entries_tag     ON time_entries(tag_id) WHERE tag_id IS NOT NULL;
+CREATE INDEX idx_users_team      ON users(team_id);
+CREATE INDEX idx_invites_email   ON invitations(email);
+CREATE INDEX idx_invites_team    ON invitations(team_id);
 ```
+
+### Data Rules
+- `users.email` remains globally unique.
+- Pending invitations do not create user rows early; they reserve onboarding intent only.
+- Invited emails cannot use open registration because open registration does not exist in V1.
+- `admin` users may have `team_id = NULL`.
+- `team_lead` and `member` should have a `team_id`.
+- Deactivation is soft via `users.is_active = false`.
+
+---
+
+## Access Control
+
+Authorization must be validated in **every route handler and server component that reads protected data**.
+
+### Shared Permission Helpers
+
+The app should centralize authorization with server-side helper functions:
+- `isAdmin(session)`
+- `isTeamLead(session)`
+- `isMember(session)`
+- `canManageProjects(session)`
+- `canViewUser(session, targetUserId)`
+- `scopeUserIdsForSession(session)` or equivalent team-aware query helpers
+
+### Route Rules
+
+| Surface | Admin | Team Lead | Member |
+|---|---|---|---|
+| `/projects` list | Yes | Yes | Yes |
+| Create/edit/archive projects | Yes | No | No |
+| `/team` page | All teams | Own team only | Own team only |
+| Create invites | Yes | No | No |
+| Create/edit teams | Yes | No | No |
+| Reports | All users | Team users only | Own only |
+| User management | All users | No direct user edits in V1 | No |
+
+### Important Security Note
+
+`proxy.ts` is only a UX guard. It is **not** the source of truth for authorization. Route handlers and server components must re-check role and team scope because Next.js proxy protection alone is not sufficient.
 
 ---
 
@@ -119,242 +247,162 @@ CREATE INDEX idx_entries_tag      ON time_entries(tag_id) WHERE tag_id IS NOT NU
 
 ```
 FloLabs_Chronos/
-├── ARCHITECTURE.md          # This file
+├── ARCHITECTURE.md
+├── CLAUDE.md
+├── GAME_MASTER.md
 ├── src/
 │   ├── app/
-│   │   ├── layout.tsx       # Root layout with fonts + providers
-│   │   ├── page.tsx         # Landing / redirect
 │   │   ├── (auth)/
 │   │   │   ├── login/page.tsx
-│   │   │   └── register/page.tsx
+│   │   │   └── register/page.tsx        # Invite-only registration
 │   │   ├── (dashboard)/
-│   │   │   ├── layout.tsx   # Sidebar + top bar
-│   │   │   ├── timer/page.tsx       # Active timer + recent entries
-│   │   │   ├── projects/page.tsx    # Project management
-│   │   │   ├── team/page.tsx        # Team member list
-│   │   │   └── reports/page.tsx     # Detailed reports (admin)
+│   │   │   ├── timer/page.tsx
+│   │   │   ├── projects/page.tsx
+│   │   │   ├── team/page.tsx            # Team visibility varies by role
+│   │   │   ├── reports/page.tsx
+│   │   │   └── settings/page.tsx
 │   │   └── api/
-│   │       ├── auth/[...nextauth]/route.ts
+│   │       ├── auth/
+│   │       │   ├── [...nextauth]/route.ts
+│   │       │   ├── register/route.ts
+│   │       │   └── invitation/route.ts  # Invite validation lookup
 │   │       ├── timer/
-│   │       │   ├── start/route.ts
-│   │       │   ├── stop/route.ts
-│   │       │   └── active/route.ts
-│   │       ├── entries/route.ts     # CRUD time entries
-│   │       ├── projects/route.ts
-│   │       ├── tags/route.ts
-│   │       ├── users/route.ts       # Admin user management
-│   │       ├── sse/route.ts          # SSE endpoint for live updates
+│   │       ├── entries/
+│   │       ├── projects/
+│   │       ├── reports/
+│   │       ├── teams/                   # Team CRUD (admin)
+│   │       ├── invitations/             # Invite creation/listing (admin)
+│   │       ├── users/
+│   │       ├── tags/
+│   │       ├── sse/route.ts
 │   │       └── cron/
-│   │           ├── notion-sync/route.ts   # Batch sync to Notion (every 5 min)
-│   │           └── daily-summary/route.ts # Discord daily summaries (daily 18:00)
 │   ├── components/
-│   │   ├── ui/              # Design system primitives
-│   │   ├── timer/           # Timer display, controls
-│   │   ├── entries/         # Entry list, entry card
-│   │   ├── reports/         # Charts, filters, tables
-│   │   └── layout/          # Sidebar, top bar, bottom nav
+│   ├── hooks/
 │   ├── lib/
 │   │   ├── db/
-│   │   │   ├── schema.ts   # Drizzle schema
-│   │   │   ├── index.ts    # DB connection
-│   │   │   └── migrations/ # SQL migrations
-│   │   ├── redis.ts         # Redis/KV client
-│   │   ├── auth.ts          # Auth.js config
-│   │   ├── notion.ts        # Notion API sync client
-│   │   ├── discord.ts       # Discord webhook helper
-│   │   └── utils.ts         # Shared helpers
-│   ├── hooks/
-│   │   ├── use-timer.ts     # Timer state + local tick
-│   │   └── use-sse.ts       # SSE subscription hook
+│   │   ├── auth.ts
+│   │   ├── permissions.ts               # Shared role/team permission helpers
+│   │   ├── invitations.ts               # Token generation + delivery abstraction
+│   │   ├── redis.ts
+│   │   ├── notion.ts
+│   │   └── discord.ts
 │   └── types/
-│       └── index.ts         # Shared TypeScript types
 ├── drizzle.config.ts
-├── tailwind.config.ts       # Vellum Ink design tokens
-├── next.config.ts
-├── vercel.json              # Cron jobs (Notion sync, daily summary)
-├── package.json
+├── vercel.json
 └── .env.example
 ```
 
 ---
 
-## Design System: Vellum Ink
+## Registration Flow
 
-The UI follows the "Tactile Editorial" design system from the Stitch AI designs.
+Chronos V1 is **invite-only**.
 
-### Key Principles
-- **Paper-based surfaces:** Cream (#fbf9f5) base, tonal layering for depth
-- **No-line rule:** No 1px borders for sectioning — use background color shifts
-- **Typography:** Newsreader (serif) for headlines/numbers, Work Sans (sans) for body/UI
-- **Ink-on-paper:** Never use pure #000 — use #31332f (on-surface)
-- **Paper shadows:** `box-shadow: 0 12px 32px -4px rgba(49, 51, 47, 0.06)`
-- **Intentional asymmetry:** Luxury margins, editorial spacing
+### Registration Rules
+- `/register` requires a valid invite token.
+- Without a valid invite, the page becomes an informational state that points users to sign in or contact an admin.
+- The invite email is the only email allowed for that registration attempt.
+- If the email already exists in `users`, registration returns `409`.
+- If the invite is expired or already accepted, registration returns `410`.
 
-### Color Tokens
-- Primary: #366769 (oxidized mint)
-- Secondary: #5c5e6e (lavender grey)
-- Tertiary: #755a40 (dusty peach)
-- Surface: #fbf9f5 (paper base)
-- On-surface: #31332f (ink)
+### Recommended Endpoint Split
+- `GET /api/auth/invitation?token=...` -> validate invite and return prefill data
+- `POST /api/auth/register` -> create account from invite
+
+That keeps the UI simple and removes the need for the client to infer invite validity.
 
 ---
 
 ## Reports Engine
 
-Admin detailed reports are server-side PostgreSQL queries via Next.js Server Components:
+Reports are server-side PostgreSQL queries with scope depending on the viewer:
+- **Admin:** unrestricted across all users
+- **Team Lead:** restricted to users whose `team_id` matches the lead's team
+- **Member:** restricted to `session.user.id`
 
-- **Filter by:** user, project, tag, date range, description (full-text search)
-- **Group by:** user, project, tag, day/week/month
-- **Aggregations:** total hours, entry count, per-project breakdown
-- **Export:** CSV download
-- **URL-based filters:** All filter state in URL params for sharing/bookmarking
+### Filter Model
+- Filter by user, project, tag, date range, description
+- Group by day, week, month, user, project
+- Export CSV
+- Store filter state in URL params
+
+### Team-Scoped Reporting Rule
+
+User-filter dropdowns must be derived from the same accessible scope as the report query. A team lead must never receive a global user list in the filter UI.
+
+---
+
+## Design System: Vellum Ink
+
+The UI follows the "Tactile Editorial" system from the Stitch references.
+
+### Principles
+- Cream paper background: `#fbf9f5`
+- Ink text: `#31332f`, never pure black
+- No hard borders for layout sectioning
+- Newsreader for editorial headers and numeric emphasis
+- Work Sans for UI labels and controls
+- Paper shadow: `0 12px 32px -4px rgba(49, 51, 47, 0.06)`
+
+Use the existing design tokens and avoid generic admin-panel styling.
 
 ---
 
 ## Deployment
 
-1. **Vercel** — Next.js app, auto-deploys from Git
-2. **Vercel Postgres** (or Neon) — Serverless PostgreSQL
-3. **Vercel KV** — Serverless Redis for active timers
-4. **Custom domain** — Connected via Vercel DNS
+1. **Vercel** for the Next.js deployment
+2. **Neon Postgres** for durable relational storage
+3. **Redis** for active timers and pub/sub
+4. **Optional email provider** for invite delivery
 
 ### Environment Variables
+
+```bash
+DATABASE_URL=
+KV_URL=
+NEXTAUTH_SECRET=
+NEXTAUTH_URL=
+CRON_SECRET=
+NOTION_API_KEY=
+NOTION_DATABASE_ID=
+
+# Optional invitation delivery
+RESEND_API_KEY=
+INVITE_FROM_EMAIL=
+APP_URL=
 ```
-DATABASE_URL=           # PostgreSQL connection string
-KV_URL=                 # Redis connection string
-KV_REST_API_URL=        # Vercel KV REST URL
-KV_REST_API_TOKEN=      # Vercel KV REST token
-NEXTAUTH_SECRET=        # Auth.js secret
-NEXTAUTH_URL=           # App URL
-NOTION_API_KEY=         # Notion internal integration token
-NOTION_DATABASE_ID=     # Notion database ID for time entries backup
-CRON_SECRET=            # Secret to protect cron endpoints
-```
+
+`APP_URL` should be used when building absolute invite URLs outside request scope.
 
 ---
 
 ## Notion Backup
 
-Notion serves as a **secondary backup** of all time entries — not the source of truth. The sync is async and batch-oriented to respect Notion's API rate limits (~3 requests/second).
+Notion remains a **secondary backup**, not the source of truth.
 
-### How It Works
+### Sync Rules
+1. Select entries where `synced_at IS NULL OR synced_at < updated_at`
+2. Create or update the corresponding Notion page
+3. Persist `notion_page_id` and `synced_at`
 
-A Vercel Cron job runs every 5 minutes:
-
-1. `SELECT * FROM time_entries WHERE synced_at IS NULL OR synced_at < updated_at`
-2. For each entry:
-   - No `notion_page_id` → **Create** page in Notion database
-   - Has `notion_page_id` → **Update** existing page
-3. Set `synced_at = now()` and store `notion_page_id` on the entry
-
-### Schema Additions
-
-```sql
-ALTER TABLE time_entries ADD COLUMN notion_page_id TEXT;
-ALTER TABLE time_entries ADD COLUMN synced_at TIMESTAMPTZ;
-ALTER TABLE time_entries ADD COLUMN updated_at TIMESTAMPTZ DEFAULT now();
-```
-
-### Notion Database Properties
-
-| Property | Type | Maps to |
-|---|---|---|
-| Description | Title | `description` |
-| User | Select | `user.name` |
-| Project | Select | `project.name` |
-| Tag | Select | `tag.name` |
-| Started | Date | `started_at` |
-| Stopped | Date | `stopped_at` |
-| Duration (h) | Number | `duration_ms / 3600000` |
-| Chronos ID | Rich Text | `id` (for deduplication) |
-
-### Failure Handling
-
-- If Notion is down, entries accumulate with `synced_at IS NULL` and sync on the next successful run
-- Rate limit (429) → exponential backoff within the batch
-- No data loss — PostgreSQL is always authoritative
-
-### Environment Variables
-
-```
-NOTION_API_KEY=           # Notion internal integration token
-NOTION_DATABASE_ID=       # Target database ID for time entries
-```
-
-### Files
-
-- `src/lib/notion.ts` — Notion API client (create/update pages, batch sync logic)
-- `src/app/api/cron/notion-sync/route.ts` — Vercel Cron handler
+If Notion is unavailable, sync retries on the next cron run. PostgreSQL remains authoritative.
 
 ---
 
 ## Discord Notifications
 
-Each user can have a Discord webhook URL configured by admins. Notifications fire on timer events and optionally as a daily summary.
+Discord webhook notifications remain optional and non-blocking:
+- Timer started
+- Timer stopped
+- Daily summary
 
-### User Schema Additions
-
-```sql
-ALTER TABLE users ADD COLUMN discord_webhook_url TEXT;
-ALTER TABLE users ADD COLUMN notify_on_start BOOLEAN DEFAULT false;
-ALTER TABLE users ADD COLUMN notify_on_stop BOOLEAN DEFAULT true;
-ALTER TABLE users ADD COLUMN daily_summary BOOLEAN DEFAULT true;
-```
-
-### Notification Events
-
-| Event | Trigger | Example Message |
-|---|---|---|
-| Timer started | `POST /api/timer/start` | 🟢 **Oliver** started: *Brand Guidelines* (Aesthetic Co.) — Design |
-| Timer stopped | `POST /api/timer/stop` | 🔴 **Oliver** stopped: *Brand Guidelines* — 2h 30m |
-| Daily summary | Vercel Cron (daily 18:00 CET) | 📊 **Oliver** logged 6.2h today across 4 entries |
-
-### Implementation
-
-- **Start/Stop:** Fire-and-forget `fetch()` call to the user's webhook URL inline in the API route. Non-blocking — failures are silently caught.
-- **Daily summary:** Vercel Cron aggregates the day's entries per user and sends a summary embed to users with `daily_summary = true`.
-- **Embeds use Chronos branding:** Primary color `#366769`, clean field layout.
-
-### Rate Limits
-
-Discord webhooks allow ~30 requests/minute per URL. With start/stop events, even a very active user won't approach this. Daily summaries are one message per user.
-
-### Files
-
-- `src/lib/discord.ts` — Webhook helper (send embed, format timer events)
-- `src/app/api/cron/daily-summary/route.ts` — Vercel Cron handler for daily summaries
-- Admin team UI includes Discord webhook URL and notification toggle fields per user
+They should never block the primary timer or reporting flows.
 
 ---
 
-## Vercel Cron Jobs
+## Scaling and Future Extensions
 
-Defined in `vercel.json`:
-
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/notion-sync",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron/daily-summary",
-      "schedule": "0 17 * * *"
-    }
-  ]
-}
-```
-
-- **Notion sync:** Every 5 minutes, batch sync new/updated entries
-- **Daily summary:** 17:00 UTC (18:00 CET) — Discord summary for each user
-
----
-
-## Scaling Considerations
-
-- **Timers are timestamps:** No server-side ticking. A million timers = a million Redis keys, each a few bytes.
-- **SSE fan-out:** Each connected client holds one HTTP connection. Vercel Edge handles this at scale.
-- **Reports on cold data:** Historical queries hit PostgreSQL indexes. Active timers are in Redis.
-- **Serverless PostgreSQL:** Aurora Serverless or Neon scales compute on demand for heavy report queries.
-- **Partitioning (future):** If time_entries grows past ~100M rows, partition by month on `started_at`.
+- Single-team membership keeps V1 authorization simple and easy to reason about.
+- If the org needs cross-team staffing later, add a `team_memberships` table and migrate permission helpers to set-based membership checks.
+- If project ownership becomes team-scoped, add `projects.team_id` and reuse the same access helper layer.
+- If email delivery becomes mandatory, plug Resend into the invitation service without changing the registration contract.

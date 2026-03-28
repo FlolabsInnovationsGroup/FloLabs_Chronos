@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { timeEntries, projects, tags, users } from "@/lib/db/schema";
-import { eq, and, gte, lte, desc, isNotNull } from "drizzle-orm";
+import { eq, and, gte, lte, desc, inArray, isNotNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
+import { getAccessibleUserIds } from "@/lib/permissions";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -12,14 +13,28 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const limit = parseInt(url.searchParams.get("limit") ?? "50");
-  const userId = session.user.role === "admin"
-    ? (url.searchParams.get("userId") ?? session.user.id)
-    : session.user.id;
+  const requestedUserId = url.searchParams.get("userId");
+  const accessibleUserIds = await getAccessibleUserIds(session.user);
 
-  const conditions = [
-    eq(timeEntries.userId, userId),
+  const conditions: SQL[] = [
     isNotNull(timeEntries.stoppedAt),
   ];
+
+  if (accessibleUserIds !== null) {
+    if (requestedUserId && !accessibleUserIds.includes(requestedUserId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (requestedUserId) {
+      conditions.push(eq(timeEntries.userId, requestedUserId));
+    } else if (accessibleUserIds.length === 1) {
+      conditions.push(eq(timeEntries.userId, accessibleUserIds[0]));
+    } else {
+      conditions.push(inArray(timeEntries.userId, accessibleUserIds));
+    }
+  } else if (requestedUserId) {
+    conditions.push(eq(timeEntries.userId, requestedUserId));
+  }
 
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");

@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { invitations, users } from "@/lib/db/schema";
+import { and, eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { normalizeEmail } from "@/lib/invitations";
 
 const registerSchema = z.object({
+  token: z.string().min(1),
   name: z.string().min(1),
   email: z.string().email(),
   password: z.string().min(8),
@@ -22,8 +24,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
 
-  const { name, email, password } = parsed.data;
-  const normalizedEmail = email.toLowerCase().trim();
+  const { token, name, email, password } = parsed.data;
+  const normalizedEmail = normalizeEmail(email);
 
   const existing = await db
     .select({ id: users.id })
@@ -35,6 +37,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
   }
 
+  const [invite] = await db
+    .select()
+    .from(invitations)
+    .where(and(eq(invitations.token, token), eq(invitations.email, normalizedEmail)))
+    .limit(1);
+
+  if (!invite) {
+    return NextResponse.json({ error: "This invitation is invalid." }, { status: 404 });
+  }
+
+  if (invite.acceptedAt) {
+    return NextResponse.json({ error: "This invitation has already been used." }, { status: 410 });
+  }
+
+  if (new Date(invite.expiresAt).getTime() < Date.now()) {
+    return NextResponse.json({ error: "This invitation has expired." }, { status: 410 });
+  }
+
   const hashedPassword = await bcrypt.hash(password, 12);
 
   const [user] = await db
@@ -43,9 +63,23 @@ export async function POST(req: Request) {
       name: name.trim(),
       email: normalizedEmail,
       password: hashedPassword,
-      role: "member",
+      role: invite.role,
+      teamId: invite.teamId,
+      isActive: true,
     })
-    .returning({ id: users.id, email: users.email, name: users.name, role: users.role });
+    .returning({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+      teamId: users.teamId,
+      isActive: users.isActive,
+    });
+
+  await db
+    .update(invitations)
+    .set({ acceptedAt: new Date() })
+    .where(eq(invitations.id, invite.id));
 
   return NextResponse.json({ user }, { status: 201 });
 }

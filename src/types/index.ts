@@ -1,12 +1,37 @@
-export type Role = "admin" | "member";
+export type Role = "admin" | "team_lead" | "member";
 
 export interface User {
   id: string;
   email: string;
   name: string;
   role: Role;
+  teamId: string | null;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  team?: Pick<Team, "id" | "name" | "slug"> | null;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Invitation {
+  id: string;
+  email: string;
+  name: string;
+  role: Exclude<Role, "admin">;
+  teamId: string;
+  token: string;
+  invitedById: string;
+  expiresAt: Date;
+  acceptedAt: Date | null;
+  createdAt: Date;
+  team?: Pick<Team, "id" | "name" | "slug">;
 }
 
 export interface Project {

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { timeEntries, projects, tags, users } from "@/lib/db/schema";
-import { eq, and, gte, lte, isNotNull, desc } from "drizzle-orm";
+import { eq, and, gte, lte, isNotNull, desc, inArray, type SQL } from "drizzle-orm";
+import { getAccessibleUserIds } from "@/lib/permissions";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -18,12 +19,25 @@ export async function GET(req: Request) {
   const groupBy = url.searchParams.get("groupBy") ?? "day";
   const format = url.searchParams.get("format");
 
-  const conditions = [isNotNull(timeEntries.stoppedAt)];
+  const conditions: SQL[] = [isNotNull(timeEntries.stoppedAt)];
+  const accessibleUserIds = await getAccessibleUserIds(session.user);
 
-  // Non-admins can only see their own data
-  const effectiveUserId =
-    session.user.role === "admin" ? userId : session.user.id;
-  if (effectiveUserId) conditions.push(eq(timeEntries.userId, effectiveUserId));
+  if (accessibleUserIds !== null) {
+    if (userId && !accessibleUserIds.includes(userId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (userId) {
+      conditions.push(eq(timeEntries.userId, userId));
+    } else if (accessibleUserIds.length === 1) {
+      conditions.push(eq(timeEntries.userId, accessibleUserIds[0]));
+    } else {
+      conditions.push(inArray(timeEntries.userId, accessibleUserIds));
+    }
+  } else if (userId) {
+    conditions.push(eq(timeEntries.userId, userId));
+  }
+
   if (projectId) conditions.push(eq(timeEntries.projectId, projectId));
   if (tagId) conditions.push(eq(timeEntries.tagId, tagId));
   if (from) conditions.push(gte(timeEntries.startedAt, new Date(from)));

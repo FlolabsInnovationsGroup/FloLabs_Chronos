@@ -4,10 +4,13 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { canManageTeams } from "@/lib/permissions";
 
 const updateSchema = z.object({
-  role: z.enum(["admin", "member"]).optional(),
+  role: z.enum(["admin", "team_lead", "member"]).optional(),
   name: z.string().min(1).optional(),
+  teamId: z.string().uuid().nullable().optional(),
+  isActive: z.boolean().optional(),
   discordWebhookUrl: z.string().url().nullable().optional(),
   notifyOnStart: z.boolean().optional(),
   notifyOnStop: z.boolean().optional(),
@@ -19,7 +22,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "admin") {
+  if (!session?.user || !canManageTeams(session.user)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
@@ -32,6 +35,8 @@ export async function PATCH(
   const updateData: Record<string, unknown> = {};
   if (parsed.data.role !== undefined) updateData.role = parsed.data.role;
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
+  if (parsed.data.teamId !== undefined) updateData.teamId = parsed.data.teamId;
+  if (parsed.data.isActive !== undefined) updateData.isActive = parsed.data.isActive;
   if (parsed.data.discordWebhookUrl !== undefined) updateData.discordWebhookUrl = parsed.data.discordWebhookUrl;
   if (parsed.data.notifyOnStart !== undefined) updateData.notifyOnStart = parsed.data.notifyOnStart;
   if (parsed.data.notifyOnStop !== undefined) updateData.notifyOnStop = parsed.data.notifyOnStop;
@@ -46,6 +51,8 @@ export async function PATCH(
       email: users.email,
       name: users.name,
       role: users.role,
+      teamId: users.teamId,
+      isActive: users.isActive,
       discordWebhookUrl: users.discordWebhookUrl,
       notifyOnStart: users.notifyOnStart,
       notifyOnStop: users.notifyOnStop,
@@ -62,7 +69,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "admin") {
+  if (!session?.user || !canManageTeams(session.user)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
@@ -73,6 +80,9 @@ export async function DELETE(
     return NextResponse.json({ error: "Cannot deactivate your own account" }, { status: 400 });
   }
 
-  await db.delete(users).where(eq(users.id, id));
+  await db
+    .update(users)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(users.id, id));
   return NextResponse.json({ ok: true });
 }

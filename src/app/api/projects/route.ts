@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { projects } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { canManageProjects } from "@/lib/permissions";
 
 export async function GET() {
   const session = await auth();
@@ -22,7 +23,9 @@ const createSchema = z.object({
 
 export async function POST(req: Request) {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user || !canManageProjects(session.user)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
 
   const body = await req.json();
@@ -35,7 +38,9 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user || !canManageProjects(session.user)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
 
   const url = new URL(req.url);
@@ -49,7 +54,7 @@ export async function PUT(req: Request) {
 
 export async function DELETE(req: Request) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "admin") {
+  if (!session?.user || !canManageProjects(session.user)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });

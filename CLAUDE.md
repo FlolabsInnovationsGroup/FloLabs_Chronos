@@ -1,229 +1,168 @@
 # CLAUDE.md — FloLabs Chronos
 
-Project context for AI coding agents working on this codebase.
+Project context for coding agents working on this repository.
 
-## What Is This?
+## Read Order
 
-FloLabs Chronos is a team time-tracking web app replacing Toggl. Built for FloLabs' internal use with plans to scale across the full team.
-
-**Read `ARCHITECTURE.md` first** — it has the full technical plan, data model, and design decisions.
-
----
-
-## Quick Start
-
-```bash
-pnpm install
-cp .env.example .env.local   # Fill in database + Redis + auth credentials
-pnpm db:generate              # Generate Drizzle migrations
-pnpm db:push                  # Push schema to database
-pnpm dev                      # Start dev server on localhost:3000
-```
-
-### Required Services
-
-| Service | Purpose | Dev Option |
-|---|---|---|
-| PostgreSQL | Primary database | Neon free tier or local Docker |
-| Redis | Active timer state | Vercel KV or local Redis |
-| Notion API | Backup sync (optional) | Skip for local dev |
+1. `ARCHITECTURE.md` — source of truth for product model, data model, and access rules
+2. `GAME_MASTER.md` — current implementation status and next steps
+3. Then inspect the actual code before changing behavior
 
 ---
 
-## Tech Stack
+## What This App Is
 
-- **Framework:** Next.js 15 (App Router, Server Components)
-- **Language:** TypeScript (strict)
-- **ORM:** Drizzle ORM with PostgreSQL
-- **Auth:** NextAuth v5 (credentials provider, admin/member roles)
-- **Real-time:** Vercel KV (Redis) + Server-Sent Events (SSE)
-- **Styling:** Tailwind CSS with Vellum Ink design tokens
+FloLabs Chronos is an internal time-tracking and team-management application.
+
+V1 priorities:
+- reliable timer tracking
+- team-scoped reporting
+- admin-controlled project creation
+- invite-only account onboarding
+- clean editorial UI using Vellum Ink
+
+This is not an open signup SaaS. Treat it as an internal operations tool with strict role boundaries.
+
+---
+
+## Current Product Contract
+
+### Roles
+- `admin`
+- `team_lead`
+- `member`
+
+### Role Rules
+- **Admins** can manage teams, invite users, create/edit/archive projects, and see all reports.
+- **Team leads** can see members and reports for their own team only.
+- **Members** can see only their own reports and which team they belong to.
+
+### Team Rules
+- V1 uses **one primary team per user**
+- non-admin users should always have a `teamId`
+- admins may be global and have `teamId = null`
+
+### Registration Rules
+- registration is **invite-only**
+- `/register` must require a valid invite token
+- invited users are assigned to the invite's team automatically
+- if an email already exists in `users`, registration must fail
+- do not recreate accounts for invited emails
+
+### Project Rules
+- all authenticated users can read projects needed for timer entry
+- only admins can create, edit, archive, or restore projects
+
+---
+
+## Stack
+
+- **Framework:** Next.js 16 App Router
+- **Language:** TypeScript
+- **ORM:** Drizzle ORM
+- **Database:** Neon Postgres
+- **Auth:** NextAuth v5 credentials
+- **Realtime:** Redis + SSE
 - **Validation:** Zod
-- **Deployment:** Vercel + Vercel Postgres + Vercel KV
+- **Styling:** Tailwind CSS with Vellum Ink tokens
+- **Deployment:** Vercel
 
 ---
 
-## Design System: Vellum Ink
+## Architecture Notes To Preserve
 
-**This is critical. The UI has a specific editorial aesthetic. Do not use generic component library styles.**
+### Timers
+- timers are timestamps, not ticking counters
+- active timers live in Redis
+- completed entries live in Postgres
+- clients compute elapsed time locally from `startedAt`
 
-### Rules
+### Authorization
+- never trust `proxy.ts` alone
+- every route handler must enforce role and team scope itself
+- centralize access logic in shared helpers instead of duplicating inline checks everywhere
 
-1. **Background:** `#fbf9f5` (cream paper) — never white (`#fff`) as page background
-2. **Text:** `#31332f` (ink) — **never pure `#000`**
-3. **No borders for sectioning:** Use background color shifts between `surface`, `surface-container-low`, `surface-container`, `surface-container-high`
-4. **Paper shadows only:** `box-shadow: 0 12px 32px -4px rgba(49, 51, 47, 0.06)` — no standard drop shadows
-5. **Typography:** Newsreader (serif, italic) for headlines + numbers. Work Sans for body/UI text.
-6. **Corners:** `rounded-sm` to `rounded-xl` — never `rounded-full` on buttons (only icon-only buttons)
-7. **Colors:** Primary `#366769`, Secondary `#5c5e6e`, Tertiary `#755a40`
+### Database Direction
 
-### Reference
+Expected core tables:
+- `users`
+- `teams`
+- `invitations`
+- `projects`
+- `tags`
+- `time_entries`
 
-- `stitch/vellum_ink/DESIGN.md` — Full design spec
-- `stitch/timer_dashboard_desktop_paper_style/code.html` — Desktop layout reference
-- `stitch/timer_dashboard_mobile_paper_style/code.html` — Mobile layout reference
+Expected high-value user fields:
+- `role`
+- `teamId`
+- `isActive`
 
-Tailwind config has all color tokens defined. Use semantic names like `bg-surface`, `text-on-surface`, `bg-primary`, etc.
+### Invitation Delivery
 
----
+The invitation system should be implemented in two layers:
+1. creation and token persistence
+2. delivery abstraction
 
-## Project Structure
-
-```
-src/
-├── app/
-│   ├── (auth)/              # Login + register pages
-│   ├── (dashboard)/         # Protected dashboard pages
-│   │   ├── timer/           # Main timer view
-│   │   ├── projects/        # Project CRUD
-│   │   ├── team/            # User management (admin)
-│   │   └── reports/         # Detailed reports + filters
-│   └── api/
-│       ├── auth/            # NextAuth route handler
-│       ├── timer/           # start, stop, active
-│       ├── entries/         # Time entry CRUD
-│       ├── projects/        # Project CRUD
-│       ├── tags/            # Tag CRUD
-│       ├── users/           # Admin user management
-│       ├── sse/             # Server-Sent Events for live timers
-│       └── cron/            # Vercel Cron handlers
-│           ├── notion-sync/ # Batch sync entries → Notion (every 5 min)
-│           └── daily-summary/ # Discord daily summaries (daily 18:00)
-├── components/
-│   ├── ui/                  # Design system primitives (Button, Input, Card, etc.)
-│   ├── layout/              # Sidebar, TopBar, BottomNav
-│   ├── timer/               # TimerDisplay, TimerControls
-│   ├── entries/             # EntryCard, EntryList
-│   └── reports/             # ReportFilters, ReportTable
-├── hooks/
-│   ├── use-timer.ts         # Timer state + local tick from startedAt
-│   └── use-sse.ts           # SSE subscription hook
-├── lib/
-│   ├── db/                  # Drizzle schema + connection
-│   ├── auth.ts              # NextAuth config
-│   ├── redis.ts             # Vercel KV client
-│   ├── notion.ts            # Notion API sync client
-│   ├── discord.ts           # Discord webhook helper
-│   └── utils.ts             # Shared utilities
-└── types/
-    └── index.ts             # Shared TypeScript types
-```
+If no email provider is configured, the API should still return a shareable invite URL. Do not block the feature on SMTP or vendor setup.
 
 ---
 
-## Key Architecture Decisions
+## Coding Rules For This Repo
 
-### Timers Are Timestamps, Not Ticks
+### Prefer shared permission helpers
 
-Active timers store a `startedAt` ISO timestamp in Redis. Clients calculate elapsed time locally with `Date.now() - startedAt`. No server-side ticking. This scales to thousands of concurrent timers with zero compute cost.
+If you add or change access control, do it through a shared server-side utility layer. Avoid scattered one-off `session.user.role === "admin"` checks when the logic is actually team-aware.
 
-### Redis for Hot, PostgreSQL for Cold
+### Keep V1 simple
 
-- **Redis (Vercel KV):** Active running timers. Key pattern: `timer:{userId}`. Ephemeral.
-- **PostgreSQL:** Completed time entries. Durable, indexed, queryable for reports.
-- On timer stop: data moves from Redis → PostgreSQL.
+Do not introduce multi-team membership yet unless the task explicitly requires it. Single-team-per-user is the intended V1 simplification.
 
-### SSE for Real-Time Updates
+### Avoid destructive user deletion
 
-Timer start/stop events publish to a Redis channel. The SSE endpoint (`/api/sse`) subscribes and fans out to connected clients. One event per start/stop — no periodic polling.
+If a person already has time entries, preserve historical integrity. Prefer soft deactivation (`isActive = false`) over deleting rows.
 
-### Notion Is a Backup, Not the Source of Truth
+### Registration must not drift back to open signup
 
-A Vercel Cron job syncs entries to Notion every 5 minutes. If Notion is down, entries queue in PostgreSQL and sync on the next run. The `notion_page_id` and `synced_at` columns on `time_entries` track sync state.
+Any work on auth or onboarding must preserve invite-only registration unless the product contract changes explicitly.
 
-### Discord Is Fire-and-Forget
+### UI must reflect permissions
 
-Webhook notifications fire inline in timer API routes. Failures are silently caught — they should never block the timer response. Per-user webhook URLs are managed by admins.
-
----
-
-## Database Schema
-
-Defined in `src/lib/db/schema.ts` using Drizzle ORM.
-
-### Tables
-- **users** — id, email, name, password (bcrypt), role (admin/member), discord_webhook_url, notify_on_start, notify_on_stop, daily_summary
-- **projects** — id, name, color, icon, archived
-- **tags** — id, name, color
-- **time_entries** — id, user_id, project_id, tag_id, description, started_at, stopped_at, duration_ms, notion_page_id, synced_at, updated_at, created_at
-
-### Key Indexes
-- `idx_entries_user` — (user_id, started_at DESC) for user history
-- `idx_entries_project` — (project_id, started_at DESC) for project reports
-- `idx_entries_date` — (started_at DESC) for date-range queries
-- `idx_entries_running` — partial index on stopped_at IS NULL
-- `idx_entries_tag` — (tag_id) for tag filtering
-
----
-
-## Auth & Roles
-
-- **admin:** Full access — manage users, view all timers, access all reports, configure Discord webhooks
-- **member:** Own timer, own entries, own reports
-
-Protected via NextAuth middleware in `src/middleware.ts`. Admin-only routes check `session.user.role === 'admin'`.
-
----
-
-## Integrations
-
-### Notion Backup
-- Cron: `*/5 * * * *` via Vercel Cron
-- Syncs entries where `synced_at IS NULL OR synced_at < updated_at`
-- Creates/updates pages in a Notion database
-- Env: `NOTION_API_KEY`, `NOTION_DATABASE_ID`
-
-### Discord Webhooks
-- Per-user webhook URL stored in `users` table
-- Fires on timer start (if `notify_on_start`) and stop (if `notify_on_stop`)
-- Daily summary cron at 17:00 UTC for users with `daily_summary = true`
-- Rich embeds with Chronos branding (color `#366769`)
-
----
-
-## Deployment
-
-- **Vercel:** Auto-deploy from Git. Vercel Postgres + Vercel KV provisioned in dashboard.
-- **Crons:** Defined in `vercel.json` — notion-sync (5 min) and daily-summary (daily).
-- **Domain:** Custom domain connected via Vercel DNS.
+Do not only block forbidden writes in the API. Also remove or disable the corresponding UI affordances:
+- hide project creation controls from non-admins
+- hide invite and team-management controls from non-admins
+- never show global user filters to team leads or members
 
 ---
 
 ## Common Tasks
 
-### Add a new API route
-1. Create `src/app/api/<name>/route.ts`
-2. Use `getServerSession()` from `src/lib/auth.ts` for auth
-3. Validate input with Zod
-4. Use Drizzle for DB queries
+### Add or change a protected route
+1. inspect the current route handler
+2. reuse shared auth/permission helpers
+3. validate input with Zod
+4. enforce both role and team scope
 
-### Add a new dashboard page
-1. Create `src/app/(dashboard)/<name>/page.tsx`
-2. Follow Vellum Ink design system (check stitch/ for reference)
-3. Use server components for data fetching, client components for interactivity
+### Add or change a dashboard page
+1. prefer server components for initial data loading
+2. push interactivity into small client components
+3. keep Vellum Ink styling intact
+4. remove actions the current role cannot perform
 
-### Modify the database schema
-1. Edit `src/lib/db/schema.ts`
-2. Run `pnpm db:generate` to create migration
-3. Run `pnpm db:push` to apply
+### Modify the schema
+1. update `src/lib/db/schema.ts`
+2. update shared TypeScript types if needed
+3. run `pnpm db:push`
+4. update seed data if the change affects bootstrapping
 
 ---
 
-## What's Left to Build (as of 2026-03-27)
+## OpenClaw Handoff Notes
 
-- [ ] Complete component implementations (some component dirs may be empty)
-- [ ] Discord webhook fields in admin user management UI
-- [ ] Notion sync cron route (`src/app/api/cron/notion-sync/route.ts`)
-- [ ] Daily summary cron route (`src/app/api/cron/daily-summary/route.ts`)
-- [ ] `src/lib/notion.ts` — Notion API client
-- [ ] `src/lib/discord.ts` — Discord webhook helper
-- [ ] Add `notion_page_id`, `synced_at`, `updated_at` columns to time_entries schema
-- [ ] Add `discord_webhook_url`, `notify_on_start`, `notify_on_stop`, `daily_summary` columns to users schema
-- [ ] `vercel.json` with cron configuration
-- [ ] Seed script for default admin user + sample data
-- [ ] CSV export on reports page
-- [ ] Test the full auth flow (login → dashboard → timer → stop → entry saved)
-- [ ] Vercel deployment + env vars setup
-- [ ] Connect custom domain
+When continuing work, check these first:
+- whether teams/invitations schema has already been pushed
+- whether registration is already token-gated
+- whether reports are team-scoped in both the page and the API
+- whether project mutations are admin-only in both API and UI
+- whether the team page renders different data by role
 
-Check each file before assuming it's incomplete — the build agent may have finished some of these.
+If the docs and code disagree, follow `ARCHITECTURE.md` and update the code to match.

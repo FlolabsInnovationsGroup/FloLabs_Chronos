@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -98,6 +99,8 @@ function ProjectForm({
 }
 
 export default function ProjectsPage() {
+  const { data: session } = useSession();
+  const canManageProjects = session?.user.role === "admin";
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -180,10 +183,12 @@ export default function ProjectsPage() {
             {activeProjects.length} active project{activeProjects.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button variant="primary" onClick={() => setShowModal(true)}>
-          <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>add</span>
-          New Project
-        </Button>
+        {canManageProjects && (
+          <Button variant="primary" onClick={() => setShowModal(true)}>
+            <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>add</span>
+            New Project
+          </Button>
+        )}
       </div>
 
       {/* Projects grid */}
@@ -245,22 +250,24 @@ export default function ProjectsPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => setEditProject(project)}
-                    className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors"
-                    title="Edit"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>edit</span>
-                  </button>
-                  <button
-                    onClick={() => handleArchive(project)}
-                    className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors"
-                    title="Archive"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>archive</span>
-                  </button>
-                </div>
+                {canManageProjects && (
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => setEditProject(project)}
+                      className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors"
+                      title="Edit"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>edit</span>
+                    </button>
+                    <button
+                      onClick={() => handleArchive(project)}
+                      className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors"
+                      title="Archive"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>archive</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </Card>
           ))}
@@ -291,13 +298,15 @@ export default function ProjectsPage() {
                   >
                     {project.name}
                   </p>
-                  <button
-                    onClick={() => handleArchive(project)}
-                    className="p-1 rounded text-[#5e605b] hover:text-[#31332f] opacity-0 group-hover:opacity-100 transition-all"
-                    title="Unarchive"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>unarchive</span>
-                  </button>
+                  {canManageProjects && (
+                    <button
+                      onClick={() => handleArchive(project)}
+                      className="p-1 rounded text-[#5e605b] hover:text-[#31332f] opacity-0 group-hover:opacity-100 transition-all"
+                      title="Unarchive"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>unarchive</span>
+                    </button>
+                  )}
                 </div>
               </Card>
             ))}
@@ -306,24 +315,28 @@ export default function ProjectsPage() {
       )}
 
       {/* Create modal */}
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="New Project">
-        <ProjectForm onSave={handleCreate} onCancel={() => setShowModal(false)} />
-      </Modal>
+      {canManageProjects && (
+        <Modal open={showModal} onClose={() => setShowModal(false)} title="New Project">
+          <ProjectForm onSave={handleCreate} onCancel={() => setShowModal(false)} />
+        </Modal>
+      )}
 
       {/* Edit modal */}
-      <Modal
-        open={!!editProject}
-        onClose={() => setEditProject(null)}
-        title="Edit Project"
-      >
-        {editProject && (
-          <ProjectForm
-            initial={editProject}
-            onSave={handleEdit}
-            onCancel={() => setEditProject(null)}
-          />
-        )}
-      </Modal>
+      {canManageProjects && (
+        <Modal
+          open={!!editProject}
+          onClose={() => setEditProject(null)}
+          title="Edit Project"
+        >
+          {editProject && (
+            <ProjectForm
+              initial={editProject}
+              onSave={handleEdit}
+              onCancel={() => setEditProject(null)}
+            />
+          )}
+        </Modal>
+      )}
     </div>
   );
 }

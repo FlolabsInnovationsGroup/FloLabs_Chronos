@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import type { Role } from "@/types";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -42,6 +43,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             .limit(1);
 
           if (!user) return null;
+          if (!user.isActive) return null;
 
           const valid = await bcrypt.compare(password, user.password);
           if (!valid) return null;
@@ -50,7 +52,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             id: user.id,
             email: user.email,
             name: user.name,
-            role: user.role,
+            role: user.role as Role,
+            teamId: user.teamId,
+            isActive: user.isActive,
           };
         } catch {
           return null;
@@ -61,16 +65,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
-        token.role = (user as { role?: string }).role ?? "member";
+        const t = token as Record<string, unknown>;
+        t.id = user.id;
+        t.role = (user as { role?: Role }).role ?? "member";
+        t.teamId = (user as { teamId?: string | null }).teamId ?? null;
+        t.isActive = (user as { isActive?: boolean }).isActive ?? true;
       }
       return token;
     },
     async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id as string;
-        (session.user as { role?: string }).role = token.role as string;
-      }
+      const t = token as Record<string, unknown>;
+      session.user.id = (t.id as string) ?? "";
+      (session.user as { role?: Role }).role = (t.role as Role | undefined) ?? "member";
+      session.user.teamId = (t.teamId as string | null | undefined) ?? null;
+      session.user.isActive = (t.isActive as boolean | undefined) ?? true;
       return session;
     },
   },
@@ -82,7 +90,10 @@ declare module "next-auth" {
       id: string;
       email: string;
       name: string;
-      role: string;
+      role: Role;
+      teamId: string | null;
+      isActive: boolean;
     };
   }
 }
+

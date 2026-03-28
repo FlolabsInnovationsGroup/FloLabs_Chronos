@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { timeEntries, projects, tags, users } from "@/lib/db/schema";
-import { eq, and, gte, lte, isNotNull, desc, like } from "drizzle-orm";
+import { eq, and, gte, lte, isNotNull, desc, like, inArray, type SQL } from "drizzle-orm";
 import { ReportFilters } from "@/components/reports/ReportFilters";
 import { ReportChart } from "@/components/reports/ReportChart";
 import { ReportTable } from "@/components/reports/ReportTable";
 import { ExportCSVButton } from "@/components/reports/ExportCSVButton";
 import { Suspense } from "react";
 import type { Project, Tag, ReportRow, TimeEntry } from "@/types";
+import { getAccessibleUserIds, getAccessibleUsers, isAdmin as userIsAdmin } from "@/lib/permissions";
 
 export const metadata: Metadata = { title: "Reports | FloLabs Chronos" };
 
@@ -22,34 +23,66 @@ interface SearchParams {
   groupBy?: string;
 }
 
-async function getFilterData() {
+async function getFilterData(sessionUser: {
+  id: string;
+  role: "admin" | "team_lead" | "member";
+  teamId: string | null;
+  isActive: boolean;
+}) {
   if (!db) return { projects: [], tags: [], users: [] };
   const [projectRows, tagRows, userRows] = await Promise.all([
     db.select().from(projects).where(eq(projects.archived, false)).orderBy(projects.name),
     db.select().from(tags).orderBy(tags.name),
-    db.select({ id: users.id, name: users.name, email: users.email, role: users.role, createdAt: users.createdAt, updatedAt: users.updatedAt }).from(users),
+    getAccessibleUsers(sessionUser),
   ]);
-  return { projects: projectRows as Project[], tags: tagRows as Tag[], users: userRows as import("@/types").User[] };
+  return {
+    projects: projectRows as Project[],
+    tags: tagRows as Tag[],
+    users: (userIsAdmin(sessionUser) || sessionUser.role === "team_lead"
+      ? userRows
+      : []) as import("@/types").User[],
+  };
 }
 
-async function getEntries(params: SearchParams, sessionUserId: string, isAdmin: boolean) {
+async function getEntries(
+  params: SearchParams,
+  sessionUser: {
+    id: string;
+    role: "admin" | "team_lead" | "member";
+    teamId: string | null;
+    isActive: boolean;
+  }
+) {
   if (!db) return [];
 
-  const conditions: ReturnType<typeof eq>[] = [isNotNull(timeEntries.stoppedAt) as ReturnType<typeof eq>];
+  const conditions: SQL[] = [isNotNull(timeEntries.stoppedAt)];
+  const accessibleUserIds = await getAccessibleUserIds(sessionUser);
 
-  // Non-admins can only see their own entries
-  const targetUserId = isAdmin ? (params.userId ?? undefined) : sessionUserId;
-  if (targetUserId) conditions.push(eq(timeEntries.userId, targetUserId));
+  if (accessibleUserIds !== null) {
+    if (params.userId && !accessibleUserIds.includes(params.userId)) {
+      return [];
+    }
 
-  if (params.from) conditions.push(gte(timeEntries.startedAt, new Date(params.from)) as ReturnType<typeof eq>);
+    if (params.userId) {
+      conditions.push(eq(timeEntries.userId, params.userId));
+    } else if (accessibleUserIds.length === 1) {
+      conditions.push(eq(timeEntries.userId, accessibleUserIds[0]));
+    } else {
+      conditions.push(inArray(timeEntries.userId, accessibleUserIds));
+    }
+  } else if (params.userId) {
+    conditions.push(eq(timeEntries.userId, params.userId));
+  }
+
+  if (params.from) conditions.push(gte(timeEntries.startedAt, new Date(params.from)));
   if (params.to) {
     const toDate = new Date(params.to);
     toDate.setHours(23, 59, 59, 999);
-    conditions.push(lte(timeEntries.startedAt, toDate) as ReturnType<typeof eq>);
+    conditions.push(lte(timeEntries.startedAt, toDate));
   }
   if (params.projectId) conditions.push(eq(timeEntries.projectId, params.projectId));
   if (params.tagId) conditions.push(eq(timeEntries.tagId, params.tagId));
-  if (params.search) conditions.push(like(timeEntries.description, `%${params.search}%`) as ReturnType<typeof eq>);
+  if (params.search) conditions.push(like(timeEntries.description, `%${params.search}%`));
 
   const rows = await db
     .select({
@@ -147,12 +180,12 @@ interface ReportsPageProps {
 
 export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const session = await auth();
-  const isAdmin = session?.user?.role === "admin";
+  const sessionUser = session?.user;
   const params = await searchParams;
 
   const [filterData, entries] = await Promise.all([
-    getFilterData(),
-    getEntries(params, session!.user.id, isAdmin),
+    getFilterData(sessionUser!),
+    getEntries(params, sessionUser!),
   ]);
 
   const groupBy = params.groupBy ?? "day";
@@ -189,7 +222,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         <ReportFilters
           projects={filterData.projects}
           tags={filterData.tags}
-          users={isAdmin ? filterData.users : []}
+          users={filterData.users}
         />
       </Suspense>
 

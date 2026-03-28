@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { projects } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { canManageProjects } from "@/lib/permissions";
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
@@ -17,7 +18,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user || !canManageProjects(session.user)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
 
   const { id } = await params;
@@ -40,7 +43,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "admin") {
+  if (!session?.user || !canManageProjects(session.user)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });

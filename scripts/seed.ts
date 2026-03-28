@@ -24,9 +24,10 @@ try {
 
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { users, projects, tags } from "../src/lib/db/schema";
+import { teams, users, projects, tags } from "../src/lib/db/schema";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
+import { createTeamSlug } from "../src/lib/invitations";
 
 async function main() {
   const url =
@@ -42,12 +43,40 @@ async function main() {
   console.log("Seeding database...");
 
   const adminEmail = "admin@flolabs.io";
+  const defaultTeamName = "FloLabs Core";
+  const defaultTeamSlug = createTeamSlug(defaultTeamName);
+
+  let teamId: string | null = null;
+  const existingTeam = await db
+    .select({ id: teams.id })
+    .from(teams)
+    .where(eq(teams.slug, defaultTeamSlug))
+    .limit(1);
+
+  if (existingTeam.length > 0) {
+    teamId = existingTeam[0].id;
+  } else {
+    const [team] = await db
+      .insert(teams)
+      .values({ name: defaultTeamName, slug: defaultTeamSlug })
+      .returning({ id: teams.id });
+    teamId = team.id;
+    console.log("Created team:", defaultTeamName);
+  }
+
   const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, adminEmail)).limit(1);
   if (existing.length > 0) {
     console.log("Admin already exists");
   } else {
     const hash = await bcrypt.hash("flchron2026", 12);
-    await db.insert(users).values({ name: "Admin", email: adminEmail, password: hash, role: "admin" });
+    await db.insert(users).values({
+      name: "Admin",
+      email: adminEmail,
+      password: hash,
+      role: "admin",
+      teamId,
+      isActive: true,
+    });
     console.log("Created admin: admin@flolabs.io / flchron2026");
   }
 

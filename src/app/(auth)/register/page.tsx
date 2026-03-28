@@ -1,21 +1,88 @@
 "use client";
 
-import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
+import { useEffect, useState, Suspense } from "react";
 
-export default function RegisterPage() {
+interface InvitationPayload {
+  id: string;
+  email: string;
+  name: string;
+  role: "team_lead" | "member";
+  teamId: string;
+  team?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
+}
+
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get("invite") ?? "";
+
+  const [invitation, setInvitation] = useState<InvitationPayload | null>(null);
+  const [loadingInvite, setLoadingInvite] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadInvitation() {
+      if (!inviteToken) {
+        setLoadingInvite(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/auth/invitation?token=${encodeURIComponent(inviteToken)}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          if (!cancelled) {
+            setError(data.error ?? "This invitation is not valid.");
+            setInvitation(null);
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setInvitation(data.invitation);
+          setName(data.invitation.name ?? "");
+          setEmail(data.invitation.email ?? "");
+        }
+      } catch {
+        if (!cancelled) {
+          setError("Could not validate this invitation.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingInvite(false);
+        }
+      }
+    }
+
+    void loadInvitation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteToken]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    if (!invitation || !inviteToken) {
+      setError("A valid invitation is required.");
+      return;
+    }
 
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
@@ -29,19 +96,19 @@ export default function RegisterPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          token: inviteToken,
           name: name.trim(),
           email: email.toLowerCase().trim(),
           password,
         }),
       });
 
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
         setError(data.error ?? "Registration failed.");
         return;
       }
 
-      // Auto-sign in after registration
       const result = await signIn("credentials", {
         email: email.toLowerCase().trim(),
         password,
@@ -49,11 +116,12 @@ export default function RegisterPage() {
       });
 
       if (result?.error) {
-        setError("Account created but login failed. Try signing in.");
-      } else {
-        router.push("/timer");
-        router.refresh();
+        setError("Account created, but login failed. Please sign in manually.");
+        return;
       }
+
+      router.push("/timer");
+      router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -61,10 +129,11 @@ export default function RegisterPage() {
     }
   }
 
+  const invitationRequired = !loadingInvite && !invitation;
+
   return (
     <div className="min-h-screen bg-[#fbf9f5] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        {/* Brand */}
         <div className="text-center mb-10">
           <h1
             className="text-4xl font-light italic text-[#31332f]"
@@ -76,96 +145,139 @@ export default function RegisterPage() {
             className="text-sm text-[#5e605b] mt-2"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
-            Create your account
+            {invitation ? "Accept your invitation" : "Invitation required"}
           </p>
         </div>
 
-        {/* Card */}
         <div className="bg-surface-container-lowest rounded-xl paper-shadow p-8">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="name"
-                className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
-                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-              >
-                Full Name
-              </label>
-              <input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Jane Smith"
-                required
-                autoFocus
-                className="w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
-                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-              />
+          {loadingInvite ? (
+            <div className="flex flex-col gap-3">
+              <div className="h-4 rounded bg-[#f5f4ef] animate-pulse" />
+              <div className="h-4 rounded bg-[#f5f4ef] animate-pulse w-4/5" />
+              <div className="h-10 rounded-xl bg-[#f5f4ef] animate-pulse mt-4" />
             </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="email"
-                className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
-                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-              >
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-                className="w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
-                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="password"
-                className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
-                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-              >
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 characters"
-                required
-                minLength={8}
-                className="w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
-                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-              />
-            </div>
-
-            {error && (
+          ) : invitationRequired ? (
+            <div className="flex flex-col gap-4">
               <p
-                className="text-sm text-[#a73b21] bg-[#fff7f6] px-3 py-2 rounded-lg"
+                className="text-sm text-[#5e605b]"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
-                {error}
+                Chronos accounts are created from an invitation link. Ask an admin to invite you, or sign in if your account already exists.
               </p>
-            )}
+              {error && (
+                <p
+                  className="text-sm text-[#a73b21] bg-[#fff7f6] px-3 py-2 rounded-lg"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  {error}
+                </p>
+              )}
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center w-full py-2.5 px-4 text-sm font-medium rounded-md bg-[#366769] text-[#e3feff] hover:bg-[#295a5d] transition-colors"
+                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+              >
+                Go to sign in
+              </Link>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              <div className="rounded-xl bg-[#f5f4ef] p-4">
+                <p
+                  className="text-xs font-medium uppercase tracking-wide text-[#5e605b]"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  Invitation
+                </p>
+                <p
+                  className="text-sm text-[#31332f] mt-1"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  {invitation?.team?.name ?? "Assigned team"} · {invitation?.role === "team_lead" ? "Team Lead" : "Member"}
+                </p>
+              </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 px-4 text-sm font-medium rounded-md bg-[#366769] text-[#e3feff] hover:bg-[#295a5d] active:bg-[#104648] disabled:opacity-50 transition-colors cursor-pointer"
-              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-            >
-              {loading ? "Creating account..." : "Create Account"}
-            </button>
-          </form>
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="name"
+                  className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  Full Name
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Jane Smith"
+                  required
+                  autoFocus
+                  className="w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="email"
+                  className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  readOnly
+                  className="w-full px-3 py-2.5 text-sm text-[#5e605b] bg-[#efeee9] rounded-lg outline-none"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="password"
+                  className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  required
+                  minLength={8}
+                  className="w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                />
+              </div>
+
+              {error && (
+                <p
+                  className="text-sm text-[#a73b21] bg-[#fff7f6] px-3 py-2 rounded-lg"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  {error}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 px-4 text-sm font-medium rounded-md bg-[#366769] text-[#e3feff] hover:bg-[#295a5d] active:bg-[#104648] disabled:opacity-50 transition-colors cursor-pointer"
+                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+              >
+                {loading ? "Creating account..." : "Create account"}
+              </button>
+            </form>
+          )}
         </div>
 
-        {/* Login link */}
         <p
           className="text-center text-sm text-[#5e605b] mt-6"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -177,5 +289,20 @@ export default function RegisterPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#fbf9f5] flex items-center justify-center px-4">
+        <div className="w-full max-w-sm flex flex-col gap-3">
+          <div className="h-4 rounded bg-[#f5f4ef] animate-pulse" />
+          <div className="h-4 rounded bg-[#f5f4ef] animate-pulse w-4/5" />
+        </div>
+      </div>
+    }>
+      <RegisterForm />
+    </Suspense>
   );
 }

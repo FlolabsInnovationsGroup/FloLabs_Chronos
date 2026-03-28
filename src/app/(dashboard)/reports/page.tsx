@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { timeEntries, projects, tags, users } from "@/lib/db/schema";
@@ -5,8 +6,11 @@ import { eq, and, gte, lte, isNotNull, desc, like } from "drizzle-orm";
 import { ReportFilters } from "@/components/reports/ReportFilters";
 import { ReportChart } from "@/components/reports/ReportChart";
 import { ReportTable } from "@/components/reports/ReportTable";
+import { ExportCSVButton } from "@/components/reports/ExportCSVButton";
 import { Suspense } from "react";
 import type { Project, Tag, ReportRow, TimeEntry } from "@/types";
+
+export const metadata: Metadata = { title: "Reports | Chronos" };
 
 interface SearchParams {
   from?: string;
@@ -137,26 +141,6 @@ function buildChartData(entries: TimeEntry[]) {
   return days;
 }
 
-function buildCSV(entries: TimeEntry[]): string {
-  const header = "Date,Description,Project,Tag,Duration (h),Start,Stop";
-  const rows = entries.map((e) => {
-    const date = new Date(e.startedAt).toLocaleDateString("en-US");
-    const dur = e.durationMs ? (e.durationMs / 3_600_000).toFixed(2) : "";
-    const start = e.startedAt ? new Date(e.startedAt).toISOString() : "";
-    const stop = e.stoppedAt ? new Date(e.stoppedAt).toISOString() : "";
-    return [
-      date,
-      `"${(e.description ?? "").replace(/"/g, '""')}"`,
-      e.project?.name ?? "",
-      e.tag?.name ?? "",
-      dur,
-      start,
-      stop,
-    ].join(",");
-  });
-  return [header, ...rows].join("\n");
-}
-
 interface ReportsPageProps {
   searchParams: Promise<SearchParams>;
 }
@@ -174,7 +158,6 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const groupBy = params.groupBy ?? "day";
   const reportRows = groupEntries(entries, groupBy);
   const chartData = buildChartData(entries);
-  const csvData = buildCSV(entries);
   const totalMs = entries.reduce((s, e) => s + (e.durationMs ?? 0), 0);
   const totalHours = (totalMs / 3_600_000).toFixed(1);
 
@@ -198,15 +181,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         </div>
 
         {/* CSV export */}
-        <a
-          href={`data:text/csv;charset=utf-8,${encodeURIComponent(csvData)}`}
-          download="chronos-report.csv"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[#f5f4ef] text-[#31332f] text-sm font-medium hover:bg-[#efeee9] transition-colors"
-          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>download</span>
-          Export CSV
-        </a>
+        <ExportCSVButton entries={entries} />
       </div>
 
       {/* Filters (client component needs Suspense) */}

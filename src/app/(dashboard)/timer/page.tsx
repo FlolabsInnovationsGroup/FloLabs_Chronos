@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { timeEntries, projects, tags, users } from "@/lib/db/schema";
@@ -7,6 +8,8 @@ import { TimerControls } from "@/components/timer/TimerControls";
 import { ActiveTimerCard } from "@/components/timer/ActiveTimerCard";
 import { EntryList } from "@/components/entries/EntryList";
 import type { Project, Tag, TimeEntry } from "@/types";
+
+export const metadata: Metadata = { title: "Timer | Chronos" };
 
 async function getProjects(): Promise<Project[]> {
   if (!db) return [];

@@ -69,6 +69,29 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
     );
   }
 
+  if (!activeTimer && projects.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 gap-3 rounded-xl bg-[#f5f4ef]">
+        <span className="material-symbols-outlined text-[#b2b2ad]" style={{ fontSize: "32px" }}>
+          folder_open
+        </span>
+        <p
+          className="text-sm text-[#5e605b] text-center"
+          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+        >
+          Create your first project to start tracking time.
+        </p>
+        <a
+          href="/projects"
+          className="text-sm font-medium text-[#366769] hover:underline"
+          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+        >
+          Go to Projects →
+        </a>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-5">
       {/* Description input */}

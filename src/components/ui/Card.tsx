@@ -11,7 +11,7 @@ interface CardProps {
 }
 
 const variantStyles: Record<CardVariant, string> = {
-  default: "bg-white",
+  default: "bg-surface-container-lowest",
   tonal: "bg-[#f5f4ef]",
 };
 

@@ -15,7 +15,7 @@ export function ReportChart({ data, title = "Past 7 Days" }: ReportChartProps) {
   const maxHours = Math.max(...data.map((d) => d.hours), 1);
 
   return (
-    <div className="bg-white rounded-xl paper-shadow p-6">
+    <div className="bg-surface-container-lowest rounded-xl paper-shadow p-6">
       <h3
         className="text-sm font-semibold text-[#31332f] mb-5"
         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -37,7 +37,7 @@ export function ReportChart({ data, title = "Past 7 Days" }: ReportChartProps) {
                   {/* Tooltip */}
                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                     <div
-                      className="bg-[#31332f] text-white text-xs px-2 py-1 rounded-lg whitespace-nowrap"
+                      className="bg-[#31332f] text-[#fbf9f5] text-xs px-2 py-1 rounded-lg whitespace-nowrap"
                       style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                     >
                       {day.hours.toFixed(1)}h

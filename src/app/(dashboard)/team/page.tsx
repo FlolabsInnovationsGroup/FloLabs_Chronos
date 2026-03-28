@@ -94,7 +94,7 @@ function EditUserForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex items-center gap-3 pb-2">
-        <div className="w-10 h-10 rounded-full bg-[#366769] flex items-center justify-center text-white font-semibold">
+        <div className="w-10 h-10 rounded-full bg-[#366769] flex items-center justify-center text-[#e3feff] font-semibold">
           {user.name.charAt(0).toUpperCase()}
         </div>
         <div>
@@ -219,7 +219,7 @@ export default function TeamPage() {
       </div>
 
       {/* Users table */}
-      <div className="bg-white rounded-xl paper-shadow overflow-hidden">
+      <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-hidden">
         <table className="w-full">
           <thead>
             <tr className="bg-[#f5f4ef]">
@@ -260,7 +260,7 @@ export default function TeamPage() {
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
                       <div
-                        className="w-8 h-8 rounded-full bg-[#366769] flex items-center justify-center text-white text-sm font-semibold shrink-0"
+                        className="w-8 h-8 rounded-full bg-[#366769] flex items-center justify-center text-[#e3feff] text-sm font-semibold shrink-0"
                         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                       >
                         {user.name.charAt(0).toUpperCase()}

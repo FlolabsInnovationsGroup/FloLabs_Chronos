@@ -43,7 +43,7 @@ export function Button({
     <button
       disabled={disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center font-body font-medium rounded-full transition-colors duration-150 cursor-pointer select-none whitespace-nowrap",
+        "inline-flex items-center justify-center font-body font-medium rounded-md transition-colors duration-150 cursor-pointer select-none whitespace-nowrap",
         variantStyles[variant],
         sizeStyles[size],
         className

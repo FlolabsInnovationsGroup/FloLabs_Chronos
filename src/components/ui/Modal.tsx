@@ -54,7 +54,7 @@ export function Modal({ open, onClose, title, children, className, size = "md" }
       {/* Modal panel */}
       <div
         className={cn(
-          "relative w-full bg-white rounded-2xl paper-shadow overflow-hidden",
+          "relative w-full bg-surface-container-lowest rounded-xl paper-shadow overflow-hidden",
           sizeStyles[size],
           className
         )}
@@ -64,7 +64,7 @@ export function Modal({ open, onClose, title, children, className, size = "md" }
       >
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between px-6 py-5 border-b border-[#f5f4ef]">
+          <div className="flex items-center justify-between px-6 py-5 bg-[#f5f4ef]">
             <h2
               id="modal-title"
               className="text-lg font-medium text-[#31332f]"

@@ -22,7 +22,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className="fixed left-0 top-0 h-full w-20 bg-white paper-shadow z-40 flex flex-col items-center py-5 gap-2"
+      className="fixed left-0 top-0 h-full w-20 bg-surface-container-lowest paper-shadow z-40 flex flex-col items-center py-5 gap-2"
       aria-label="Main navigation"
     >
       {/* Logo */}

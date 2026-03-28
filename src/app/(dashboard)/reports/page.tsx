@@ -201,7 +201,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         <a
           href={`data:text/csv;charset=utf-8,${encodeURIComponent(csvData)}`}
           download="chronos-report.csv"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#f5f4ef] text-[#31332f] text-sm font-medium hover:bg-[#efeee9] transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[#f5f4ef] text-[#31332f] text-sm font-medium hover:bg-[#efeee9] transition-colors"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>download</span>
@@ -234,7 +234,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
             icon: "bar_chart",
           },
         ].map(({ label, value, icon }) => (
-          <div key={label} className="bg-white rounded-xl paper-shadow p-5 flex items-center gap-4">
+          <div key={label} className="bg-surface-container-lowest rounded-xl paper-shadow p-5 flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-[#b9ecee] flex items-center justify-center shrink-0">
               <span className="material-symbols-outlined text-[#366769]" style={{ fontSize: "20px" }}>{icon}</span>
             </div>

@@ -12,7 +12,7 @@ export function BottomNav() {
     <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
       {activeTimer ? (
         // Active timer pill
-        <div className="flex items-center gap-3 bg-[#31332f] text-white rounded-full px-5 py-3 paper-shadow">
+        <div className="flex items-center gap-3 bg-[#31332f] text-[#fbf9f5] rounded-full px-5 py-3 paper-shadow">
           {/* Pulsing dot */}
           <span className="relative flex h-2.5 w-2.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#b9ecee] opacity-75" />
@@ -40,7 +40,7 @@ export function BottomNav() {
         </div>
       ) : (
         // Idle pill — tapping opens timer page (or triggers a quick start)
-        <div className="flex items-center gap-2 bg-white text-[#31332f] rounded-full px-5 py-3 paper-shadow border border-[#efeee9]">
+        <div className="flex items-center gap-2 bg-surface-container-lowest text-[#31332f] rounded-full px-5 py-3 paper-shadow">
           <span className="material-symbols-outlined text-[#366769]" style={{ fontSize: "18px" }}>
             play_circle
           </span>

@@ -31,7 +31,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
   const get = (key: string) => searchParams.get(key) ?? "";
 
   return (
-    <div className="flex flex-wrap items-center gap-3 p-4 bg-white rounded-xl paper-shadow">
+    <div className="flex flex-wrap items-center gap-3 p-4 bg-surface-container-lowest rounded-xl paper-shadow">
       {/* Date range */}
       <div className="flex items-center gap-2">
         <span

@@ -11,7 +11,7 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
 
   if (rows.length === 0) {
     return (
-      <div className="bg-white rounded-xl paper-shadow p-6">
+      <div className="bg-surface-container-lowest rounded-xl paper-shadow p-6">
         <p
           className="text-sm text-[#b2b2ad] text-center py-8"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -23,9 +23,9 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
   }
 
   return (
-    <div className="bg-white rounded-xl paper-shadow overflow-hidden">
+    <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-hidden">
       {/* Table header */}
-      <div className="px-6 py-4 border-b border-[#f5f4ef]">
+      <div className="px-6 py-4 bg-[#f5f4ef]">
         <h3
           className="text-sm font-semibold text-[#31332f]"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -119,7 +119,7 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
         </tbody>
         {/* Footer total */}
         <tfoot>
-          <tr className="bg-[#f5f4ef] border-t border-[#efeee9]">
+          <tr className="bg-[#f5f4ef]">
             <td className="px-6 py-3">
               <span
                 className="text-sm font-semibold text-[#31332f]"

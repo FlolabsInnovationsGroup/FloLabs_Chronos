@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -40,6 +40,7 @@ async function readJson(res: Response) {
 export default function TeamPage() {
   const { data: session } = useSession();
   const role = session?.user.role;
+  const userId = session?.user.id;
 
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -63,8 +64,8 @@ export default function TeamPage() {
   const [editTeamId, setEditTeamId] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
 
-  async function refresh() {
-    if (!session?.user) return;
+  const refresh = useCallback(async () => {
+    if (!userId) return;
 
     setError("");
     setLoading(true);
@@ -82,12 +83,12 @@ export default function TeamPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [role, userId]);
 
   useEffect(() => {
-    if (!session?.user) return;
+    if (!userId) return;
     void refresh();
-  }, [session?.user?.id, role]);
+  }, [refresh, userId]);
 
   useEffect(() => {
     if (!inviteTeamId && teams[0]?.id) setInviteTeamId(teams[0].id);
@@ -101,13 +102,31 @@ export default function TeamPage() {
   }, [editingUser]);
 
   const currentUser = useMemo(
-    () => users.find((user) => user.id === session?.user.id) ?? null,
-    [session?.user?.id, users]
+    () => users.find((user) => user.id === userId) ?? null,
+    [userId, users]
+  );
+  const openInvitations = useMemo(
+    () =>
+      invitations.filter(
+        (invite) =>
+          !invite.acceptedAt && new Date(invite.expiresAt).getTime() > Date.now()
+      ),
+    [invitations]
   );
 
   const visibleTeams = useMemo(() => {
-    if (teams.length > 0) return teams;
-    if (currentUser?.team) return [currentUser.team];
+    if (teams.length > 0) {
+      return teams.map((team) => ({ id: team.id, name: team.name, slug: team.slug }));
+    }
+    if (currentUser?.team?.id) {
+      return [
+        {
+          id: currentUser.team.id,
+          name: currentUser.team.name,
+          slug: currentUser.team.slug,
+        },
+      ];
+    }
     return [];
   }, [currentUser?.team, teams]);
 
@@ -209,7 +228,7 @@ export default function TeamPage() {
   const teamCards = visibleTeams.map((team) => ({
     ...team,
     memberCount: users.filter((user) => user.teamId === team.id && user.isActive).length,
-    pendingInvites: invitations.filter((invite) => invite.teamId === team.id && !invite.acceptedAt).length,
+    pendingInvites: openInvitations.filter((invite) => invite.teamId === team.id).length,
   }));
 
   return (
@@ -298,8 +317,8 @@ export default function TeamPage() {
       {role === "member" ? (
         <div className="bg-surface-container-lowest rounded-xl paper-shadow p-6">
           <p className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
-            {currentUser?.team
-              ? `You are currently in ${currentUser.team.name}.`
+            {currentUser?.team?.id
+              ? `You are currently in ${currentUser.team?.name ?? "your assigned team"}.`
               : "You do not have a team assignment yet."}
           </p>
         </div>
@@ -392,14 +411,14 @@ export default function TeamPage() {
               </tr>
             </thead>
             <tbody>
-              {invitations.length === 0 ? (
+              {openInvitations.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-5 py-10 text-center text-sm text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
                     No invitations yet.
                   </td>
                 </tr>
               ) : (
-                invitations.map((invite, index) => (
+                openInvitations.map((invite, index) => (
                   <tr key={invite.id} className={index % 2 === 0 ? "" : "bg-[#fbf9f5]"}>
                     <td className="px-5 py-4">
                       <p className="text-sm font-medium text-[#31332f]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{invite.name}</p>

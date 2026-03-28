@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { Role } from "@/types";
 import { db } from "@/lib/db";
 import { teams, users } from "@/lib/db/schema";
@@ -51,7 +51,7 @@ export async function getAccessibleUserIds(user: SessionUserLike): Promise<strin
     const rows = await db
       .select({ id: users.id })
       .from(users)
-      .where(and(eq(users.teamId, user.teamId), eq(users.isActive, true)));
+      .where(eq(users.teamId, user.teamId));
     return rows.map((row) => row.id);
   }
 

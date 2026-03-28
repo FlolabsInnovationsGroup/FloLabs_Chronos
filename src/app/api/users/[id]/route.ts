@@ -32,6 +32,27 @@ export async function PATCH(
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
+  const [existingUser] = await db
+    .select({ id: users.id, role: users.role, teamId: users.teamId })
+    .from(users)
+    .where(eq(users.id, id))
+    .limit(1);
+
+  if (!existingUser) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const finalRole = parsed.data.role ?? existingUser.role;
+  const finalTeamId =
+    parsed.data.teamId !== undefined ? parsed.data.teamId : existingUser.teamId;
+
+  if (finalRole !== "admin" && !finalTeamId) {
+    return NextResponse.json(
+      { error: "Team leads and members must belong to a team." },
+      { status: 400 }
+    );
+  }
+
   const updateData: Record<string, unknown> = {};
   if (parsed.data.role !== undefined) updateData.role = parsed.data.role;
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name;

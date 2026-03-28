@@ -55,6 +55,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "This invitation has expired." }, { status: 410 });
   }
 
+  if (invite.role !== "admin" && !invite.teamId) {
+    return NextResponse.json(
+      { error: "This invitation is missing a team assignment." },
+      { status: 400 }
+    );
+  }
+
   const hashedPassword = await bcrypt.hash(password, 12);
 
   const [user] = await db

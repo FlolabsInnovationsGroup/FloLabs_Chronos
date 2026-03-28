@@ -10,7 +10,7 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!db) return NextResponse.json({ projects: [] });
 
-  const rows = await db.select().from(projects).where(eq(projects.archived, false));
+  const rows = await db.select().from(projects).orderBy(projects.name);
   return NextResponse.json({ projects: rows });
 }
 

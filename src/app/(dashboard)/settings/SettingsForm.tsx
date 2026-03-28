@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { signOut } from "next-auth/react";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -189,6 +190,34 @@ export function SettingsForm({ user }: SettingsFormProps) {
             )}
           </div>
         </form>
+      </Card>
+
+      <Card className="p-6 flex flex-col gap-4">
+        <div>
+          <h2
+            className="text-base font-medium text-[#31332f]"
+            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          >
+            Session
+          </h2>
+          <p
+            className="text-sm text-[#5e605b] mt-0.5"
+            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          >
+            Sign out of your FloLabs Chronos account on this device
+          </p>
+        </div>
+
+        <div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => signOut({ callbackUrl: "/login" })}
+          >
+            Log out
+          </Button>
+        </div>
       </Card>
     </div>
   );

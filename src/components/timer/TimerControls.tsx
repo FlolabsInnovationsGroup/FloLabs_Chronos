@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTimer } from "@/hooks/use-timer";
 import { Button } from "@/components/ui/Button";
+import { DropdownSelect } from "@/components/ui/DropdownSelect";
 import type { Project, Tag } from "@/types";
 
 interface TimerControlsProps {
@@ -121,58 +122,31 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
       {/* Pill selectors row */}
       {!activeTimer && (
         <div className="flex flex-wrap gap-2">
-          {/* Project selector */}
-          <div className="relative">
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="appearance-none pl-8 pr-3 py-1.5 text-sm rounded-xl border-0 shadow-none bg-[#f5f4ef] text-[#31332f] outline-none focus:ring-2 focus:ring-[#366769]/20 cursor-pointer"
-              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-            >
-              <option value="">Select project</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <span
-              className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-[#366769]"
-              style={{ fontSize: "15px" }}
-            >
-              {selectedProject ? "folder" : "folder_open"}
-            </span>
-            {/* Color swatch */}
-            {selectedProject && (
-              <span
-                className="absolute left-2 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full pointer-events-none"
-                style={{ backgroundColor: selectedProject.color ?? "#366769", marginTop: "1px" }}
-              />
-            )}
-          </div>
+          <DropdownSelect
+            value={selectedProjectId}
+            onChange={setSelectedProjectId}
+            placeholder="Select project"
+            leadingIcon={selectedProject ? undefined : "folder_open"}
+            leadingIconColor="#366769"
+            options={projects.map((p) => ({
+              value: p.id,
+              label: p.name,
+              color: p.color ?? "#366769",
+            }))}
+          />
 
-          {/* Tag selector */}
-          <div className="relative">
-            <select
-              value={selectedTagId}
-              onChange={(e) => setSelectedTagId(e.target.value)}
-              className="appearance-none pl-8 pr-3 py-1.5 text-sm rounded-xl border-0 shadow-none bg-[#f5f4ef] text-[#31332f] outline-none focus:ring-2 focus:ring-[#366769]/20 cursor-pointer"
-              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-            >
-              <option value="">Add tag</option>
-              {tags.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-            <span
-              className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-[#755a40]"
-              style={{ fontSize: "15px" }}
-            >
-              label
-            </span>
-          </div>
+          <DropdownSelect
+            value={selectedTagId}
+            onChange={setSelectedTagId}
+            placeholder="Add tag"
+            leadingIcon="label"
+            leadingIconColor="#755a40"
+            options={tags.map((t) => ({
+              value: t.id,
+              label: t.name,
+              color: t.color ?? "#755a40",
+            }))}
+          />
         </div>
       )}
 

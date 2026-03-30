@@ -42,8 +42,8 @@ async function main() {
   const db = drizzle(sql);
   console.log("Seeding database...");
 
-  const adminEmail = "admin@flolabsinnovations.com";
-  const legacyAdminEmail = "admin@flolabs.io";
+  const adminEmail = "pm@flolabsinnovations.com";
+  const legacyAdminEmail = "admin@flolabsinnovations.com";
   const defaultTeamName = "FloLabs Core";
   const defaultTeamSlug = createTeamSlug(defaultTeamName);
 
@@ -77,6 +77,13 @@ async function main() {
     .where(eq(users.email, legacyAdminEmail))
     .limit(1);
 
+  // Also check the original legacy email
+  const olderLegacy = await db
+    .select({ id: users.id, email: users.email, teamId: users.teamId, isActive: users.isActive })
+    .from(users)
+    .where(eq(users.email, "admin@flolabs.io"))
+    .limit(1);
+
   if (existing.length > 0) {
     console.log("Admin already exists");
     if (!existing[0].teamId || existing[0].isActive === false) {
@@ -97,6 +104,17 @@ async function main() {
       })
       .where(eq(users.id, legacyExisting[0].id));
     console.log(`Migrated admin email: ${legacyAdminEmail} -> ${adminEmail}`);
+  } else if (olderLegacy.length > 0) {
+    await db
+      .update(users)
+      .set({
+        email: adminEmail,
+        teamId,
+        isActive: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, olderLegacy[0].id));
+    console.log(`Migrated admin email: admin@flolabs.io -> ${adminEmail}`);
   } else {
     const hash = await bcrypt.hash("flchron2026", 12);
     await db.insert(users).values({

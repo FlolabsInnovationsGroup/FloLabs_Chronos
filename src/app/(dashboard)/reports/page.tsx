@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { timeEntries, projects, tags, users } from "@/lib/db/schema";
-import { eq, and, gte, lte, isNotNull, desc, like, inArray, type SQL } from "drizzle-orm";
+import { eq, and, gte, lte, isNotNull, desc, ilike, inArray, or, type SQL } from "drizzle-orm";
 import { ReportFilters } from "@/components/reports/ReportFilters";
 import { ReportChart } from "@/components/reports/ReportChart";
 import { ReportTable } from "@/components/reports/ReportTable";
@@ -21,6 +21,7 @@ interface SearchParams {
   tagId?: string;
   search?: string;
   groupBy?: string;
+  limit?: string;
 }
 
 async function getFilterData(sessionUser: {
@@ -82,9 +83,21 @@ async function getEntries(
   }
   if (params.projectId) conditions.push(eq(timeEntries.projectId, params.projectId));
   if (params.tagId) conditions.push(eq(timeEntries.tagId, params.tagId));
-  if (params.search) conditions.push(like(timeEntries.description, `%${params.search}%`));
+  if (params.search) {
+    const pattern = `%${params.search}%`;
+    const searchCondition = or(
+      ilike(timeEntries.description, pattern),
+      ilike(projects.name, pattern),
+      ilike(tags.name, pattern),
+      ilike(users.name, pattern),
+    );
+    if (searchCondition) conditions.push(searchCondition);
+  }
 
-  const rows = await db
+  const rawLimit = params.limit ?? "50";
+  const limitValue = rawLimit === "all" ? null : (parseInt(rawLimit) || 50);
+
+  const baseQuery = db
     .select({
       entry: timeEntries,
       project: projects,
@@ -96,8 +109,9 @@ async function getEntries(
     .leftJoin(tags, eq(timeEntries.tagId, tags.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
     .where(and(...conditions))
-    .orderBy(desc(timeEntries.startedAt))
-    .limit(500);
+    .orderBy(desc(timeEntries.startedAt));
+
+  const rows = limitValue !== null ? await baseQuery.limit(limitValue) : await baseQuery;
 
   return rows.map(({ entry, project, tag, user }) => ({
     ...entry,

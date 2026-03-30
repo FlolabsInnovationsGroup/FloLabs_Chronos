@@ -27,9 +27,12 @@ interface Tag {
 interface EntryCardProps {
   entry: TimeEntry;
   onResume?: (entry: TimeEntry) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  anySelected?: boolean;
 }
 
-export function EntryCard({ entry, onResume }: EntryCardProps) {
+export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect, anySelected = false }: EntryCardProps) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
 
@@ -128,6 +131,24 @@ export function EntryCard({ entry, onResume }: EntryCardProps) {
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
+        {/* Checkbox */}
+        {onToggleSelect && (
+          <div
+            className={`shrink-0 transition-opacity duration-150 ${
+              anySelected || hovered ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggleSelect(entry.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-4 h-4 rounded cursor-pointer accent-[#366769]"
+              aria-label={`Select entry`}
+            />
+          </div>
+        )}
+
         {/* Project color icon box */}
         <div
           className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
@@ -294,7 +315,7 @@ export function EntryCard({ entry, onResume }: EntryCardProps) {
             Are you sure you want to delete this time entry? This cannot be undone.
           </p>
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(false)}>
+            <Button variant="primary" size="sm" onClick={() => setDeleteConfirm(false)}>
               Cancel
             </Button>
             <Button

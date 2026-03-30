@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { timeEntries, projects, tags, users } from "@/lib/db/schema";
-import { eq, and, gte, lte, isNotNull, desc, inArray, type SQL } from "drizzle-orm";
+import { eq, and, gte, lte, isNotNull, desc, inArray, or, ilike, type SQL } from "drizzle-orm";
 import { getAccessibleUserIds } from "@/lib/permissions";
 
 export async function GET(req: Request) {
@@ -18,6 +18,7 @@ export async function GET(req: Request) {
   const to = url.searchParams.get("to");
   const groupBy = url.searchParams.get("groupBy") ?? "day";
   const format = url.searchParams.get("format");
+  const search = url.searchParams.get("search");
 
   const conditions: SQL[] = [isNotNull(timeEntries.stoppedAt)];
   const accessibleUserIds = await getAccessibleUserIds(session.user);
@@ -42,6 +43,16 @@ export async function GET(req: Request) {
   if (tagId) conditions.push(eq(timeEntries.tagId, tagId));
   if (from) conditions.push(gte(timeEntries.startedAt, new Date(from)));
   if (to) conditions.push(lte(timeEntries.startedAt, new Date(to)));
+  if (search) {
+    const pattern = `%${search}%`;
+    const searchCondition = or(
+      ilike(timeEntries.description, pattern),
+      ilike(projects.name, pattern),
+      ilike(tags.name, pattern),
+      ilike(users.name, pattern),
+    );
+    if (searchCondition) conditions.push(searchCondition);
+  }
 
   const rows = await db
     .select({

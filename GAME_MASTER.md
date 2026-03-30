@@ -91,6 +91,18 @@
 - [x] Admin can delete team members when they have no time entries
 - [x] Destructive actions use confirmation modals with Cancel as the highlighted button
 
+### 8. Time Entry Management
+- [x] Bulk operations API (`POST /api/entries/bulk`): delete or change project on multiple entries
+- [x] Multi-select entries with checkboxes (visible on hover or when any entry selected)
+- [x] Floating action bar for bulk delete and bulk project change
+- [x] Individual entry edit supports project change (was already in place)
+- [x] Delete confirmation modals use Cancel as highlighted button
+
+### 9. Reports Search and Filtering
+- [x] Debounced search input (2-second delay) — no more lag while typing
+- [x] Search now matches across descriptions, project names, tag names, and user names (ILIKE)
+- [x] Configurable page size: 25, 50, 100, 250, 500, or All entries per page
+
 ---
 
 ## Risks To Watch

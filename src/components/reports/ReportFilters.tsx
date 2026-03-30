@@ -1,8 +1,17 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import type { Project, Tag, User } from "@/types";
+
+const PAGE_SIZE_OPTIONS = [
+  { value: "25", label: "25" },
+  { value: "50", label: "50" },
+  { value: "100", label: "100" },
+  { value: "250", label: "250" },
+  { value: "500", label: "500" },
+  { value: "all", label: "All" },
+];
 
 interface ReportFiltersProps {
   projects: Project[];
@@ -29,6 +38,23 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
   );
 
   const get = (key: string) => searchParams.get(key) ?? "";
+
+  // Local state for search with 2-second debounce
+  const [searchInput, setSearchInput] = useState(get("search"));
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync local search state when URL param changes externally (e.g. clear filters)
+  useEffect(() => {
+    setSearchInput(searchParams.get("search") ?? "");
+  }, [searchParams]);
+
+  function handleSearchChange(value: string) {
+    setSearchInput(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      update("search", value);
+    }, 2000);
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-3 p-4 bg-surface-container-lowest rounded-xl paper-shadow">
@@ -65,7 +91,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
       {/* Divider */}
       <div className="w-px h-6 bg-[#efeee9]" />
 
-      {/* User select (admin) */}
+      {/* User select (admin / team lead) */}
       {users.length > 0 && (
         <select
           value={get("userId")}
@@ -126,7 +152,21 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
         <option value="user">By Member</option>
       </select>
 
-      {/* Search */}
+      {/* Page size */}
+      <select
+        value={get("limit") || "50"}
+        onChange={(e) => update("limit", e.target.value === "50" ? "" : e.target.value)}
+        className="px-2.5 py-1.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none focus:ring-2 focus:ring-[#366769]/20 cursor-pointer"
+        style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+      >
+        {PAGE_SIZE_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label} / page
+          </option>
+        ))}
+      </select>
+
+      {/* Search (debounced 2s) */}
       <div className="flex-1 min-w-[160px] relative">
         <span
           className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[#b2b2ad]"
@@ -137,8 +177,8 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
         <input
           type="text"
           placeholder="Search entries..."
-          value={get("search")}
-          onChange={(e) => update("search", e.target.value)}
+          value={searchInput}
+          onChange={(e) => handleSearchChange(e.target.value)}
           className="w-full pl-8 pr-3 py-1.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none focus:ring-2 focus:ring-[#366769]/20 placeholder:text-[#b2b2ad]"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         />

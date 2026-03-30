@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { timeEntries, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { canManageTeams } from "@/lib/permissions";
@@ -96,14 +96,33 @@ export async function DELETE(
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
 
   const { id } = await params;
-  // Prevent self-deletion
   if (id === session.user.id) {
-    return NextResponse.json({ error: "Cannot deactivate your own account" }, { status: 400 });
+    return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 });
   }
 
-  await db
-    .update(users)
-    .set({ isActive: false, updatedAt: new Date() })
-    .where(eq(users.id, id));
+  const [existingUser] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, id))
+    .limit(1);
+
+  if (!existingUser) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const [entry] = await db
+    .select({ id: timeEntries.id })
+    .from(timeEntries)
+    .where(eq(timeEntries.userId, id))
+    .limit(1);
+
+  if (entry) {
+    return NextResponse.json(
+      { error: "This member has time entries and cannot be deleted. Deactivate the account instead." },
+      { status: 409 }
+    );
+  }
+
+  await db.delete(users).where(eq(users.id, id));
   return NextResponse.json({ ok: true });
 }

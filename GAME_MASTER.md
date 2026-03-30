@@ -82,8 +82,14 @@
 ### 6. UI Polish
 - [x] Delayed tooltip component (`Tooltip`) for icon-only buttons — shows label after 3s hover
 - [x] Applied to Projects page (edit, archive, unarchive)
-- [x] Applied to Team page (edit member, deactivate)
+- [x] Applied to Team page (edit member, delete member, disable/delete invite)
 - [x] Applied to EntryCard (resume, edit, delete)
+
+### 7. Admin Destructive Controls
+- [x] Admin can disable invitation links
+- [x] Admin can delete invitation links
+- [x] Admin can delete team members when they have no time entries
+- [x] Destructive actions use confirmation modals with Cancel as the highlighted button
 
 ---
 

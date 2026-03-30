@@ -233,9 +233,10 @@ The app should centralize authorization with server-side helper functions:
 | Create/edit/archive projects | Yes | No | No |
 | `/team` page | All teams | Own team only | Own team only |
 | Create invites | Yes | No | No |
+| Disable/delete pending invites | Yes | No | No |
 | Create/edit teams | Yes | No | No |
 | Reports | All users | Team users only | Own only |
-| User management | All users | No direct user edits in V1 | No |
+| User management | All users; delete allowed only when user has no time entries | No direct user edits in V1 | No |
 
 ### Important Security Note
 

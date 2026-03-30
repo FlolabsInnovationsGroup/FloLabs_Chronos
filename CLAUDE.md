@@ -130,6 +130,7 @@ Any work on auth or onboarding must preserve invite-only registration unless the
 Do not only block forbidden writes in the API. Also remove or disable the corresponding UI affordances:
 - hide project creation controls from non-admins
 - hide invite and team-management controls from non-admins
+- destructive actions (delete member, disable/delete invite) must use a confirmation modal with Cancel visually highlighted
 - never show global user filters to team leads or members
 
 ---

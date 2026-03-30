@@ -53,6 +53,9 @@ export default function TeamPage() {
   const [showCreateTeam, setShowCreateTeam] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [editingUser, setEditingUser] = useState<TeamUser | null>(null);
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<TeamUser | null>(null);
+  const [confirmDisableInvite, setConfirmDisableInvite] = useState<TeamInvitation | null>(null);
+  const [confirmDeleteInvite, setConfirmDeleteInvite] = useState<TeamInvitation | null>(null);
 
   const [teamName, setTeamName] = useState("");
   const [inviteName, setInviteName] = useState("");
@@ -207,13 +210,45 @@ export default function TeamPage() {
     }
   }
 
-  async function handleDeactivate(user: TeamUser) {
-    if (!window.confirm(`Deactivate ${user.name}?`)) return;
+  async function handleDeleteUser() {
+    if (!confirmDeleteUser) return;
+    setSaving(true);
     try {
-      await readJson(await fetch(`/api/users/${user.id}`, { method: "DELETE" }));
+      await readJson(await fetch(`/api/users/${confirmDeleteUser.id}`, { method: "DELETE" }));
+      setConfirmDeleteUser(null);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to deactivate user.");
+      setError(err instanceof Error ? err.message : "Failed to delete user.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDisableInvite() {
+    if (!confirmDisableInvite) return;
+    setSaving(true);
+    try {
+      await readJson(await fetch(`/api/invitations/${confirmDisableInvite.id}`, { method: "PATCH" }));
+      setConfirmDisableInvite(null);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to disable invitation.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteInvite() {
+    if (!confirmDeleteInvite) return;
+    setSaving(true);
+    try {
+      await readJson(await fetch(`/api/invitations/${confirmDeleteInvite.id}`, { method: "DELETE" }));
+      setConfirmDeleteInvite(null);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete invitation.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -386,9 +421,9 @@ export default function TeamPage() {
                             </button>
                           </Tooltip>
                           {user.id !== session?.user.id && (
-                            <Tooltip label="Deactivate">
-                              <button onClick={() => void handleDeactivate(user)} className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#fff7f6] hover:text-[#a73b21]">
-                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>person_off</span>
+                            <Tooltip label="Delete member">
+                              <button onClick={() => setConfirmDeleteUser(user)} className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#fff7f6] hover:text-[#a73b21]">
+                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>delete</span>
                               </button>
                             </Tooltip>
                           )}
@@ -441,7 +476,11 @@ export default function TeamPage() {
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      <Button variant="ghost" size="sm" onClick={() => void handleCopyInvite(invite.inviteUrl)}>Copy Link</Button>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => void handleCopyInvite(invite.inviteUrl)}>Copy Link</Button>
+                        <Button variant="ghost" size="sm" onClick={() => setConfirmDisableInvite(invite)}>Disable</Button>
+                        <Button variant="danger" size="sm" onClick={() => setConfirmDeleteInvite(invite)}>Delete</Button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -487,6 +526,42 @@ export default function TeamPage() {
             <Button variant="primary" type="submit" loading={saving}>Save Changes</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={!!confirmDeleteUser} onClose={() => setConfirmDeleteUser(null)} title="Delete member" size="sm">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+            Delete {confirmDeleteUser?.name}? This permanently removes the member account if it has no time entries.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="primary" type="button" onClick={() => setConfirmDeleteUser(null)}>Cancel</Button>
+            <Button variant="danger" type="button" onClick={() => void handleDeleteUser()} loading={saving}>Delete member</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={!!confirmDisableInvite} onClose={() => setConfirmDisableInvite(null)} title="Disable invitation link" size="sm">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+            Disable the invitation link for {confirmDisableInvite?.email}? Existing links will stop working immediately.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="primary" type="button" onClick={() => setConfirmDisableInvite(null)}>Cancel</Button>
+            <Button variant="danger" type="button" onClick={() => void handleDisableInvite()} loading={saving}>Disable link</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={!!confirmDeleteInvite} onClose={() => setConfirmDeleteInvite(null)} title="Delete invitation link" size="sm">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+            Delete the invitation for {confirmDeleteInvite?.email}? This cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="primary" type="button" onClick={() => setConfirmDeleteInvite(null)}>Cancel</Button>
+            <Button variant="danger" type="button" onClick={() => void handleDeleteInvite()} loading={saving}>Delete link</Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

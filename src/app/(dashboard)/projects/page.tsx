@@ -88,14 +88,9 @@ function ProjectForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div className="rounded-2xl bg-[#f5f4ef] p-4 flex items-center gap-4">
-        <div
-          className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
-          style={{ backgroundColor: `${color}22` }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: "30px", color }}>
-            {icon}
-          </span>
-        </div>
+        <span className="material-symbols-outlined shrink-0" style={{ fontSize: "34px", color }}>
+          {icon}
+        </span>
         <div className="min-w-0">
           <p
             className="text-xs uppercase tracking-wide text-[#5e605b]"

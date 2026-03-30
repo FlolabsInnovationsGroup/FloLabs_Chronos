@@ -126,7 +126,7 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
             <select
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="appearance-none pl-8 pr-3 py-1.5 text-sm rounded-full bg-[#f5f4ef] text-[#31332f] outline-none focus:ring-2 focus:ring-[#366769]/20 cursor-pointer"
+              className="appearance-none pl-8 pr-3 py-1.5 text-sm rounded-xl border-0 shadow-none bg-[#f5f4ef] text-[#31332f] outline-none focus:ring-2 focus:ring-[#366769]/20 cursor-pointer"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               <option value="">Select project</option>
@@ -156,7 +156,7 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
             <select
               value={selectedTagId}
               onChange={(e) => setSelectedTagId(e.target.value)}
-              className="appearance-none pl-8 pr-3 py-1.5 text-sm rounded-full bg-[#f5f4ef] text-[#31332f] outline-none focus:ring-2 focus:ring-[#366769]/20 cursor-pointer"
+              className="appearance-none pl-8 pr-3 py-1.5 text-sm rounded-xl border-0 shadow-none bg-[#f5f4ef] text-[#31332f] outline-none focus:ring-2 focus:ring-[#366769]/20 cursor-pointer"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               <option value="">Add tag</option>

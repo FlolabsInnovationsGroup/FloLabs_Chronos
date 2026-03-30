@@ -96,6 +96,19 @@ body {
   vertical-align: middle;
 }
 
+select,
+option,
+optgroup {
+  font-family: "Work Sans", sans-serif;
+}
+
+option,
+optgroup {
+  background-color: #fbf9f5;
+  color: #31332f;
+  border: 0;
+}
+
 @keyframes tooltipFadeIn {
   from {
     opacity: 0;

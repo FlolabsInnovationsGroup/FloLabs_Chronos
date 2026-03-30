@@ -15,8 +15,8 @@ const PROJECT_COLORS = [
   "#a73b21", // warm red
   "#f08a24", // orange
   "#5aa9e6", // sky blue
-  "#295a5d", // dark teal
-  "#3d3e4e", // dark slate
+  "#1f6fa8", // marine blue
+  "#6f56d9", // violet
   "#791903", // dark red
 ];
 
@@ -34,16 +34,20 @@ function ProjectForm({
   initial,
   onSave,
   onCancel,
+  onDelete,
 }: {
   initial?: Partial<Project>;
   onSave: (data: Partial<Project>) => Promise<void>;
   onCancel: () => void;
+  onDelete?: () => Promise<void>;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [color, setColor] = useState(initial?.color ?? "#366769");
   const [icon, setIcon] = useState(initial?.icon ?? "folder");
   const [iconSearch, setIconSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
 
   const filteredIcons = useMemo(() => {
@@ -65,6 +69,19 @@ function ProjectForm({
       setError("Failed to save project");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteProject() {
+    if (!onDelete) return;
+    setDeleting(true);
+    try {
+      await onDelete();
+      setConfirmDelete(false);
+    } catch {
+      setError("Failed to delete project");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -192,12 +209,33 @@ function ProjectForm({
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 pt-2">
-        <Button variant="ghost" type="button" onClick={onCancel}>Cancel</Button>
-        <Button variant="primary" type="submit" loading={saving}>
-          {initial?.id ? "Save Changes" : "Create Project"}
-        </Button>
+      <div className="flex items-center justify-between gap-3 pt-2">
+        <div>
+          {onDelete && initial?.id && (
+            <Button variant="danger" type="button" onClick={() => setConfirmDelete(true)}>
+              Delete Project
+            </Button>
+          )}
+        </div>
+        <div className="flex justify-end gap-3">
+          <Button variant="ghost" type="button" onClick={onCancel}>Cancel</Button>
+          <Button variant="primary" type="submit" loading={saving}>
+            {initial?.id ? "Save Changes" : "Create Project"}
+          </Button>
+        </div>
       </div>
+
+      <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete project" size="sm">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+            Delete this project? This will also delete all time entries linked to it. This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="primary" type="button" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+            <Button variant="danger" type="button" onClick={() => void handleDeleteProject()} loading={deleting}>Delete project</Button>
+          </div>
+        </div>
+      </Modal>
     </form>
   );
 }
@@ -263,6 +301,14 @@ export default function ProjectsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ archived: !project.archived }),
     });
+    await refreshProjects();
+  }
+
+  async function handleDeleteProject(project: Project) {
+    await fetch(`/api/projects/${project.id}`, {
+      method: "DELETE",
+    });
+    setEditProject(null);
     await refreshProjects();
   }
 
@@ -446,6 +492,7 @@ export default function ProjectsPage() {
               initial={editProject}
               onSave={handleEdit}
               onCancel={() => setEditProject(null)}
+              onDelete={() => handleDeleteProject(editProject)}
             />
           )}
         </Modal>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { projects } from "@/lib/db/schema";
+import { projects, timeEntries } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { canManageProjects } from "@/lib/permissions";
@@ -49,6 +49,19 @@ export async function DELETE(
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
 
   const { id } = await params;
-  await db.update(projects).set({ archived: true }).where(eq(projects.id, id));
+
+  const [project] = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(eq(projects.id, id))
+    .limit(1);
+
+  if (!project) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  await db.delete(timeEntries).where(eq(timeEntries.projectId, id));
+  await db.delete(projects).where(eq(projects.id, id));
+
   return NextResponse.json({ ok: true });
 }

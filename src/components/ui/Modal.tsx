@@ -54,7 +54,7 @@ export function Modal({ open, onClose, title, children, className, size = "md" }
       {/* Modal panel */}
       <div
         className={cn(
-          "relative w-full bg-surface-container-lowest rounded-xl paper-shadow overflow-hidden",
+          "relative w-full max-h-[calc(100vh-2rem)] bg-surface-container-lowest rounded-xl paper-shadow overflow-hidden flex flex-col",
           sizeStyles[size],
           className
         )}
@@ -85,7 +85,7 @@ export function Modal({ open, onClose, title, children, className, size = "md" }
         )}
 
         {/* Body */}
-        <div className="px-6 py-5">{children}</div>
+        <div className="px-6 py-5 overflow-y-auto">{children}</div>
       </div>
     </div>
   );

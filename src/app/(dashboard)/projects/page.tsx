@@ -17,7 +17,7 @@ const PROJECT_COLORS = [
   "#5aa9e6", // sky blue
   "#1f6fa8", // marine blue
   "#6f56d9", // violet
-  "#791903", // dark red
+  "#8bcf7b", // light green
 ];
 
 const MATERIAL_ICONS = [

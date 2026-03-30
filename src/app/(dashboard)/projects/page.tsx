@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -10,9 +10,24 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import type { Project } from "@/types";
 
 const PROJECT_COLORS = [
-  "#366769", "#295a5d", "#755a40", "#684e35",
-  "#5c5e6e", "#3d3e4e", "#a73b21", "#791903",
-  "#366769", "#b9ecee",
+  "#366769", // deep teal
+  "#5c5e6e", // slate
+  "#a73b21", // warm red
+  "#f08a24", // orange
+  "#5aa9e6", // sky blue
+  "#295a5d", // dark teal
+  "#3d3e4e", // dark slate
+  "#791903", // dark red
+];
+
+const MATERIAL_ICONS = [
+  "folder", "work", "web", "palette", "campaign", "phone_android", "code", "bolt",
+  "design_services", "analytics", "bar_chart", "trending_up", "groups", "handshake",
+  "shopping_bag", "payments", "receipt_long", "storefront", "rocket_launch", "school",
+  "event", "assignment", "article", "edit_note", "photo_camera", "videocam", "mic",
+  "headset", "support_agent", "psychology", "dns", "cloud", "hub", "inventory_2",
+  "local_shipping", "medical_services", "restaurant", "fitness_center", "construction",
+  "real_estate_agent", "travel", "flight", "hotel", "music_note", "movie", "sports_esports",
 ];
 
 function ProjectForm({
@@ -27,12 +42,22 @@ function ProjectForm({
   const [name, setName] = useState(initial?.name ?? "");
   const [color, setColor] = useState(initial?.color ?? "#366769");
   const [icon, setIcon] = useState(initial?.icon ?? "folder");
+  const [iconSearch, setIconSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const filteredIcons = useMemo(() => {
+    const query = iconSearch.trim().toLowerCase();
+    if (!query) return MATERIAL_ICONS;
+    return MATERIAL_ICONS.filter((item) => item.toLowerCase().includes(query));
+  }, [iconSearch]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) { setError("Name is required"); return; }
+    if (!name.trim()) {
+      setError("Name is required");
+      return;
+    }
     setSaving(true);
     try {
       await onSave({ name, color, icon });
@@ -44,7 +69,38 @@ function ProjectForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <div className="rounded-2xl bg-[#f5f4ef] p-4 flex items-center gap-4">
+        <div
+          className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
+          style={{ backgroundColor: `${color}22` }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: "30px", color }}>
+            {icon}
+          </span>
+        </div>
+        <div className="min-w-0">
+          <p
+            className="text-xs uppercase tracking-wide text-[#5e605b]"
+            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          >
+            Preview
+          </p>
+          <p
+            className="text-lg italic text-[#31332f] truncate"
+            style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
+          >
+            {name.trim() || "Your project name"}
+          </p>
+          <p
+            className="text-xs text-[#b2b2ad] mt-0.5"
+            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          >
+            {icon.replace(/_/g, " ")}
+          </p>
+        </div>
+      </div>
+
       <Input
         label="Project Name"
         placeholder="e.g. Website Redesign"
@@ -52,7 +108,8 @@ function ProjectForm({
         onChange={(e) => setName(e.target.value)}
         error={error}
       />
-      <div className="flex flex-col gap-1.5">
+
+      <div className="flex flex-col gap-2">
         <label
           className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -65,30 +122,76 @@ function ProjectForm({
               key={c}
               type="button"
               onClick={() => setColor(c)}
-              className="w-7 h-7 rounded-full transition-transform hover:scale-110"
+              className="w-10 h-10 rounded-full transition-transform hover:scale-105 flex items-center justify-center"
               style={{
                 backgroundColor: c,
-                outline: color === c ? `3px solid ${c}` : "none",
+                outline: color === c ? "3px solid rgba(49, 51, 47, 0.25)" : "none",
                 outlineOffset: "2px",
               }}
-            />
+            >
+              {color === c && (
+                <span className="material-symbols-outlined text-white" style={{ fontSize: "16px" }}>
+                  check
+                </span>
+              )}
+            </button>
           ))}
           <input
             type="color"
             value={color}
             onChange={(e) => setColor(e.target.value)}
-            className="w-7 h-7 rounded-full cursor-pointer border-0 p-0 bg-transparent"
+            className="w-10 h-10 rounded-full cursor-pointer border-0 p-0 bg-transparent"
             title="Custom color"
           />
         </div>
       </div>
-      <Input
-        label="Icon"
-        placeholder="Material icon name (e.g. folder)"
-        value={icon}
-        onChange={(e) => setIcon(e.target.value)}
-        hint="Use any Material Symbols icon name"
-      />
+
+      <div className="flex flex-col gap-2">
+        <Input
+          label="Search Material icon"
+          placeholder="Search icons like folder, rocket, chart, palette..."
+          value={iconSearch}
+          onChange={(e) => setIconSearch(e.target.value)}
+        />
+        <div className="rounded-2xl bg-[#f5f4ef] p-3 max-h-72 overflow-y-auto">
+          <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+            {filteredIcons.map((item) => {
+              const active = icon === item;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setIcon(item)}
+                  className="group rounded-2xl px-2 py-3 flex flex-col items-center justify-center gap-2 transition-all hover:bg-[#fbf9f5]"
+                  style={{
+                    backgroundColor: active ? `${color}18` : "transparent",
+                    outline: active ? `2px solid ${color}` : "none",
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: "24px", color: active ? color : "#5e605b" }}>
+                    {item}
+                  </span>
+                  <span
+                    className="text-[10px] leading-tight text-center break-words text-[#5e605b]"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    {item.replace(/_/g, " ")}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {filteredIcons.length === 0 && (
+            <p
+              className="text-sm text-[#b2b2ad] text-center py-6"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              No icons found for that search.
+            </p>
+          )}
+        </div>
+      </div>
+
       <div className="flex justify-end gap-3 pt-2">
         <Button variant="ghost" type="button" onClick={onCancel}>Cancel</Button>
         <Button variant="primary" type="submit" loading={saving}>
@@ -290,8 +393,14 @@ export default function ProjectsPage() {
             {archivedProjects.map((project) => (
               <Card key={project.id} variant="tonal" className="p-5 opacity-60 group relative">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#efeee9] flex items-center justify-center">
-                    <span className="material-symbols-outlined text-[#b2b2ad]" style={{ fontSize: "18px" }}>
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{ backgroundColor: `${project.color ?? "#366769"}18` }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: "18px", color: project.color ?? "#366769" }}
+                    >
                       {project.icon ?? "folder"}
                     </span>
                   </div>

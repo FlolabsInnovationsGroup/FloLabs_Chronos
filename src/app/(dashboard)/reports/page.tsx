@@ -6,6 +6,7 @@ import { eq, and, gte, lte, isNotNull, desc, ilike, inArray, or, type SQL } from
 import { ReportFilters } from "@/components/reports/ReportFilters";
 import { ReportChart } from "@/components/reports/ReportChart";
 import { ReportTable } from "@/components/reports/ReportTable";
+import { ReportEntries } from "@/components/reports/ReportEntries";
 import { ExportCSVButton } from "@/components/reports/ExportCSVButton";
 import { Suspense } from "react";
 import type { Project, Tag, ReportRow, TimeEntry } from "@/types";
@@ -280,6 +281,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
       {/* Table */}
       <ReportTable rows={reportRows} title={`Breakdown by ${groupBy}`} />
+
+      {/* Detailed entries with multi-select and management */}
+      <ReportEntries entries={entries} />
     </div>
   );
 }

@@ -346,6 +346,10 @@ The UI follows the "Tactile Editorial" system from the Stitch references.
 
 Use the existing design tokens and avoid generic admin-panel styling.
 
+### Delayed Tooltips
+
+Icon-only buttons across the UI use the `<Tooltip>` component (`src/components/ui/Tooltip.tsx`) to display a descriptive label after hovering for 3 seconds. This keeps the interface clean while remaining accessible to users who need to discover button actions. The tooltip uses Vellum Ink styling (dark ink background, cream text) and fades in smoothly. Apply `<Tooltip label="...">` around any new icon-only button.
+
 ---
 
 ## Deployment

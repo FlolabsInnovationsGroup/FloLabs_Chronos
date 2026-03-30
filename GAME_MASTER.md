@@ -79,6 +79,14 @@
 
 ---
 
+### 6. UI Polish
+- [x] Delayed tooltip component (`Tooltip`) for icon-only buttons — shows label after 3s hover
+- [x] Applied to Projects page (edit, archive, unarchive)
+- [x] Applied to Team page (edit member, deactivate)
+- [x] Applied to EntryCard (resume, edit, delete)
+
+---
+
 ## Risks To Watch
 
 - existing inline `admin` checks may accidentally allow or block team leads incorrectly

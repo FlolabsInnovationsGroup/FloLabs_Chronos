@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
+import { Tooltip } from "@/components/ui/Tooltip";
 import type { Invitation, Role, Team, User } from "@/types";
 
 interface TeamUser extends User {
@@ -379,13 +380,17 @@ export default function TeamPage() {
                     {role === "admin" && (
                       <td className="px-5 py-4">
                         <div className="flex gap-1">
-                          <button onClick={() => setEditingUser(user)} className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef]">
-                            <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>edit</span>
-                          </button>
-                          {user.id !== session?.user.id && (
-                            <button onClick={() => void handleDeactivate(user)} className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#fff7f6] hover:text-[#a73b21]">
-                              <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>person_off</span>
+                          <Tooltip label="Edit member">
+                            <button onClick={() => setEditingUser(user)} className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef]">
+                              <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>edit</span>
                             </button>
+                          </Tooltip>
+                          {user.id !== session?.user.id && (
+                            <Tooltip label="Deactivate">
+                              <button onClick={() => void handleDeactivate(user)} className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#fff7f6] hover:text-[#a73b21]">
+                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>person_off</span>
+                              </button>
+                            </Tooltip>
                           )}
                         </div>
                       </td>

@@ -148,6 +148,12 @@ Do not only block forbidden writes in the API. Also remove or disable the corres
 3. keep Vellum Ink styling intact
 4. remove actions the current role cannot perform
 
+### Add an icon-only button
+1. Wrap the `<button>` in `<Tooltip label="Action Name">` from `@/components/ui/Tooltip`
+2. The tooltip appears after 3 seconds of hovering (configurable via `delayMs` prop)
+3. Remove any `title` attribute — the Tooltip replaces it
+4. Use Vellum Ink styling; do not use the browser's native tooltip
+
 ### Modify the schema
 1. update `src/lib/db/schema.ts`
 2. update shared TypeScript types if needed

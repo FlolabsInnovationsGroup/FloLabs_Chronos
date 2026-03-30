@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { formatDuration, formatTime } from "@/lib/utils";
 import type { TimeEntry } from "@/types";
 
@@ -175,47 +176,50 @@ export function EntryCard({ entry, onResume }: EntryCardProps) {
         <div className="flex items-center gap-1 shrink-0">
           {/* Resume button */}
           {onResume && (
-            <button
-              onClick={() => onResume(entry)}
-              className={`p-1.5 rounded-lg text-[#366769] hover:bg-[#b9ecee] transition-all duration-150 ${
-                hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-              }`}
-              aria-label="Resume this entry"
-              title="Resume"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
-                play_arrow
-              </span>
-            </button>
+            <Tooltip label="Resume">
+              <button
+                onClick={() => onResume(entry)}
+                className={`p-1.5 rounded-lg text-[#366769] hover:bg-[#b9ecee] transition-all duration-150 ${
+                  hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+                aria-label="Resume this entry"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
+                  play_arrow
+                </span>
+              </button>
+            </Tooltip>
           )}
 
           {/* Edit button */}
-          <button
-            onClick={openEdit}
-            className={`p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] transition-all duration-150 ${
-              hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-            }`}
-            aria-label="Edit this entry"
-            title="Edit"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
-              edit
-            </span>
-          </button>
+          <Tooltip label="Edit">
+            <button
+              onClick={openEdit}
+              className={`p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] transition-all duration-150 ${
+                hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+              }`}
+              aria-label="Edit this entry"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
+                edit
+              </span>
+            </button>
+          </Tooltip>
 
           {/* Delete button */}
-          <button
-            onClick={() => setDeleteConfirm(true)}
-            className={`p-1.5 rounded-lg text-[#a73b21] hover:bg-[#fde0d9] transition-all duration-150 ${
-              hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-            }`}
-            aria-label="Delete this entry"
-            title="Delete"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
-              delete
-            </span>
-          </button>
+          <Tooltip label="Delete">
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              className={`p-1.5 rounded-lg text-[#a73b21] hover:bg-[#fde0d9] transition-all duration-150 ${
+                hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+              }`}
+              aria-label="Delete this entry"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
+                delete
+              </span>
+            </button>
+          </Tooltip>
 
           {/* Duration */}
           <span

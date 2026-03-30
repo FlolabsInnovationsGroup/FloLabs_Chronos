@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { Tooltip } from "@/components/ui/Tooltip";
 import type { Project } from "@/types";
 
 const PROJECT_COLORS = [
@@ -252,20 +253,22 @@ export default function ProjectsPage() {
                 {/* Actions */}
                 {canManageProjects && (
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => setEditProject(project)}
-                      className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors"
-                      title="Edit"
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>edit</span>
-                    </button>
-                    <button
-                      onClick={() => handleArchive(project)}
-                      className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors"
-                      title="Archive"
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>archive</span>
-                    </button>
+                    <Tooltip label="Edit">
+                      <button
+                        onClick={() => setEditProject(project)}
+                        className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors"
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>edit</span>
+                      </button>
+                    </Tooltip>
+                    <Tooltip label="Archive">
+                      <button
+                        onClick={() => handleArchive(project)}
+                        className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors"
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>archive</span>
+                      </button>
+                    </Tooltip>
                   </div>
                 )}
               </div>
@@ -299,13 +302,14 @@ export default function ProjectsPage() {
                     {project.name}
                   </p>
                   {canManageProjects && (
-                    <button
-                      onClick={() => handleArchive(project)}
-                      className="p-1 rounded text-[#5e605b] hover:text-[#31332f] opacity-0 group-hover:opacity-100 transition-all"
-                      title="Unarchive"
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>unarchive</span>
-                    </button>
+                    <Tooltip label="Unarchive">
+                      <button
+                        onClick={() => handleArchive(project)}
+                        className="p-1 rounded text-[#5e605b] hover:text-[#31332f] opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>unarchive</span>
+                      </button>
+                    </Tooltip>
                   )}
                 </div>
               </Card>

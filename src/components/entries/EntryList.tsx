@@ -134,6 +134,28 @@ export function EntryList({
   return (
     <>
       <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-[#f5f4ef]">
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={() => (allSelected ? deselectAll() : selectAll())}
+              className="w-4 h-4 rounded accent-[#366769]"
+            />
+            <span
+              className="text-sm font-medium text-[#31332f]"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              Select all entries
+            </span>
+          </label>
+          <span
+            className="text-xs text-[#5e605b]"
+            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          >
+            {selectedIds.size} selected
+          </span>
+        </div>
         {groups.map((group) => {
           const groupTotalMs = group.entries.reduce((sum, e) => sum + (e.durationMs ?? 0), 0);
 

@@ -4,13 +4,14 @@ import { db } from "@/lib/db";
 import { timeEntries, users, tags } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { canManageTeams } from "@/lib/permissions";
+import { canManageTeams, isAdmin, isTeamLead } from "@/lib/permissions";
 
 const updateSchema = z.object({
   role: z.enum(["admin", "team_lead", "member"]).optional(),
   name: z.string().min(1).optional(),
   teamId: z.string().uuid().nullable().optional(),
   isActive: z.boolean().optional(),
+  weeklyTargetHours: z.number().min(0).max(168).optional(),
   discordWebhookUrl: z.string().url().nullable().optional(),
   notifyOnStart: z.boolean().optional(),
   notifyOnStop: z.boolean().optional(),
@@ -22,7 +23,14 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (!session?.user || !canManageTeams(session.user)) {
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userIsAdmin = isAdmin(session.user);
+  const userIsTeamLead = isTeamLead(session.user);
+
+  if (!userIsAdmin && !userIsTeamLead) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
@@ -40,6 +48,22 @@ export async function PATCH(
 
   if (!existingUser) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Team leads can only update weeklyTargetHours for members in their team
+  if (userIsTeamLead && !userIsAdmin) {
+    if (existingUser.teamId !== session.user.teamId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    // Team leads may only change weeklyTargetHours
+    const allowedKeys = ["weeklyTargetHours"];
+    const attemptedKeys = Object.keys(parsed.data).filter(
+      (k) => parsed.data[k as keyof typeof parsed.data] !== undefined
+    );
+    const forbidden = attemptedKeys.filter((k) => !allowedKeys.includes(k));
+    if (forbidden.length > 0) {
+      return NextResponse.json({ error: "Team leads can only update weekly target hours." }, { status: 403 });
+    }
   }
 
   const finalRole = parsed.data.role ?? existingUser.role;
@@ -62,6 +86,7 @@ export async function PATCH(
   if (parsed.data.notifyOnStart !== undefined) updateData.notifyOnStart = parsed.data.notifyOnStart;
   if (parsed.data.notifyOnStop !== undefined) updateData.notifyOnStop = parsed.data.notifyOnStop;
   if (parsed.data.dailySummary !== undefined) updateData.dailySummary = parsed.data.dailySummary;
+  if (parsed.data.weeklyTargetHours !== undefined) updateData.weeklyTargetHours = parsed.data.weeklyTargetHours;
 
   const [user] = await db
     .update(users)
@@ -74,6 +99,7 @@ export async function PATCH(
       role: users.role,
       teamId: users.teamId,
       isActive: users.isActive,
+      weeklyTargetHours: users.weeklyTargetHours,
       discordWebhookUrl: users.discordWebhookUrl,
       notifyOnStart: users.notifyOnStart,
       notifyOnStop: users.notifyOnStop,

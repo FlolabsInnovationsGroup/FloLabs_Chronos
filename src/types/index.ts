@@ -7,6 +7,7 @@ export interface User {
   role: Role;
   teamId: string | null;
   isActive: boolean;
+  weeklyTargetHours: number | null;
   createdAt: Date;
   updatedAt: Date;
   team?: Pick<Team, "id" | "name" | "slug"> | null;

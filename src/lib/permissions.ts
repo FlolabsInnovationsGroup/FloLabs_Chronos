@@ -63,6 +63,23 @@ export async function canAccessUser(user: SessionUserLike, targetUserId: string)
   return accessibleIds === null ? true : accessibleIds.includes(targetUserId);
 }
 
+const userSelectFields = {
+  id: users.id,
+  email: users.email,
+  name: users.name,
+  role: users.role,
+  teamId: users.teamId,
+  isActive: users.isActive,
+  weeklyTargetHours: users.weeklyTargetHours,
+  discordWebhookUrl: users.discordWebhookUrl,
+  notifyOnStart: users.notifyOnStart,
+  notifyOnStop: users.notifyOnStop,
+  dailySummary: users.dailySummary,
+  createdAt: users.createdAt,
+  updatedAt: users.updatedAt,
+  team: { id: teams.id, name: teams.name, slug: teams.slug },
+};
+
 export async function getAccessibleUsers(user: SessionUserLike) {
   if (!db) {
     return [];
@@ -70,63 +87,21 @@ export async function getAccessibleUsers(user: SessionUserLike) {
 
   if (isAdmin(user)) {
     return db
-      .select({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        role: users.role,
-        teamId: users.teamId,
-        isActive: users.isActive,
-        discordWebhookUrl: users.discordWebhookUrl,
-        notifyOnStart: users.notifyOnStart,
-        notifyOnStop: users.notifyOnStop,
-        dailySummary: users.dailySummary,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
-        team: { id: teams.id, name: teams.name, slug: teams.slug },
-      })
+      .select(userSelectFields)
       .from(users)
       .leftJoin(teams, eq(users.teamId, teams.id));
   }
 
   if (user.teamId) {
     return db
-      .select({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        role: users.role,
-        teamId: users.teamId,
-        isActive: users.isActive,
-        discordWebhookUrl: users.discordWebhookUrl,
-        notifyOnStart: users.notifyOnStart,
-        notifyOnStop: users.notifyOnStop,
-        dailySummary: users.dailySummary,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
-        team: { id: teams.id, name: teams.name, slug: teams.slug },
-      })
+      .select(userSelectFields)
       .from(users)
       .leftJoin(teams, eq(users.teamId, teams.id))
       .where(eq(users.teamId, user.teamId));
   }
 
   return db
-    .select({
-      id: users.id,
-      email: users.email,
-      name: users.name,
-      role: users.role,
-      teamId: users.teamId,
-      isActive: users.isActive,
-      discordWebhookUrl: users.discordWebhookUrl,
-      notifyOnStart: users.notifyOnStart,
-      notifyOnStop: users.notifyOnStop,
-      dailySummary: users.dailySummary,
-      createdAt: users.createdAt,
-      updatedAt: users.updatedAt,
-      team: { id: teams.id, name: teams.name, slug: teams.slug },
-    })
+    .select(userSelectFields)
     .from(users)
     .leftJoin(teams, eq(users.teamId, teams.id))
     .where(eq(users.id, user.id));

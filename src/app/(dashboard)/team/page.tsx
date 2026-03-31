@@ -67,6 +67,7 @@ export default function TeamPage() {
   const [editRole, setEditRole] = useState<Role>("member");
   const [editTeamId, setEditTeamId] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
+  const [editWeeklyTarget, setEditWeeklyTarget] = useState(40);
 
   const refresh = useCallback(async () => {
     if (!userId) return;
@@ -103,6 +104,7 @@ export default function TeamPage() {
     setEditRole(editingUser.role);
     setEditTeamId(editingUser.teamId ?? "");
     setEditIsActive(editingUser.isActive);
+    setEditWeeklyTarget(editingUser.weeklyTargetHours ?? 40);
   }, [editingUser]);
 
   const currentUser = useMemo(
@@ -195,9 +197,12 @@ export default function TeamPage() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            role: editRole,
-            teamId: editRole === "admin" ? null : editTeamId || null,
-            isActive: editIsActive,
+            ...(role === "admin" ? {
+              role: editRole,
+              teamId: editRole === "admin" ? null : editTeamId || null,
+              isActive: editIsActive,
+            } : {}),
+            weeklyTargetHours: editWeeklyTarget,
           }),
         })
       );
@@ -363,7 +368,7 @@ export default function TeamPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-[#f5f4ef]">
-                {["Member", "Role", "Team", "Status", "Joined", ...(role === "admin" ? ["Actions"] : [])].map((heading) => (
+                {["Member", "Role", "Team", "Status", "Joined", ...((role === "admin" || role === "team_lead") ? ["Actions"] : [])].map((heading) => (
                   <th key={heading} className="text-left px-5 py-3 text-xs font-semibold text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
                     {heading}
                   </th>
@@ -374,14 +379,14 @@ export default function TeamPage() {
               {loading ? (
                 [...Array(3)].map((_, index) => (
                   <tr key={index}>
-                    <td colSpan={role === "admin" ? 6 : 5} className="px-5 py-4">
+                    <td colSpan={(role === "admin" || role === "team_lead") ? 6 : 5} className="px-5 py-4">
                       <div className="h-4 rounded bg-[#f5f4ef] animate-pulse" />
                     </td>
                   </tr>
                 ))
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={role === "admin" ? 6 : 5} className="px-5 py-10 text-center text-sm text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                  <td colSpan={(role === "admin" || role === "team_lead") ? 6 : 5} className="px-5 py-10 text-center text-sm text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
                     No users in scope.
                   </td>
                 </tr>
@@ -412,7 +417,7 @@ export default function TeamPage() {
                         {user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
                       </span>
                     </td>
-                    {role === "admin" && (
+                    {(role === "admin" || role === "team_lead") && (
                       <td className="px-5 py-4">
                         <div className="flex gap-1">
                           <Tooltip label="Edit member">
@@ -420,7 +425,7 @@ export default function TeamPage() {
                               <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>edit</span>
                             </button>
                           </Tooltip>
-                          {user.id !== session?.user.id && (
+                          {role === "admin" && user.id !== session?.user.id && (
                             <Tooltip label="Delete member">
                               <button onClick={() => setConfirmDeleteUser(user)} className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#fff7f6] hover:text-[#a73b21]">
                                 <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>delete</span>
@@ -515,12 +520,23 @@ export default function TeamPage() {
 
       <Modal open={!!editingUser} onClose={() => setEditingUser(null)} title="Edit Member">
         <form onSubmit={handleEditUser} className="flex flex-col gap-4">
-          <Select label="Role" options={EDIT_ROLES} value={editRole} onChange={(value) => setEditRole(value as Role)} />
-          <Select label="Team" options={teams.map((team) => ({ value: team.id, label: team.name }))} value={editTeamId} onChange={setEditTeamId} placeholder={editRole === "admin" ? "Admins can stay unassigned" : "Choose a team"} disabled={editRole === "admin"} />
-          <label className="flex items-center gap-2.5 cursor-pointer">
-            <input type="checkbox" checked={editIsActive} onChange={(e) => setEditIsActive(e.target.checked)} className="w-4 h-4 rounded accent-[#366769]" />
-            <span className="text-sm text-[#31332f]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Active account</span>
-          </label>
+          {role === "admin" && (
+            <>
+              <Select label="Role" options={EDIT_ROLES} value={editRole} onChange={(value) => setEditRole(value as Role)} />
+              <Select label="Team" options={teams.map((team) => ({ value: team.id, label: team.name }))} value={editTeamId} onChange={setEditTeamId} placeholder={editRole === "admin" ? "Admins can stay unassigned" : "Choose a team"} disabled={editRole === "admin"} />
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={editIsActive} onChange={(e) => setEditIsActive(e.target.checked)} className="w-4 h-4 rounded accent-[#366769]" />
+                <span className="text-sm text-[#31332f]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Active account</span>
+              </label>
+            </>
+          )}
+          <Input
+            label="Weekly Target (hours)"
+            type="number"
+            value={String(editWeeklyTarget)}
+            onChange={(e) => setEditWeeklyTarget(Math.max(0, Math.min(168, Number(e.target.value) || 0)))}
+            hint={`Daily target: ${(editWeeklyTarget / 5).toFixed(1)}h (Mon–Fri)`}
+          />
           <div className="flex justify-end gap-3">
             <Button variant="ghost" type="button" onClick={() => setEditingUser(null)}>Cancel</Button>
             <Button variant="primary" type="submit" loading={saving}>Save Changes</Button>

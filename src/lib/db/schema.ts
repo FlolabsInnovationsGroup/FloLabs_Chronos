@@ -38,6 +38,7 @@ export const users = pgTable(
     notifyOnStart: boolean("notify_on_start").default(false),
     notifyOnStop: boolean("notify_on_stop").default(false),
     dailySummary: boolean("daily_summary").default(false),
+    weeklyTargetHours: bigint("weekly_target_hours", { mode: "number" }).default(40),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },

@@ -98,16 +98,29 @@ async function getRecentEntries(userId: string): Promise<TimeEntry[]> {
   return buildEntriesWithTags(rows);
 }
 
+async function getUserWeeklyTarget(userId: string): Promise<number> {
+  if (!db) return 40;
+  const [row] = await db
+    .select({ weeklyTargetHours: users.weeklyTargetHours })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row?.weeklyTargetHours ?? 40;
+}
+
 export default async function TimerPage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  const [projectsList, tagsList, todayEntries, recentEntries] = await Promise.all([
+  const [projectsList, tagsList, todayEntries, recentEntries, weeklyTarget] = await Promise.all([
     getProjects(),
     getUserTags(userId),
     getTodayEntries(userId),
     getRecentEntries(userId),
+    getUserWeeklyTarget(userId),
   ]);
+
+  const dailyTarget = weeklyTarget / 5;
 
   return (
     <div className="flex flex-col gap-10 max-w-6xl mx-auto">
@@ -121,7 +134,7 @@ export default async function TimerPage() {
 
         {/* Right: active timer card */}
         <div className="col-span-12 md:col-span-5">
-          <ActiveTimerCard todayEntries={todayEntries} targetHours={8} />
+          <ActiveTimerCard todayEntries={todayEntries} targetHours={dailyTarget} />
         </div>
       </div>
 

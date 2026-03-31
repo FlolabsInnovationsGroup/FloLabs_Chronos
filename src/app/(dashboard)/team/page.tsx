@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { Invitation, Role, Team, User } from "@/types";
+import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 
 interface TeamUser extends User {
   discordWebhookUrl?: string | null;
@@ -108,6 +109,8 @@ export default function TeamPage() {
     if (!userId) return;
     void refresh();
   }, [refresh, userId]);
+
+  useAutoRefresh(refresh, { enabled: !!userId, intervalMs: 5000 });
 
   useEffect(() => {
     if (!inviteTeamId && teams[0]?.id) setInviteTeamId(teams[0].id);

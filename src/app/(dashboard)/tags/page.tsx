@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 
 interface TagRow {
   id: string;
@@ -24,40 +25,36 @@ export default function TagsPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
 
-  // Selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  // Create modal
   const [showCreate, setShowCreate] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createError, setCreateError] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
 
-  // Bulk delete confirm
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
 
-  // Single rename
   const [editTag, setEditTag] = useState<TagRow | null>(null);
   const [editName, setEditName] = useState("");
   const [editError, setEditError] = useState("");
   const [editLoading, setEditLoading] = useState(false);
 
-  // Single delete confirm
   const [deleteTarget, setDeleteTarget] = useState<TagRow | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const refreshTags = useCallback(async () => {
-    const res = await fetch("/api/tags");
+    const res = await fetch("/api/tags", { cache: "no-store" });
     const { tags: data } = await res.json();
     setTagList(data ?? []);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch("/api/tags");
+        const res = await fetch("/api/tags", { cache: "no-store" });
         const { tags: data } = await res.json();
         if (!cancelled) setTagList(data ?? []);
       } finally {
@@ -67,6 +64,8 @@ export default function TagsPage() {
     void load();
     return () => { cancelled = true; };
   }, []);
+
+  useAutoRefresh(refreshTags, { intervalMs: 5000 });
 
   const paginated = tagList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(tagList.length / PAGE_SIZE));
@@ -169,7 +168,6 @@ export default function TagsPage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl mx-auto">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1
@@ -199,7 +197,6 @@ export default function TagsPage() {
         </div>
       </div>
 
-      {/* Table */}
       {loading ? (
         <div className="flex flex-col gap-2">
           {[...Array(5)].map((_, i) => (
@@ -221,7 +218,6 @@ export default function TagsPage() {
       ) : (
         <>
           <div className="rounded-xl overflow-hidden border border-[#efeee9]">
-            {/* Table header */}
             <div
               className="flex items-center gap-3 px-4 py-2.5 bg-[#f5f4ef] border-b border-[#efeee9]"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -244,7 +240,6 @@ export default function TagsPage() {
               <span className="w-16 shrink-0" />
             </div>
 
-            {/* Rows */}
             {paginated.map((tag, idx) => (
               <div
                 key={tag.id}
@@ -301,7 +296,6 @@ export default function TagsPage() {
             ))}
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div
               className="flex items-center justify-between text-sm text-[#5e605b]"
@@ -331,7 +325,6 @@ export default function TagsPage() {
         </>
       )}
 
-      {/* Create modal */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="New Tag" size="sm">
         <form onSubmit={handleCreate} className="flex flex-col gap-4">
           <Input
@@ -348,7 +341,6 @@ export default function TagsPage() {
         </form>
       </Modal>
 
-      {/* Edit/rename modal */}
       <Modal
         open={!!editTag}
         onClose={() => setEditTag(null)}
@@ -369,7 +361,6 @@ export default function TagsPage() {
         </form>
       </Modal>
 
-      {/* Single delete confirm */}
       <Modal
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
@@ -392,7 +383,6 @@ export default function TagsPage() {
         </div>
       </Modal>
 
-      {/* Bulk delete confirm */}
       <Modal
         open={bulkDeleteOpen}
         onClose={() => setBulkDeleteOpen(false)}

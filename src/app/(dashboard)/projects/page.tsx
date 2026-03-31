@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -8,16 +8,17 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { Project } from "@/types";
+import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 
 const PROJECT_COLORS = [
-  "#366769", // deep teal
-  "#5c5e6e", // slate
-  "#a73b21", // warm red
-  "#f08a24", // orange
-  "#5aa9e6", // sky blue
-  "#1f6fa8", // marine blue
-  "#6f56d9", // violet
-  "#8bcf7b", // light green
+  "#366769",
+  "#5c5e6e",
+  "#a73b21",
+  "#f08a24",
+  "#5aa9e6",
+  "#1f6fa8",
+  "#6f56d9",
+  "#8bcf7b",
 ];
 
 const MATERIAL_ICONS = [
@@ -243,19 +244,19 @@ export default function ProjectsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
 
-  async function refreshProjects() {
-    const res = await fetch("/api/projects");
+  const refreshProjects = useCallback(async () => {
+    const res = await fetch("/api/projects", { cache: "no-store" });
     const { projects: data } = await res.json();
     setProjects(data ?? []);
     setLoading(false);
-  }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadInitialProjects() {
       try {
-        const res = await fetch("/api/projects");
+        const res = await fetch("/api/projects", { cache: "no-store" });
         const { projects: data } = await res.json();
         if (!cancelled) setProjects(data ?? []);
       } finally {
@@ -269,6 +270,8 @@ export default function ProjectsPage() {
       cancelled = true;
     };
   }, []);
+
+  useAutoRefresh(refreshProjects, { intervalMs: 5000 });
 
   async function handleCreate(data: Partial<Project>) {
     await fetch("/api/projects", {
@@ -312,7 +315,6 @@ export default function ProjectsPage() {
 
   return (
     <div className="flex flex-col gap-8 max-w-5xl mx-auto">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1
@@ -336,7 +338,6 @@ export default function ProjectsPage() {
         )}
       </div>
 
-      {/* Projects grid */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
@@ -360,7 +361,6 @@ export default function ProjectsPage() {
           {activeProjects.map((project) => (
             <Card key={project.id} className="p-5 group relative">
               <div className="flex items-start gap-3">
-                {/* Color swatch + icon */}
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                   style={{ backgroundColor: `${project.color}20` }}
@@ -394,7 +394,6 @@ export default function ProjectsPage() {
                   </div>
                 </div>
 
-                {/* Actions */}
                 {canManageProjects && (
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Tooltip label="Edit">
@@ -421,7 +420,6 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {/* Archived section */}
       {archivedProjects.length > 0 && (
         <div className="flex flex-col gap-3">
           <h2
@@ -468,14 +466,12 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {/* Create modal */}
       {canManageProjects && (
         <Modal open={showModal} onClose={() => setShowModal(false)} title="New Project">
           <ProjectForm onSave={handleCreate} onCancel={() => setShowModal(false)} />
         </Modal>
       )}
 
-      {/* Edit modal */}
       {canManageProjects && (
         <Modal
           open={!!editProject}

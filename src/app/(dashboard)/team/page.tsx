@@ -69,6 +69,20 @@ export default function TeamPage() {
   const [editIsActive, setEditIsActive] = useState(true);
   const [editWeeklyTarget, setEditWeeklyTarget] = useState(40);
 
+  type SortKey = "name" | "team" | "weekly";
+  type SortDir = "asc" | "desc";
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
   const refresh = useCallback(async () => {
     if (!userId) return;
 
@@ -266,6 +280,30 @@ export default function TeamPage() {
     }
   }
 
+  const sortedUsers = useMemo(() => {
+    const sorted = [...users];
+    const mult = sortDir === "asc" ? 1 : -1;
+    sorted.sort((a, b) => {
+      switch (sortKey) {
+        case "name":
+          return mult * a.name.localeCompare(b.name);
+        case "team": {
+          const aTeam = a.team?.name ?? "zzz";
+          const bTeam = b.team?.name ?? "zzz";
+          return mult * aTeam.localeCompare(bTeam);
+        }
+        case "weekly": {
+          const aH = a.weeklyTargetHours ?? 0;
+          const bH = b.weeklyTargetHours ?? 0;
+          return mult * (aH - bH);
+        }
+        default:
+          return 0;
+      }
+    });
+    return sorted;
+  }, [users, sortKey, sortDir]);
+
   const teamCards = visibleTeams.map((team) => ({
     ...team,
     memberCount: users.filter((user) => user.teamId === team.id && user.isActive).length,
@@ -368,9 +406,29 @@ export default function TeamPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-[#f5f4ef]">
-                {["Member", "Role", "Team", "Status", "Joined", ...((role === "admin" || role === "team_lead") ? ["Actions"] : [])].map((heading) => (
-                  <th key={heading} className="text-left px-5 py-3 text-xs font-semibold text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
-                    {heading}
+                {([
+                  { label: "Member", key: "name" as SortKey },
+                  { label: "Role", key: null },
+                  { label: "Team", key: "team" as SortKey },
+                  { label: "Weekly", key: "weekly" as SortKey },
+                  { label: "Status", key: null },
+                  { label: "Joined", key: null },
+                  ...((role === "admin" || role === "team_lead") ? [{ label: "Actions", key: null }] : []),
+                ] as { label: string; key: SortKey | null }[]).map((col) => (
+                  <th
+                    key={col.label}
+                    onClick={col.key ? () => handleSort(col.key!) : undefined}
+                    className={`text-left px-5 py-3 text-xs font-semibold text-[#5e605b] uppercase tracking-wide select-none ${col.key ? "cursor-pointer hover:text-[#31332f]" : ""}`}
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {col.label}
+                      {col.key && sortKey === col.key && (
+                        <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                          {sortDir === "asc" ? "arrow_upward" : "arrow_downward"}
+                        </span>
+                      )}
+                    </span>
                   </th>
                 ))}
               </tr>
@@ -379,19 +437,19 @@ export default function TeamPage() {
               {loading ? (
                 [...Array(3)].map((_, index) => (
                   <tr key={index}>
-                    <td colSpan={(role === "admin" || role === "team_lead") ? 6 : 5} className="px-5 py-4">
+                    <td colSpan={(role === "admin" || role === "team_lead") ? 7 : 6} className="px-5 py-4">
                       <div className="h-4 rounded bg-[#f5f4ef] animate-pulse" />
                     </td>
                   </tr>
                 ))
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={(role === "admin" || role === "team_lead") ? 6 : 5} className="px-5 py-10 text-center text-sm text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                  <td colSpan={(role === "admin" || role === "team_lead") ? 7 : 6} className="px-5 py-10 text-center text-sm text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
                     No users in scope.
                   </td>
                 </tr>
               ) : (
-                users.map((user, index) => (
+                sortedUsers.map((user, index) => (
                   <tr key={user.id} className={index % 2 === 0 ? "" : "bg-[#fbf9f5]"}>
                     <td className="px-5 py-4">
                       <div>
@@ -407,6 +465,14 @@ export default function TeamPage() {
                     <td className="px-5 py-4">
                       <span className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
                         {user.team?.name ?? "Unassigned"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className="text-sm font-medium italic text-[#31332f] tabular-nums" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>
+                        {user.weeklyTargetHours ?? 40}h
+                      </span>
+                      <span className="text-xs text-[#b2b2ad] ml-1" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                        / week
                       </span>
                     </td>
                     <td className="px-5 py-4">

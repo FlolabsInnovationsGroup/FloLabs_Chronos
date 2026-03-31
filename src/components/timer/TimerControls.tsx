@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTimer } from "@/hooks/use-timer";
 import { Button } from "@/components/ui/Button";
 import { DropdownSelect } from "@/components/ui/DropdownSelect";
@@ -13,7 +13,7 @@ interface TimerControlsProps {
 }
 
 export function TimerControls({ projects, tags: initialTags }: TimerControlsProps) {
-  const { activeTimer, start, stop, loading } = useTimer();
+  const { activeTimer, start, update, stop, loading } = useTimer();
 
   const [description, setDescription] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
@@ -22,6 +22,13 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     initialTags.map((t) => ({ id: t.id, name: t.name }))
   );
   const [submitting, setSubmitting] = useState(false);
+  const [tagSaving, setTagSaving] = useState(false);
+
+  useEffect(() => {
+    if (activeTimer) {
+      setSelectedTagIds(Array.isArray(activeTimer.tagIds) ? activeTimer.tagIds : []);
+    }
+  }, [activeTimer]);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
@@ -54,6 +61,30 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleUpdateTags(nextTagIds: string[]) {
+    setSelectedTagIds(nextTagIds);
+    if (!activeTimer) return;
+
+    setTagSaving(true);
+    try {
+      await update({ tagIds: nextTagIds });
+    } finally {
+      setTagSaving(false);
+    }
+  }
+
+  async function handleCreateWhileActive(name: string): Promise<TagOption | null> {
+    const created = await createTag(name);
+    if (!created) return null;
+
+    if (activeTimer) {
+      const nextTagIds = [...selectedTagIds, created.id];
+      await handleUpdateTags(nextTagIds);
+    }
+
+    return created;
   }
 
   async function handleStop() {
@@ -117,7 +148,6 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Description input */}
       {!activeTimer ? (
         <input
           type="text"
@@ -140,7 +170,6 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
         </p>
       )}
 
-      {/* Pill selectors row */}
       {!activeTimer && (
         <div className="flex flex-wrap gap-2 items-start">
           <DropdownSelect
@@ -168,44 +197,60 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
         </div>
       )}
 
-      {/* Active timer project/tag display */}
       {activeTimer && (
-        <div className="flex flex-wrap gap-2">
-          {(() => {
-            const proj = projects.find((p) => p.id === activeTimer.projectId);
-            const timerTagIds: string[] = Array.isArray(activeTimer.tagIds) ? activeTimer.tagIds : [];
-            const activeTags = localTags.filter((t) => timerTagIds.includes(t.id));
-            return (
-              <>
-                {proj && (
-                  <span
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm bg-[#b9ecee] text-[#104648]"
-                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                  >
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">
+            {(() => {
+              const proj = projects.find((p) => p.id === activeTimer.projectId);
+              return (
+                <>
+                  {proj && (
                     <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: proj.color ?? "#366769" }}
-                    />
-                    {proj.name}
-                  </span>
-                )}
-                {activeTags.map((tag) => (
-                  <span
-                    key={tag.id}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm bg-[#e9e8e3] text-[#31332f]"
-                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>label</span>
-                    {tag.name}
-                  </span>
-                ))}
-              </>
-            );
-          })()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm bg-[#b9ecee] text-[#104648]"
+                      style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: proj.color ?? "#366769" }}
+                      />
+                      {proj.name}
+                    </span>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <p
+                className="text-xs uppercase tracking-wide text-[#5e605b] font-medium"
+                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+              >
+                Tags for current session
+              </p>
+              {tagSaving && (
+                <span
+                  className="text-xs text-[#366769]"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  Saving…
+                </span>
+              )}
+            </div>
+            <TagMultiSelect
+              value={selectedTagIds}
+              onChange={(ids) => void handleUpdateTags(ids)}
+              options={localTags}
+              onCreate={handleCreateWhileActive}
+              placeholder="Add tags to running timer…"
+              className="flex-1"
+              disabled={submitting || tagSaving}
+            />
+          </div>
         </div>
       )}
 
-      {/* Action buttons */}
       <div className="flex items-center gap-3 pt-2">
         {!activeTimer ? (
           <Button
@@ -228,7 +273,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
               </span>
               Stop Session
             </Button>
-            <Button variant="danger" size="md" onClick={handleDiscard} disabled={submitting}>
+            <Button variant="danger" size="md" onClick={handleDiscard} disabled={submitting || tagSaving}>
               <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
                 delete
               </span>

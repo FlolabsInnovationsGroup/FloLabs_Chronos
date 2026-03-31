@@ -167,10 +167,12 @@ async function getEntries(
 }
 
 function groupEntries(entries: TimeEntry[], groupBy: string): ReportRow[] {
-  const map = new Map<string, { totalMs: number; count: number }>();
+  const map = new Map<string, { totalMs: number; count: number; sortDate?: string }>();
 
   for (const entry of entries) {
     let key = "";
+    let sortDate: string | undefined;
+
     switch (groupBy) {
       case "project":
         key = entry.project?.name ?? "Unknown Project";
@@ -180,28 +182,42 @@ function groupEntries(entries: TimeEntry[], groupBy: string): ReportRow[] {
         break;
       case "week": {
         const d = new Date(entry.startedAt);
-        const week = Math.floor(d.getDate() / 7);
-        key = `Week ${week + 1}, ${d.toLocaleDateString("en-US", { month: "short", year: "numeric" })}`;
+        const weekStart = new Date(d);
+        weekStart.setHours(0, 0, 0, 0);
+        weekStart.setDate(d.getDate() - d.getDay());
+        sortDate = weekStart.toISOString();
+        key = `Week ${Math.floor(d.getDate() / 7) + 1}, ${d.toLocaleDateString("en-US", { month: "short", year: "numeric" })}`;
         break;
       }
       case "month": {
         const d = new Date(entry.startedAt);
+        const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+        sortDate = monthStart.toISOString();
         key = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
         break;
       }
       default: {
         const d = new Date(entry.startedAt);
+        sortDate = new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
         key = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
         break;
       }
     }
-    const existing = map.get(key) ?? { totalMs: 0, count: 0 };
-    map.set(key, { totalMs: existing.totalMs + (entry.durationMs ?? 0), count: existing.count + 1 });
+
+    const existing = map.get(key) ?? { totalMs: 0, count: 0, sortDate };
+    map.set(key, {
+      totalMs: existing.totalMs + (entry.durationMs ?? 0),
+      count: existing.count + 1,
+      sortDate: existing.sortDate ?? sortDate,
+    });
   }
 
-  return Array.from(map.entries())
-    .map(([label, { totalMs, count }]) => ({ label, totalMs, entryCount: count }))
-    .sort((a, b) => b.totalMs - a.totalMs);
+  return Array.from(map.entries()).map(([label, { totalMs, count, sortDate }]) => ({
+    label,
+    totalMs,
+    entryCount: count,
+    sortDate,
+  }));
 }
 
 function buildChartData(entries: TimeEntry[]) {

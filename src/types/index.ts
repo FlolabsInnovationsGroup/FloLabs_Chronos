@@ -99,5 +99,6 @@ export interface ReportRow {
   label: string;
   totalMs: number;
   entryCount: number;
+  sortDate?: string;
   entries?: TimeEntry[];
 }

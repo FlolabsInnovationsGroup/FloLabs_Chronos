@@ -17,6 +17,7 @@ interface TimerContextValue {
   elapsed: number;
   loading: boolean;
   start: (payload: { projectId: string; tagIds?: string[]; description: string }) => Promise<ActiveTimer>;
+  update: (payload: { tagIds: string[] }) => Promise<ActiveTimer>;
   stop: (discard?: boolean) => Promise<void>;
 }
 
@@ -122,6 +123,29 @@ export function TimerProvider({ children, userId }: TimerProviderProps) {
     [applyTimerState]
   );
 
+  const update = useCallback(
+    async (payload: { tagIds: string[] }) => {
+      const res = await fetch("/api/timer", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = (await res.json().catch(() => ({ error: "Failed to update timer" }))) as {
+        error?: string;
+        timer?: ActiveTimer;
+      };
+
+      if (!res.ok || !data.timer) {
+        throw new Error(data.error ?? "Failed to update timer");
+      }
+
+      applyTimerState(data.timer);
+      return data.timer;
+    },
+    [applyTimerState]
+  );
+
   const stop = useCallback(
     async (discard = false) => {
       const res = await fetch("/api/timer/stop", {
@@ -143,8 +167,8 @@ export function TimerProvider({ children, userId }: TimerProviderProps) {
   );
 
   const value = useMemo(
-    () => ({ activeTimer, elapsed, loading, start, stop }),
-    [activeTimer, elapsed, loading, start, stop]
+    () => ({ activeTimer, elapsed, loading, start, update, stop }),
+    [activeTimer, elapsed, loading, start, update, stop]
   );
 
   return <TimerContext.Provider value={value}>{children}</TimerContext.Provider>;

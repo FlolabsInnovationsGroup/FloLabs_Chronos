@@ -5,11 +5,13 @@
 Chronos is FloLabs' internal time-tracking and team-management tool. It replaces Toggl for time capture, but the product goal is broader: admins need a controlled way to create projects, invite people into teams, and review team-wide time usage without exposing the same management surface to every account.
 
 The V1 operating model is:
-- Projects are global, but only admins can create or modify them.
+- Projects are global, but only admins can create, modify, or delete them.
 - Every non-admin account belongs to one primary team.
 - Access is role-scoped across three roles: `admin`, `team_lead`, `member`.
 - Account creation is invite-only. There is no open self-registration.
 - Invitations assign the invited user to a team automatically at account creation time.
+- Tags are per-user. Each user manages their own tags. Admins can see all tags.
+- Time entries support multiple tags via a many-to-many join table.
 
 ---
 
@@ -18,10 +20,12 @@ The V1 operating model is:
 ### Roles
 
 #### Admin
-- Can create, edit, archive, and restore projects.
+- Can create, edit, archive, delete, and restore projects.
 - Can create teams and manage all team memberships.
 - Can invite users into any team.
-- Can see all teams, all users, all time entries, and all reports.
+- Can disable or delete pending invitation links.
+- Can delete team members (only if they have no time entries).
+- Can see all teams, all users, all time entries, all tags, and all reports.
 
 #### Team Lead
 - Belongs to exactly one team in V1.
@@ -44,7 +48,18 @@ V1 uses a **single primary team per user**. That keeps permissions and reporting
 - A user can be in zero or one team.
 - `team_lead` is expressed by `users.role = 'team_lead'`, not by a second membership table.
 
-If multi-team membership becomes necessary later, the migration path is clear: replace `users.team_id` with a `team_memberships` join table and keep the rest of the authorization rules intact.
+### Tags Model
+
+Tags are **per-user**:
+- Each user creates and manages their own tags.
+- Tags have no color or icon — they are plain labels.
+- Tags are unique per user (same name can exist across different users).
+- Normal users only see their own tags.
+- Admins can see all tags on the Tags page with the creator's name.
+- Time entries can have **multiple tags** (many-to-many via `time_entry_tags` join table).
+- When a tag is deleted, time entries are preserved — only the tag association disappears.
+- When a user is deleted, their tags are cascade-deleted.
+- The tag selector supports multi-select and inline creation of new tags.
 
 ### Invitations
 
@@ -55,11 +70,11 @@ User onboarding is invite-based:
 4. Registration is only allowed when the token is valid, unexpired, and matches the invite email.
 5. On success, the new user is created and assigned to the invite's team automatically.
 
+Admins can disable or delete pending invitation links from the Team page.
+
 Delivery should be abstracted behind an invitation service:
 - If an email provider is configured, send the email directly.
 - If email delivery is not configured, still create the invite and return a shareable invite URL.
-
-That keeps the onboarding workflow operational without coupling the core product to one email vendor.
 
 ---
 
@@ -76,14 +91,6 @@ That keeps the onboarding workflow operational without coupling the core product
 | Validation | **Zod** | Shared input validation |
 | Optional email | **Resend** or equivalent | Invitation email delivery without building SMTP plumbing |
 
-### Why SSE over WebSocket?
-
-For Chronos, **Server-Sent Events (SSE)** are simpler and sufficient:
-- Timers are write-rare and read-frequent.
-- Clients only need server-to-client updates for timer state changes.
-- The UI computes elapsed time locally from `startedAt`.
-- Redis pub/sub plus SSE fan-out remains lightweight for the expected scale.
-
 ---
 
 ## How Live Timers Work
@@ -91,7 +98,7 @@ For Chronos, **Server-Sent Events (SSE)** are simpler and sufficient:
 **Timers are timestamps, not ticks.**
 
 ### Start Timer
-1. User clicks "Start" -> API writes to Redis: `timer:{userId}` = `{ projectId, tagId, description, startedAt }`
+1. User clicks "Start" → API writes to Redis: `timer:{userId}` = `{ projectId, tagIds, description, startedAt }`
 2. API broadcasts a timer-start event on the Redis pub/sub channel
 3. Connected SSE clients receive the event and update their local state
 
@@ -104,8 +111,9 @@ For Chronos, **Server-Sent Events (SSE)** are simpler and sufficient:
 1. API loads the active timer from Redis
 2. API computes `durationMs`
 3. API writes the completed entry to PostgreSQL
-4. API removes the active timer from Redis
-5. API broadcasts a timer-stop event
+4. API inserts tag associations into `time_entry_tags`
+5. API removes the active timer from Redis
+6. API broadcasts a timer-stop event
 
 ### Visibility Rules
 - Admins can inspect all active timers
@@ -134,7 +142,7 @@ CREATE TABLE users (
   email                 TEXT UNIQUE NOT NULL,
   name                  TEXT NOT NULL,
   password              TEXT NOT NULL,
-  role                  TEXT NOT NULL DEFAULT 'member', -- 'admin' | 'team_lead' | 'member'
+  role                  TEXT NOT NULL DEFAULT 'member',
   team_id               UUID REFERENCES teams(id),
   is_active             BOOLEAN NOT NULL DEFAULT true,
   discord_webhook_url   TEXT,
@@ -150,7 +158,7 @@ CREATE TABLE invitations (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email          TEXT NOT NULL,
   name           TEXT NOT NULL,
-  role           TEXT NOT NULL DEFAULT 'member', -- 'team_lead' | 'member'
+  role           TEXT NOT NULL DEFAULT 'member',
   team_id        UUID NOT NULL REFERENCES teams(id),
   token          TEXT UNIQUE NOT NULL,
   invited_by_id  UUID NOT NULL REFERENCES users(id),
@@ -169,19 +177,21 @@ CREATE TABLE projects (
   created_at  TIMESTAMPTZ DEFAULT now()
 );
 
--- Tags
+-- Tags (per-user, no color, no icon)
 CREATE TABLE tags (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name        TEXT UNIQUE NOT NULL,
-  color       TEXT DEFAULT '#755a40'
+  name        TEXT NOT NULL,
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at  TIMESTAMPTZ DEFAULT now()
 );
+CREATE UNIQUE INDEX tags_name_user_unique ON tags(name, user_id);
+CREATE INDEX idx_tags_user ON tags(user_id);
 
 -- Time entries
 CREATE TABLE time_entries (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id        UUID NOT NULL REFERENCES users(id),
   project_id     UUID NOT NULL REFERENCES projects(id),
-  tag_id         UUID REFERENCES tags(id),
   description    TEXT NOT NULL,
   started_at     TIMESTAMPTZ NOT NULL,
   stopped_at     TIMESTAMPTZ,
@@ -192,22 +202,34 @@ CREATE TABLE time_entries (
   created_at     TIMESTAMPTZ DEFAULT now()
 );
 
+-- Many-to-many: time entries ↔ tags
+CREATE TABLE time_entry_tags (
+  time_entry_id  UUID NOT NULL REFERENCES time_entries(id) ON DELETE CASCADE,
+  tag_id         UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (time_entry_id, tag_id)
+);
+
 CREATE INDEX idx_entries_user    ON time_entries(user_id, started_at DESC);
 CREATE INDEX idx_entries_project ON time_entries(project_id, started_at DESC);
 CREATE INDEX idx_entries_date    ON time_entries(started_at DESC);
-CREATE INDEX idx_entries_tag     ON time_entries(tag_id) WHERE tag_id IS NOT NULL;
-CREATE INDEX idx_users_team      ON users(team_id);
-CREATE INDEX idx_invites_email   ON invitations(email);
-CREATE INDEX idx_invites_team    ON invitations(team_id);
+CREATE INDEX idx_entry_tags_entry ON time_entry_tags(time_entry_id);
+CREATE INDEX idx_entry_tags_tag   ON time_entry_tags(tag_id);
+CREATE INDEX idx_users_team       ON users(team_id);
+CREATE INDEX idx_invites_email    ON invitations(email);
+CREATE INDEX idx_invites_team     ON invitations(team_id);
 ```
 
 ### Data Rules
 - `users.email` remains globally unique.
+- Tags are unique per (name, user_id), not globally.
+- Time entries no longer have a direct `tag_id` column; tags are linked via `time_entry_tags`.
 - Pending invitations do not create user rows early; they reserve onboarding intent only.
-- Invited emails cannot use open registration because open registration does not exist in V1.
 - `admin` users may have `team_id = NULL`.
 - `team_lead` and `member` should have a `team_id`.
 - Deactivation is soft via `users.is_active = false`.
+- Deleting a user cascades to their tags and tag associations.
+- Deleting a project also deletes all linked time entries.
+- Deleting a tag only removes associations; time entries are preserved.
 
 ---
 
@@ -217,30 +239,35 @@ Authorization must be validated in **every route handler and server component th
 
 ### Shared Permission Helpers
 
-The app should centralize authorization with server-side helper functions:
+The app centralizes authorization with server-side helper functions in `src/lib/permissions.ts`:
 - `isAdmin(session)`
 - `isTeamLead(session)`
 - `isMember(session)`
 - `canManageProjects(session)`
-- `canViewUser(session, targetUserId)`
-- `scopeUserIdsForSession(session)` or equivalent team-aware query helpers
+- `canManageTeams(session)`
+- `canManageInvitations(session)`
+- `getAccessibleUserIds(session)`
+- `getAccessibleUsers(session)`
+- `getAccessibleTeams(session)`
 
 ### Route Rules
 
 | Surface | Admin | Team Lead | Member |
 |---|---|---|---|
 | `/projects` list | Yes | Yes | Yes |
-| Create/edit/archive projects | Yes | No | No |
+| Create/edit/archive/delete projects | Yes | No | No |
+| `/tags` page | All tags (with creator name) | Own tags | Own tags |
+| Create/delete own tags | Yes | Yes | Yes |
 | `/team` page | All teams | Own team only | Own team only |
 | Create invites | Yes | No | No |
 | Disable/delete pending invites | Yes | No | No |
 | Create/edit teams | Yes | No | No |
 | Reports | All users | Team users only | Own only |
-| User management | All users; delete allowed only when user has no time entries | No direct user edits in V1 | No |
+| User management | All users; delete if no entries | No | No |
 
 ### Important Security Note
 
-`proxy.ts` is only a UX guard. It is **not** the source of truth for authorization. Route handlers and server components must re-check role and team scope because Next.js proxy protection alone is not sufficient.
+`proxy.ts` is only a UX guard. It is **not** the source of truth for authorization. Route handlers and server components must re-check role and team scope.
 
 ---
 
@@ -248,42 +275,57 @@ The app should centralize authorization with server-side helper functions:
 
 ```
 FloLabs_Chronos/
-├── ARCHITECTURE.md
-├── CLAUDE.md
-├── GAME_MASTER.md
+├── ARCHITECTURE.md          # Product model, data model, access rules
+├── CLAUDE.md                # Coding guardrails for agents
+├── GAME_MASTER.md           # Implementation tracker
+├── scripts/
+│   ├── seed.ts              # Bootstrap admin + sample data
+│   └── migrate-tags.ts      # One-time migration for per-user tags
 ├── src/
 │   ├── app/
 │   │   ├── (auth)/
 │   │   │   ├── login/page.tsx
-│   │   │   └── register/page.tsx        # Invite-only registration
+│   │   │   └── register/page.tsx
 │   │   ├── (dashboard)/
 │   │   │   ├── timer/page.tsx
 │   │   │   ├── projects/page.tsx
-│   │   │   ├── team/page.tsx            # Team visibility varies by role
+│   │   │   ├── tags/page.tsx
+│   │   │   ├── team/page.tsx
 │   │   │   ├── reports/page.tsx
 │   │   │   └── settings/page.tsx
 │   │   └── api/
 │   │       ├── auth/
-│   │       │   ├── [...nextauth]/route.ts
-│   │       │   ├── register/route.ts
-│   │       │   └── invitation/route.ts  # Invite validation lookup
 │   │       ├── timer/
 │   │       ├── entries/
+│   │       │   └── bulk/route.ts
 │   │       ├── projects/
 │   │       ├── reports/
-│   │       ├── teams/                   # Team CRUD (admin)
-│   │       ├── invitations/             # Invite creation/listing (admin)
+│   │       ├── teams/
+│   │       ├── invitations/
 │   │       ├── users/
 │   │       ├── tags/
 │   │       ├── sse/route.ts
 │   │       └── cron/
 │   ├── components/
+│   │   ├── ui/
+│   │   │   ├── Button.tsx
+│   │   │   ├── Card.tsx
+│   │   │   ├── DropdownSelect.tsx
+│   │   │   ├── Input.tsx
+│   │   │   ├── Modal.tsx
+│   │   │   ├── Select.tsx
+│   │   │   ├── TagMultiSelect.tsx
+│   │   │   └── Tooltip.tsx
+│   │   ├── entries/
+│   │   ├── layout/
+│   │   ├── reports/
+│   │   └── timer/
 │   ├── hooks/
 │   ├── lib/
 │   │   ├── db/
 │   │   ├── auth.ts
-│   │   ├── permissions.ts               # Shared role/team permission helpers
-│   │   ├── invitations.ts               # Token generation + delivery abstraction
+│   │   ├── permissions.ts
+│   │   ├── invitations.ts
 │   │   ├── redis.ts
 │   │   ├── notion.ts
 │   │   └── discord.ts
@@ -301,16 +343,10 @@ Chronos V1 is **invite-only**.
 
 ### Registration Rules
 - `/register` requires a valid invite token.
-- Without a valid invite, the page becomes an informational state that points users to sign in or contact an admin.
+- Without a valid invite, the page shows an informational state.
 - The invite email is the only email allowed for that registration attempt.
 - If the email already exists in `users`, registration returns `409`.
 - If the invite is expired or already accepted, registration returns `410`.
-
-### Recommended Endpoint Split
-- `GET /api/auth/invitation?token=...` -> validate invite and return prefill data
-- `POST /api/auth/register` -> create account from invite
-
-That keeps the UI simple and removes the need for the client to infer invite validity.
 
 ---
 
@@ -321,10 +357,14 @@ Reports are server-side PostgreSQL queries with scope depending on the viewer:
 - **Team Lead:** restricted to users whose `team_id` matches the lead's team
 - **Member:** restricted to `session.user.id`
 
-### Filter Model
+### Features
 - Filter by user, project, tag, date range, description
+- Search across descriptions, project names, tag names, and user names (ILIKE)
+- 2-second debounced search input
 - Group by day, week, month, user, project
+- Configurable page size: 25, 50, 100, 250, 500, or All
 - Export CSV
+- Detailed entry list with multi-select and bulk operations
 - Store filter state in URL params
 
 ### Team-Scoped Reporting Rule
@@ -335,8 +375,6 @@ User-filter dropdowns must be derived from the same accessible scope as the repo
 
 ## Design System: Vellum Ink
 
-The UI follows the "Tactile Editorial" system from the Stitch references.
-
 ### Principles
 - Cream paper background: `#fbf9f5`
 - Ink text: `#31332f`, never pure black
@@ -345,11 +383,35 @@ The UI follows the "Tactile Editorial" system from the Stitch references.
 - Work Sans for UI labels and controls
 - Paper shadow: `0 12px 32px -4px rgba(49, 51, 47, 0.06)`
 
-Use the existing design tokens and avoid generic admin-panel styling.
+### Custom Dropdowns
+
+All dropdown menus use the `DropdownSelect` component (`src/components/ui/DropdownSelect.tsx`) instead of native `<select>` elements. This ensures the opened dropdown panel matches Vellum Ink styling (rounded edges, Work Sans font, cream background, no browser-native contours) and works consistently on mobile browsers.
+
+### Tag Multi-Select
+
+The `TagMultiSelect` component (`src/components/ui/TagMultiSelect.tsx`) provides a multi-tag picker with inline tag creation. It replaces all single-tag selectors in timer and entry flows.
 
 ### Delayed Tooltips
 
-Icon-only buttons across the UI use the `<Tooltip>` component (`src/components/ui/Tooltip.tsx`) to display a descriptive label after hovering for 3 seconds. This keeps the interface clean while remaining accessible to users who need to discover button actions. The tooltip uses Vellum Ink styling (dark ink background, cream text) and fades in smoothly. Apply `<Tooltip label="...">` around any new icon-only button.
+Icon-only buttons use the `<Tooltip>` component to display a descriptive label after hovering for 3 seconds. Apply `<Tooltip label="...">` around any new icon-only button.
+
+### Destructive Action Modals
+
+All destructive actions (delete member, delete project, delete tag, disable invite, delete entries) must use a confirmation modal where **Cancel is the highlighted/primary button** and the destructive action uses the danger variant.
+
+---
+
+## Project Colors
+
+The project color palette:
+- `#366769` — deep teal
+- `#5c5e6e` — slate
+- `#a73b21` — warm red
+- `#f08a24` — orange
+- `#5aa9e6` — sky blue
+- `#1f6fa8` — marine blue
+- `#6f56d9` — violet
+- `#8bcf7b` — light green
 
 ---
 
@@ -360,54 +422,14 @@ Icon-only buttons across the UI use the `<Tooltip>` component (`src/components/u
 3. **Redis** for active timers and pub/sub
 4. **Optional email provider** for invite delivery
 
-### Environment Variables
-
-```bash
-DATABASE_URL=
-KV_URL=
-NEXTAUTH_SECRET=
-NEXTAUTH_URL=
-CRON_SECRET=
-NOTION_API_KEY=
-NOTION_DATABASE_ID=
-
-# Optional invitation delivery
-RESEND_API_KEY=
-INVITE_FROM_EMAIL=
-APP_URL=
-```
-
-`APP_URL` should be used when building absolute invite URLs outside request scope.
-
 ---
 
 ## Notion Backup
 
-Notion remains a **secondary backup**, not the source of truth.
-
-### Sync Rules
-1. Select entries where `synced_at IS NULL OR synced_at < updated_at`
-2. Create or update the corresponding Notion page
-3. Persist `notion_page_id` and `synced_at`
-
-If Notion is unavailable, sync retries on the next cron run. PostgreSQL remains authoritative.
+Notion remains a **secondary backup**, not the source of truth. PostgreSQL is authoritative.
 
 ---
 
 ## Discord Notifications
 
-Discord webhook notifications remain optional and non-blocking:
-- Timer started
-- Timer stopped
-- Daily summary
-
-They should never block the primary timer or reporting flows.
-
----
-
-## Scaling and Future Extensions
-
-- Single-team membership keeps V1 authorization simple and easy to reason about.
-- If the org needs cross-team staffing later, add a `team_memberships` table and migrate permission helpers to set-based membership checks.
-- If project ownership becomes team-scoped, add `projects.team_id` and reuse the same access helper layer.
-- If email delivery becomes mandatory, plug Resend into the invitation service without changing the registration contract.
+Discord webhook notifications remain optional and non-blocking.

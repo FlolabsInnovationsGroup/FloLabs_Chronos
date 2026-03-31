@@ -5,8 +5,16 @@ Project context for coding agents working on this repository.
 ## Read Order
 
 1. `ARCHITECTURE.md` — source of truth for product model, data model, and access rules
-2. `GAME_MASTER.md` — current implementation status and next steps
+2. `GAME_MASTER.md` — current implementation status, completed work, and next steps
 3. Then inspect the actual code before changing behavior
+
+## Workflow
+
+- `ARCHITECTURE.md` is the **target contract**. If the code disagrees with it, fix the code.
+- `GAME_MASTER.md` tracks **what's done and what's next**. Update it after completing work.
+- `CLAUDE.md` (this file) defines **how to work** in this repo. Follow these guardrails.
+
+When starting a session, check `GAME_MASTER.md` first for current status and handoff notes.
 
 ---
 
@@ -18,8 +26,9 @@ V1 priorities:
 - reliable timer tracking
 - team-scoped reporting
 - admin-controlled project creation
+- per-user tag management with multi-tag entries
 - invite-only account onboarding
-- clean editorial UI using Vellum Ink
+- clean editorial UI using Vellum Ink with custom dropdowns
 
 This is not an open signup SaaS. Treat it as an internal operations tool with strict role boundaries.
 
@@ -33,25 +42,35 @@ This is not an open signup SaaS. Treat it as an internal operations tool with st
 - `member`
 
 ### Role Rules
-- **Admins** can manage teams, invite users, create/edit/archive projects, and see all reports.
+- **Admins** can manage teams, invite users, create/edit/archive/delete projects, see all tags (with creator names), and see all reports.
 - **Team leads** can see members and reports for their own team only.
 - **Members** can see only their own reports and which team they belong to.
+- **All users** can create, view, and delete their own tags.
 
 ### Team Rules
 - V1 uses **one primary team per user**
 - non-admin users should always have a `teamId`
 - admins may be global and have `teamId = null`
 
+### Tag Rules
+- Tags are **per-user** — unique per (name, userId), not globally unique.
+- Tags have **no color and no icon** — plain labels only.
+- Normal users see only their own tags.
+- Admins see all tags on the Tags page with creator names.
+- Time entries support **multiple tags** via the `time_entry_tags` join table.
+- Deleting a tag removes associations but preserves time entries.
+- Deleting a user cascades to their tags.
+
 ### Registration Rules
 - registration is **invite-only**
 - `/register` must require a valid invite token
 - invited users are assigned to the invite's team automatically
 - if an email already exists in `users`, registration must fail
-- do not recreate accounts for invited emails
 
 ### Project Rules
 - all authenticated users can read projects needed for timer entry
-- only admins can create, edit, archive, or restore projects
+- only admins can create, edit, archive, delete, or restore projects
+- deleting a project also deletes all linked time entries (with confirmation warning)
 
 ---
 
@@ -80,30 +99,15 @@ This is not an open signup SaaS. Treat it as an internal operations tool with st
 ### Authorization
 - never trust `proxy.ts` alone
 - every route handler must enforce role and team scope itself
-- centralize access logic in shared helpers instead of duplicating inline checks everywhere
+- centralize access logic in shared helpers (`src/lib/permissions.ts`)
 
-### Database Direction
+### Database Tables
+- `users`, `teams`, `invitations`, `projects`, `tags`, `time_entries`, `time_entry_tags`
 
-Expected core tables:
-- `users`
-- `teams`
-- `invitations`
-- `projects`
-- `tags`
-- `time_entries`
-
-Expected high-value user fields:
-- `role`
-- `teamId`
-- `isActive`
-
-### Invitation Delivery
-
-The invitation system should be implemented in two layers:
-1. creation and token persistence
-2. delivery abstraction
-
-If no email provider is configured, the API should still return a shareable invite URL. Do not block the feature on SMTP or vendor setup.
+### Tags Architecture
+- `tags.user_id` is NOT NULL, references `users(id) ON DELETE CASCADE`
+- `time_entry_tags` is the join table between entries and tags (both FKs cascade on delete)
+- There is NO `tag_id` column on `time_entries` — always use the join table
 
 ---
 
@@ -111,27 +115,38 @@ If no email provider is configured, the API should still return a shareable invi
 
 ### Prefer shared permission helpers
 
-If you add or change access control, do it through a shared server-side utility layer. Avoid scattered one-off `session.user.role === "admin"` checks when the logic is actually team-aware.
+Use `src/lib/permissions.ts` for all access control. Avoid scattered inline role checks.
 
 ### Keep V1 simple
 
-Do not introduce multi-team membership yet unless the task explicitly requires it. Single-team-per-user is the intended V1 simplification.
+Do not introduce multi-team membership unless explicitly requested.
 
 ### Avoid destructive user deletion
 
-If a person already has time entries, preserve historical integrity. Prefer soft deactivation (`isActive = false`) over deleting rows.
+If a person already has time entries, preserve historical integrity. Block deletion and suggest deactivation.
 
 ### Registration must not drift back to open signup
 
-Any work on auth or onboarding must preserve invite-only registration unless the product contract changes explicitly.
+Any work on auth or onboarding must preserve invite-only registration.
 
 ### UI must reflect permissions
 
-Do not only block forbidden writes in the API. Also remove or disable the corresponding UI affordances:
 - hide project creation controls from non-admins
 - hide invite and team-management controls from non-admins
-- destructive actions (delete member, disable/delete invite) must use a confirmation modal with Cancel visually highlighted
+- destructive actions must use a confirmation modal with **Cancel visually highlighted** (primary variant) and the destructive action as danger variant
 - never show global user filters to team leads or members
+
+### Use custom dropdowns, not native selects
+
+All dropdown menus must use `DropdownSelect` or `Select` (which wraps `DropdownSelect`) instead of native `<select>` elements. This ensures Vellum Ink styling consistency across all browsers and mobile devices.
+
+### Use TagMultiSelect for tag pickers
+
+Tag selection must use `TagMultiSelect` component. It supports multi-select and inline creation of new tags.
+
+### Modals must fit the screen
+
+All modals use `max-h-[calc(100vh-2rem)]` with scrollable body content. The Modal component handles this automatically.
 
 ---
 
@@ -149,27 +164,34 @@ Do not only block forbidden writes in the API. Also remove or disable the corres
 3. keep Vellum Ink styling intact
 4. remove actions the current role cannot perform
 
+### Add a dropdown/select
+1. use `DropdownSelect` or `Select` component — never native `<select>`
+2. for tags, use `TagMultiSelect`
+
 ### Add an icon-only button
-1. Wrap the `<button>` in `<Tooltip label="Action Name">` from `@/components/ui/Tooltip`
-2. The tooltip appears after 3 seconds of hovering (configurable via `delayMs` prop)
-3. Remove any `title` attribute — the Tooltip replaces it
-4. Use Vellum Ink styling; do not use the browser's native tooltip
+1. wrap in `<Tooltip label="Action Name">`
+2. remove any `title` attribute
+
+### Add a destructive action
+1. use confirmation modal
+2. Cancel = `variant="primary"` (highlighted)
+3. Destructive action = `variant="danger"`
 
 ### Modify the schema
 1. update `src/lib/db/schema.ts`
-2. update shared TypeScript types if needed
-3. run `pnpm db:push`
-4. update seed data if the change affects bootstrapping
+2. update shared TypeScript types in `src/types/index.ts`
+3. write a migration script in `scripts/` if needed
+4. run `pnpm db:push` (use PTY mode for interactive prompts)
+5. update seed data if the change affects bootstrapping
+6. update `ARCHITECTURE.md` data model section
 
 ---
 
-## OpenClaw Handoff Notes
+## Handoff Notes
 
 When continuing work, check these first:
-- whether teams/invitations schema has already been pushed
-- whether registration is already token-gated
-- whether reports are team-scoped in both the page and the API
-- whether project mutations are admin-only in both API and UI
-- whether the team page renders different data by role
+- `GAME_MASTER.md` for current status
+- whether the database schema matches `src/lib/db/schema.ts`
+- whether the build passes: `pnpm exec tsc --noEmit && pnpm build`
 
 If the docs and code disagree, follow `ARCHITECTURE.md` and update the code to match.

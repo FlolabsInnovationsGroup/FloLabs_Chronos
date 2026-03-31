@@ -1,8 +1,8 @@
 # GAME_MASTER.md — FloLabs Chronos Development Tracker
 
 ## Project Status
-**Date:** 2026-03-28  
-**Phase:** V1 role-and-team refactor in progress  
+**Date:** 2026-03-31
+**Phase:** V1 feature-complete, in testing
 **Stack:** Next.js 16 + Drizzle + Neon Postgres + Redis + NextAuth v5
 
 ---
@@ -11,117 +11,112 @@
 
 - `ARCHITECTURE.md` defines the target V1 operating model
 - `CLAUDE.md` defines the implementation guardrails for coding agents
-- Code must be moved toward:
-  - invite-only registration
-  - three roles (`admin`, `team_lead`, `member`)
-  - single primary team per user
-  - admin-only project mutation
-  - team-scoped reports and team visibility
+- This file tracks what's done, what's next, and handoff context
 
 ---
 
-## Completed Before This Refactor
+## Completed
 
-- production deployment is live on Vercel
-- timer provider/state consistency was fixed
-- Redis pub/sub fan-out was repaired
-- Notion sync was updated to handle the real Notion schema
-- db/env fallbacks were aligned with the actual Vercel environment
-- `pnpm build`, `pnpm lint`, and `pnpm exec tsc --noEmit` were passing
+### Schema and Auth Foundation ✅
+- [x] `teams` table
+- [x] `invitations` table
+- [x] `users` extended with `teamId` and `isActive`
+- [x] Three roles: `admin | team_lead | member`
+- [x] Inactive users blocked from authenticating
+- [x] Shared permission helpers in `src/lib/permissions.ts`
 
----
+### Invite-Only Onboarding ✅
+- [x] Token-based registration (no open signup)
+- [x] Invitation validation endpoint (`GET /api/auth/invitation`)
+- [x] Invitation creation endpoint (`POST /api/invitations`)
+- [x] Shareable invite URLs even without email delivery
+- [x] Duplicate email prevention
 
-## Current Refactor Objectives
+### Team Visibility ✅
+- [x] Admins see all teams and members
+- [x] Team leads see only their own team
+- [x] Members see only their team assignment
+- [x] Team page renders different data by role
 
-### 1. Schema and Auth Foundation
-- [ ] Add `teams` table
-- [ ] Add `invitations` table
-- [ ] Extend `users` with `teamId` and `isActive`
-- [ ] Expand roles to `admin | team_lead | member`
-- [ ] Prevent inactive users from authenticating
-- [ ] Add shared permission helpers for team-aware authorization
+### Project Permissions ✅
+- [x] All users can read projects
+- [x] Create/edit/archive/delete restricted to admins in API and UI
+- [x] Visual icon picker with searchable Material icons
+- [x] Project deletion deletes linked time entries (with confirmation warning)
 
-### 2. Invite-Only Onboarding
-- [ ] Replace open self-registration with token-based registration
-- [ ] Add invitation validation endpoint
-- [ ] Add invitation creation endpoint
-- [ ] Return shareable invite URLs even if email delivery is not configured
-- [ ] Ensure invited emails cannot create duplicate accounts
+### Report Permissions ✅
+- [x] Admin sees all report data
+- [x] Team lead sees team data only
+- [x] Member sees own data only
+- [x] Filter dropdowns respect scope
 
-### 3. Team Visibility
-- [ ] Admins can see all teams and all members
-- [ ] Team leads can see only members of their own team
-- [ ] Members can see only their own team assignment
-- [ ] Replace current global `/team` user list with role-scoped data
+### UI Polish ✅
+- [x] Delayed tooltip component (3s hover) for icon-only buttons
+- [x] Custom dropdown menus (`DropdownSelect`) replacing native selects app-wide
+- [x] Modals scroll properly and fit the screen
+- [x] Vellum Ink design tokens used consistently
 
-### 4. Project Permissions
-- [ ] Keep project reads available for all authenticated users
-- [ ] Restrict project create/edit/archive to admins in API
-- [ ] Remove project management UI actions for non-admins
+### Admin Destructive Controls ✅
+- [x] Disable invitation links
+- [x] Delete invitation links
+- [x] Delete team members (when no time entries exist)
+- [x] Delete projects (cascades to time entries)
+- [x] All destructive modals: Cancel highlighted, action is danger variant
 
-### 5. Report Permissions
-- [ ] Admin sees all report data
-- [ ] Team lead sees only their team's report data
-- [ ] Member sees only their own report data
-- [ ] Filter dropdowns must respect the same scope
+### Time Entry Management ✅
+- [x] Bulk operations API (`POST /api/entries/bulk`): delete or change project
+- [x] Multi-select entries with checkboxes and floating action bar
+- [x] Select-all checkbox at top of entry list
+- [x] Individual entry edit (description, project, tags)
+- [x] Detailed entry list on reports page with full management controls
 
----
+### Reports Search and Filtering ✅
+- [x] 2-second debounced search input
+- [x] Search across descriptions, project names, tag names, user names (ILIKE)
+- [x] Configurable page size: 25, 50, 100, 250, 500, or All
 
-## Suggested Execution Order
+### Per-User Tags with Multi-Tag Entries ✅
+- [x] Tags are per-user (unique per name + userId)
+- [x] No color, no icon on tags
+- [x] Many-to-many join table `time_entry_tags`
+- [x] `TagMultiSelect` component with inline tag creation
+- [x] Tags page in sidebar for management
+- [x] Admins see all tags with creator names
+- [x] Tag deletion removes associations, preserves entries
+- [x] User deletion cascades to tags
+- [x] Database migration script (`scripts/migrate-tags.ts`)
 
-1. Schema changes
-2. Shared permission layer
-3. Auth/register changes
-4. API authorization updates
-5. Team page rewrite
-6. Project UI permission cleanup
-7. Verification and redeploy
-
----
-
-### 6. UI Polish
-- [x] Delayed tooltip component (`Tooltip`) for icon-only buttons — shows label after 3s hover
-- [x] Applied to Projects page (edit, archive, unarchive)
-- [x] Applied to Team page (edit member, delete member, disable/delete invite)
-- [x] Applied to EntryCard (resume, edit, delete)
-
-### 7. Admin Destructive Controls
-- [x] Admin can disable invitation links
-- [x] Admin can delete invitation links
-- [x] Admin can delete team members when they have no time entries
-- [x] Destructive actions use confirmation modals with Cancel as the highlighted button
-
-### 8. Time Entry Management
-- [x] Bulk operations API (`POST /api/entries/bulk`): delete or change project on multiple entries
-- [x] Multi-select entries with checkboxes (visible on hover or when any entry selected)
-- [x] Floating action bar for bulk delete and bulk project change
-- [x] Individual entry edit supports project change (was already in place)
-- [x] Delete confirmation modals use Cancel as highlighted button
-
-### 9. Reports Search and Filtering
-- [x] Debounced search input (2-second delay) — no more lag while typing
-- [x] Search now matches across descriptions, project names, tag names, and user names (ILIKE)
-- [x] Configurable page size: 25, 50, 100, 250, 500, or All entries per page
+### Project Colors ✅
+- [x] Updated palette: deep teal, slate, warm red, orange, sky blue, marine blue, violet, light green
 
 ---
 
-## Risks To Watch
+## Known State
 
-- existing inline `admin` checks may accidentally allow or block team leads incorrectly
-- deleting users is unsafe once time entries exist; prefer soft deactivation
-- filter UIs can leak global visibility even when API data is scoped correctly
-- proxy-only gating is insufficient; route handlers must re-check access
+- Production is deployed on Vercel
+- Database schema is migrated (per-user tags, time_entry_tags join table)
+- Build passes: `pnpm exec tsc --noEmit` and `pnpm build` both green
+- Admin account: `pm@flolabsinnovations.com`
+
+---
+
+## What's Next (V1.1 candidates)
+
+- [ ] Email delivery for invitations (Resend integration)
+- [ ] Password change in settings
+- [ ] Team lead ability to invite members to their own team
+- [ ] Notion sync updated for multi-tag entries
+- [ ] Active timer visibility for team leads/admins
+- [ ] Mobile-optimized bottom nav improvements
+- [ ] Audit log for admin actions
 
 ---
 
 ## Handoff
 
-If OpenClaw continues tomorrow, start by checking:
-- `src/lib/db/schema.ts`
-- `src/lib/auth.ts`
-- `src/lib/permissions.ts`
-- `src/app/api/auth/register/route.ts`
-- `src/app/api/reports/route.ts`
-- `src/app/(dashboard)/team/page.tsx`
-
-The next agent should assume the documented architecture is now the target contract and continue implementation from the permission layer outward.
+When continuing work:
+1. Read `CLAUDE.md` for coding rules
+2. Check this file for current status
+3. Run `pnpm exec tsc --noEmit && pnpm build` to verify green state
+4. Check `src/lib/db/schema.ts` matches the live database
+5. If schema changed, write a migration script in `scripts/` and run it

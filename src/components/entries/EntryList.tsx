@@ -18,12 +18,14 @@ interface EntryListProps {
   entries: TimeEntry[];
   onResume?: (entry: TimeEntry) => void;
   emptyMessage?: string;
+  grouped?: boolean;
 }
 
 export function EntryList({
   entries,
   onResume,
   emptyMessage = "No time entries yet. Start your first session above.",
+  grouped = true,
 }: EntryListProps) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -157,52 +159,66 @@ export function EntryList({
             {selectedIds.size} selected
           </span>
         </div>
-        {groups.map((group) => {
-          const groupTotalMs = group.entries.reduce((sum, e) => sum + (e.durationMs ?? 0), 0);
+        {grouped ? (
+          groups.map((group) => {
+            const groupTotalMs = group.entries.reduce((sum, e) => sum + (e.durationMs ?? 0), 0);
 
-          return (
-            <div key={group.date} className="flex flex-col gap-1">
-              {/* Date group header */}
-              <div className="flex items-center justify-between px-4 py-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-0.5 h-4 bg-[#abdddf] rounded-full" />
+            return (
+              <div key={group.date} className="flex flex-col gap-1">
+                {/* Date group header */}
+                <div className="flex items-center justify-between px-4 py-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-0.5 h-4 bg-[#abdddf] rounded-full" />
+                    <span
+                      className="text-sm font-semibold text-[#5e605b] uppercase tracking-wide"
+                      style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                    >
+                      {group.label}
+                    </span>
+                    <span
+                      className="text-xs text-[#b2b2ad]"
+                      style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                    >
+                      {group.entries.length} {group.entries.length === 1 ? "entry" : "entries"}
+                    </span>
+                  </div>
                   <span
-                    className="text-sm font-semibold text-[#5e605b] uppercase tracking-wide"
-                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                    className="text-sm font-light italic text-[#5e605b] tabular-nums"
+                    style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
                   >
-                    {group.label}
-                  </span>
-                  <span
-                    className="text-xs text-[#b2b2ad]"
-                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                  >
-                    {group.entries.length} {group.entries.length === 1 ? "entry" : "entries"}
+                    {formatDuration(groupTotalMs)}
                   </span>
                 </div>
-                <span
-                  className="text-sm font-light italic text-[#5e605b] tabular-nums"
-                  style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
-                >
-                  {formatDuration(groupTotalMs)}
-                </span>
-              </div>
 
-              {/* Entry cards */}
-              <div className="flex flex-col">
-                {group.entries.map((entry) => (
-                  <EntryCard
-                    key={entry.id}
-                    entry={entry}
-                    onResume={onResume}
-                    isSelected={selectedIds.has(entry.id)}
-                    onToggleSelect={toggleSelect}
-                    anySelected={anySelected}
-                  />
-                ))}
+                <div className="flex flex-col">
+                  {group.entries.map((entry) => (
+                    <EntryCard
+                      key={entry.id}
+                      entry={entry}
+                      onResume={onResume}
+                      isSelected={selectedIds.has(entry.id)}
+                      onToggleSelect={toggleSelect}
+                      anySelected={anySelected}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        ) : (
+          <div className="flex flex-col">
+            {entries.map((entry) => (
+              <EntryCard
+                key={entry.id}
+                entry={entry}
+                onResume={onResume}
+                isSelected={selectedIds.has(entry.id)}
+                onToggleSelect={toggleSelect}
+                anySelected={anySelected}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Floating bulk action bar */}

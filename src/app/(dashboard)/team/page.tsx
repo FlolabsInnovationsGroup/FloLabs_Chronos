@@ -69,7 +69,7 @@ export default function TeamPage() {
   const [editIsActive, setEditIsActive] = useState(true);
   const [editWeeklyTarget, setEditWeeklyTarget] = useState(40);
 
-  type SortKey = "name" | "team" | "weekly";
+  type SortKey = "name" | "team" | "weekly" | "joined";
   type SortDir = "asc" | "desc";
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -297,6 +297,11 @@ export default function TeamPage() {
           const bH = b.weeklyTargetHours ?? 0;
           return mult * (aH - bH);
         }
+        case "joined": {
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return mult * (aTime - bTime);
+        }
         default:
           return 0;
       }
@@ -412,7 +417,7 @@ export default function TeamPage() {
                   { label: "Team", key: "team" as SortKey },
                   { label: "Weekly", key: "weekly" as SortKey },
                   { label: "Status", key: null },
-                  { label: "Joined", key: null },
+                  { label: "Joined", key: "joined" as SortKey },
                   ...((role === "admin" || role === "team_lead") ? [{ label: "Actions", key: null }] : []),
                 ] as { label: string; key: SortKey | null }[]).map((col) => (
                   <th

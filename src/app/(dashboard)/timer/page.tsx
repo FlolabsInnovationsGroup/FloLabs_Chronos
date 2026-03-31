@@ -3,10 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
 import { eq, and, gte, isNotNull, desc, inArray } from "drizzle-orm";
-import { TimerDisplay } from "@/components/timer/TimerDisplay";
-import { TimerControls } from "@/components/timer/TimerControls";
-import { ActiveTimerCard } from "@/components/timer/ActiveTimerCard";
-import { EntryList } from "@/components/entries/EntryList";
+import { TimerDashboardClient } from "@/components/timer/TimerDashboardClient";
 import type { Project, Tag, TimeEntry } from "@/types";
 
 export const metadata: Metadata = { title: "Timer | FloLabs Chronos" };
@@ -120,45 +117,15 @@ export default async function TimerPage() {
     getUserWeeklyTarget(userId),
   ]);
 
-  const dailyTarget = weeklyTarget / 5;
-
   return (
     <div className="flex flex-col gap-10 max-w-6xl mx-auto">
-      {/* Top section: timer + daily momentum */}
-      <div className="grid grid-cols-12 gap-8">
-        {/* Left: timer display + controls */}
-        <div className="col-span-12 md:col-span-7 flex flex-col gap-8">
-          <TimerDisplay />
-          <TimerControls projects={projectsList} tags={tagsList} />
-        </div>
-
-        {/* Right: active timer card */}
-        <div className="col-span-12 md:col-span-5">
-          <ActiveTimerCard todayEntries={todayEntries} targetHours={dailyTarget} />
-        </div>
-      </div>
-
-      {/* Recent entries */}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2
-            className="text-lg font-medium text-[#31332f]"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
-            Recent Sessions
-          </h2>
-          <span
-            className="text-sm text-[#b2b2ad]"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
-            {recentEntries.length} entries
-          </span>
-        </div>
-        <EntryList
-          entries={recentEntries}
-          emptyMessage="No sessions yet. Start your first one above."
-        />
-      </div>
+      <TimerDashboardClient
+        projects={projectsList}
+        tags={tagsList}
+        initialTodayEntries={todayEntries}
+        initialRecentEntries={recentEntries}
+        targetHours={weeklyTarget / 5}
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { invitations } from "@/lib/db/schema";
 import { canManageInvitations } from "@/lib/permissions";
+import { broadcastDataChange } from "@/lib/realtime";
 
 export async function PATCH(
   _req: Request,
@@ -29,6 +30,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Invitation not found or already accepted." }, { status: 404 });
   }
 
+  broadcastDataChange("team");
   return NextResponse.json({ ok: true });
 }
 
@@ -55,5 +57,6 @@ export async function DELETE(
     return NextResponse.json({ error: "Invitation not found." }, { status: 404 });
   }
 
+  broadcastDataChange("team");
   return NextResponse.json({ ok: true });
 }

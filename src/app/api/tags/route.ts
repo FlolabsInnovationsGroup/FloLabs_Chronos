@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { tags, users } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { z } from "zod";
+import { broadcastDataChange } from "@/lib/realtime";
 
 export async function GET() {
   const session = await auth();
@@ -13,7 +14,6 @@ export async function GET() {
   const isAdmin = session.user.role === "admin";
 
   if (isAdmin) {
-    // Admin sees all tags with creator name
     const rows = await db
       .select({
         id: tags.id,
@@ -28,7 +28,6 @@ export async function GET() {
     return NextResponse.json({ tags: rows });
   }
 
-  // Normal users see only their own tags
   const rows = await db
     .select()
     .from(tags)
@@ -46,7 +45,6 @@ export async function POST(req: Request) {
   const parsed = z.object({ name: z.string().min(1).max(50) }).safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
 
-  // Check uniqueness per user
   const existing = await db
     .select({ id: tags.id })
     .from(tags)
@@ -62,6 +60,7 @@ export async function POST(req: Request) {
     .values({ name: parsed.data.name.trim(), userId: session.user.id })
     .returning();
 
+  broadcastDataChange("tags");
   return NextResponse.json({ tag }, { status: 201 });
 }
 
@@ -71,7 +70,6 @@ export async function DELETE(req: Request) {
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
 
   const url = new URL(req.url);
-  // Support ?id=xxx or ?ids=xxx,yyy for bulk
   const singleId = url.searchParams.get("id");
   const multiIds = url.searchParams.get("ids");
 
@@ -86,7 +84,6 @@ export async function DELETE(req: Request) {
   const isAdmin = session.user.role === "admin";
 
   if (!isAdmin) {
-    // Verify all belong to the requesting user
     const found = await db
       .select({ id: tags.id, userId: tags.userId })
       .from(tags)
@@ -96,5 +93,6 @@ export async function DELETE(req: Request) {
   }
 
   await db.delete(tags).where(inArray(tags.id, ids));
+  broadcastDataChange("tags");
   return NextResponse.json({ ok: true, deleted: ids.length });
 }

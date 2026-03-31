@@ -5,6 +5,7 @@ import { timeEntries, users, tags } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { canManageTeams, isAdmin, isTeamLead } from "@/lib/permissions";
+import { broadcastDataChange } from "@/lib/realtime";
 
 const updateSchema = z.object({
   role: z.enum(["admin", "team_lead", "member"]).optional(),
@@ -50,12 +51,10 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Team leads can only update weeklyTargetHours for members in their team
   if (userIsTeamLead && !userIsAdmin) {
     if (existingUser.teamId !== session.user.teamId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    // Team leads may only change weeklyTargetHours
     const allowedKeys = ["weeklyTargetHours"];
     const attemptedKeys = Object.keys(parsed.data).filter(
       (k) => parsed.data[k as keyof typeof parsed.data] !== undefined
@@ -108,6 +107,7 @@ export async function PATCH(
     });
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  broadcastDataChange("team");
   return NextResponse.json({ user });
 }
 
@@ -149,8 +149,8 @@ export async function DELETE(
     );
   }
 
-  // Delete user's tags first (FK cascade would also do this, but be explicit)
   await db.delete(tags).where(eq(tags.userId, id));
   await db.delete(users).where(eq(users.id, id));
+  broadcastDataChange("team");
   return NextResponse.json({ ok: true });
 }

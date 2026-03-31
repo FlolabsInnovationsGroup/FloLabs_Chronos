@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { tags } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { broadcastDataChange } from "@/lib/realtime";
 
 export async function PATCH(
   req: Request,
@@ -15,7 +16,6 @@ export async function PATCH(
 
   const { id } = await params;
 
-  // Fetch existing tag to check ownership
   const [existing] = await db.select().from(tags).where(eq(tags.id, id)).limit(1);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -31,7 +31,6 @@ export async function PATCH(
   const newName = parsed.data.name.trim();
   const ownerId = existing.userId;
 
-  // Check uniqueness for the owner
   const conflict = await db
     .select({ id: tags.id })
     .from(tags)
@@ -48,6 +47,7 @@ export async function PATCH(
     .where(eq(tags.id, id))
     .returning();
 
+  broadcastDataChange("tags");
   return NextResponse.json({ tag });
 }
 
@@ -70,5 +70,6 @@ export async function DELETE(
   }
 
   await db.delete(tags).where(eq(tags.id, id));
+  broadcastDataChange("tags");
   return NextResponse.json({ ok: true });
 }

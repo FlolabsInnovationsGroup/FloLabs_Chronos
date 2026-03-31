@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { invitations, teams, users } from "@/lib/db/schema";
 import { buildInviteUrl, createInvitationToken, normalizeEmail } from "@/lib/invitations";
 import { canManageInvitations } from "@/lib/permissions";
+import { broadcastDataChange } from "@/lib/realtime";
 
 const createInvitationSchema = z.object({
   email: z.string().email(),
@@ -135,6 +136,7 @@ export async function POST(req: Request) {
       createdAt: invitations.createdAt,
     });
 
+  broadcastDataChange("team");
   return NextResponse.json(
     {
       invitation: invite,

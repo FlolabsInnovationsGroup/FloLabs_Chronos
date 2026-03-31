@@ -80,8 +80,9 @@ export interface ActiveTimer {
 }
 
 export interface SSEEvent {
-  type: "timer:start" | "timer:stop" | "heartbeat";
+  type: "timer:start" | "timer:stop" | "heartbeat" | "data:changed";
   userId?: string;
+  channel?: "projects" | "tags" | "team";
   data?: ActiveTimer | null;
 }
 

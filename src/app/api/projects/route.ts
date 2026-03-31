@@ -5,6 +5,7 @@ import { projects } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { canManageProjects } from "@/lib/permissions";
+import { broadcastDataChange } from "@/lib/realtime";
 
 export async function GET() {
   const session = await auth();
@@ -33,6 +34,7 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
 
   const [project] = await db.insert(projects).values(parsed.data).returning();
+  broadcastDataChange("projects");
   return NextResponse.json({ project }, { status: 201 });
 }
 
@@ -49,6 +51,7 @@ export async function PUT(req: Request) {
 
   const body = await req.json();
   const [project] = await db.update(projects).set(body).where(eq(projects.id, id)).returning();
+  broadcastDataChange("projects");
   return NextResponse.json({ project });
 }
 
@@ -64,5 +67,6 @@ export async function DELETE(req: Request) {
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   await db.update(projects).set({ archived: true }).where(eq(projects.id, id));
+  broadcastDataChange("projects");
   return NextResponse.json({ ok: true });
 }

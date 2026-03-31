@@ -5,7 +5,8 @@ import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
-import { useAutoRefresh } from "@/hooks/use-auto-refresh";
+import { useSSE } from "@/hooks/use-sse";
+import type { SSEEvent } from "@/types";
 
 interface TagRow {
   id: string;
@@ -62,15 +63,25 @@ export default function TagsPage() {
       }
     }
     void load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useAutoRefresh(refreshTags, { intervalMs: 5000 });
+  useSSE(
+    useCallback(
+      (event: SSEEvent) => {
+        if (event.type === "data:changed" && event.channel === "tags") {
+          void refreshTags();
+        }
+      },
+      [refreshTags]
+    )
+  );
 
   const paginated = tagList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(tagList.length / PAGE_SIZE));
-  const allPageSelected =
-    paginated.length > 0 && paginated.every((t) => selected.has(t.id));
+  const allPageSelected = paginated.length > 0 && paginated.every((t) => selected.has(t.id));
 
   function toggleAll() {
     if (allPageSelected) {
@@ -93,7 +104,10 @@ export default function TagsPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!createName.trim()) { setCreateError("Name is required"); return; }
+    if (!createName.trim()) {
+      setCreateError("Name is required");
+      return;
+    }
     setCreateLoading(true);
     setCreateError("");
     try {
@@ -118,7 +132,10 @@ export default function TagsPage() {
   async function handleEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editTag) return;
-    if (!editName.trim()) { setEditError("Name is required"); return; }
+    if (!editName.trim()) {
+      setEditError("Name is required");
+      return;
+    }
     setEditLoading(true);
     setEditError("");
     try {
@@ -145,7 +162,11 @@ export default function TagsPage() {
     try {
       await fetch(`/api/tags/${deleteTarget.id}`, { method: "DELETE" });
       setDeleteTarget(null);
-      setSelected((prev) => { const n = new Set(prev); n.delete(deleteTarget.id); return n; });
+      setSelected((prev) => {
+        const n = new Set(prev);
+        n.delete(deleteTarget.id);
+        return n;
+      });
       await refreshTags();
     } finally {
       setDeleteLoading(false);
@@ -170,16 +191,10 @@ export default function TagsPage() {
     <div className="flex flex-col gap-6 max-w-3xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1
-            className="text-2xl font-light italic text-[#31332f]"
-            style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
-          >
+          <h1 className="text-2xl font-light italic text-[#31332f]" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>
             Tags
           </h1>
-          <p
-            className="text-sm text-[#5e605b] mt-0.5"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
+          <p className="text-sm text-[#5e605b] mt-0.5" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             {tagList.length} tag{tagList.length !== 1 ? "s" : ""}
             {isAdmin ? " (all users)" : ""}
           </p>
@@ -199,96 +214,38 @@ export default function TagsPage() {
 
       {loading ? (
         <div className="flex flex-col gap-2">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-11 bg-[#f5f4ef] rounded-xl animate-pulse" />
-          ))}
+          {[...Array(5)].map((_, i) => <div key={i} className="h-11 bg-[#f5f4ef] rounded-xl animate-pulse" />)}
         </div>
       ) : tagList.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <span className="material-symbols-outlined text-[#b2b2ad]" style={{ fontSize: "40px" }}>
-            label_off
-          </span>
-          <p
-            className="text-sm text-[#b2b2ad]"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
+          <span className="material-symbols-outlined text-[#b2b2ad]" style={{ fontSize: "40px" }}>label_off</span>
+          <p className="text-sm text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             No tags yet. Create one to start labelling entries.
           </p>
         </div>
       ) : (
         <>
           <div className="rounded-xl overflow-hidden border border-[#efeee9]">
-            <div
-              className="flex items-center gap-3 px-4 py-2.5 bg-[#f5f4ef] border-b border-[#efeee9]"
-              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-            >
-              <input
-                type="checkbox"
-                checked={allPageSelected}
-                onChange={toggleAll}
-                className="w-4 h-4 rounded accent-[#366769] shrink-0"
-                aria-label="Select all on this page"
-              />
-              <span className="text-xs font-semibold text-[#5e605b] uppercase tracking-wide flex-1">
-                Name
-              </span>
-              {isAdmin && (
-                <span className="text-xs font-semibold text-[#5e605b] uppercase tracking-wide w-36 shrink-0">
-                  Owner
-                </span>
-              )}
+            <div className="flex items-center gap-3 px-4 py-2.5 bg-[#f5f4ef] border-b border-[#efeee9]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+              <input type="checkbox" checked={allPageSelected} onChange={toggleAll} className="w-4 h-4 rounded accent-[#366769] shrink-0" aria-label="Select all on this page" />
+              <span className="text-xs font-semibold text-[#5e605b] uppercase tracking-wide flex-1">Name</span>
+              {isAdmin && <span className="text-xs font-semibold text-[#5e605b] uppercase tracking-wide w-36 shrink-0">Owner</span>}
               <span className="w-16 shrink-0" />
             </div>
 
             {paginated.map((tag, idx) => (
-              <div
-                key={tag.id}
-                className={`flex items-center gap-3 px-4 py-3 ${
-                  idx < paginated.length - 1 ? "border-b border-[#efeee9]" : ""
-                } hover:bg-[#f5f4ef] transition-colors group`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.has(tag.id)}
-                  onChange={() => toggleOne(tag.id)}
-                  className="w-4 h-4 rounded accent-[#366769] shrink-0"
-                  aria-label={`Select ${tag.name}`}
-                />
+              <div key={tag.id} className={`flex items-center gap-3 px-4 py-3 ${idx < paginated.length - 1 ? "border-b border-[#efeee9]" : ""} hover:bg-[#f5f4ef] transition-colors group`}>
+                <input type="checkbox" checked={selected.has(tag.id)} onChange={() => toggleOne(tag.id)} className="w-4 h-4 rounded accent-[#366769] shrink-0" aria-label={`Select ${tag.name}`} />
                 <div className="flex-1 min-w-0 flex items-center gap-2">
-                  <span
-                    className="material-symbols-outlined text-[#5e605b]"
-                    style={{ fontSize: "16px" }}
-                  >
-                    label
-                  </span>
-                  <span
-                    className="text-sm text-[#31332f] truncate"
-                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                  >
-                    {tag.name}
-                  </span>
+                  <span className="material-symbols-outlined text-[#5e605b]" style={{ fontSize: "16px" }}>label</span>
+                  <span className="text-sm text-[#31332f] truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{tag.name}</span>
                 </div>
-                {isAdmin && (
-                  <span
-                    className="text-xs text-[#5e605b] w-36 shrink-0 truncate"
-                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                  >
-                    {tag.user?.name ?? "—"}
-                  </span>
-                )}
+                {isAdmin && <span className="text-xs text-[#5e605b] w-36 shrink-0 truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{tag.user?.name ?? "—"}</span>}
                 <div className="w-16 shrink-0 flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => { setEditTag(tag); setEditName(tag.name); setEditError(""); }}
-                    className="p-1 rounded-lg text-[#5e605b] hover:bg-[#e9e8e3] transition-colors"
-                    aria-label={`Rename ${tag.name}`}
-                  >
+                  <button onClick={() => { setEditTag(tag); setEditName(tag.name); setEditError(""); }} className="p-1 rounded-lg text-[#5e605b] hover:bg-[#e9e8e3] transition-colors" aria-label={`Rename ${tag.name}`}>
                     <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>edit</span>
                   </button>
-                  <button
-                    onClick={() => setDeleteTarget(tag)}
-                    className="p-1 rounded-lg text-[#a73b21] hover:bg-[#fde0d9] transition-colors"
-                    aria-label={`Delete ${tag.name}`}
-                  >
+                  <button onClick={() => setDeleteTarget(tag)} className="p-1 rounded-lg text-[#a73b21] hover:bg-[#fde0d9] transition-colors" aria-label={`Delete ${tag.name}`}>
                     <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>delete</span>
                   </button>
                 </div>
@@ -297,28 +254,11 @@ export default function TagsPage() {
           </div>
 
           {totalPages > 1 && (
-            <div
-              className="flex items-center justify-between text-sm text-[#5e605b]"
-              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-            >
-              <span>
-                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, tagList.length)} of {tagList.length}
-              </span>
+            <div className="flex items-center justify-between text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+              <span>{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, tagList.length)} of {tagList.length}</span>
               <div className="flex gap-2">
-                <button
-                  disabled={page === 0}
-                  onClick={() => setPage(page - 1)}
-                  className="px-3 py-1 rounded-lg bg-[#f5f4ef] hover:bg-[#e9e8e3] disabled:opacity-40 transition-colors"
-                >
-                  Previous
-                </button>
-                <button
-                  disabled={page >= totalPages - 1}
-                  onClick={() => setPage(page + 1)}
-                  className="px-3 py-1 rounded-lg bg-[#f5f4ef] hover:bg-[#e9e8e3] disabled:opacity-40 transition-colors"
-                >
-                  Next
-                </button>
+                <button disabled={page === 0} onClick={() => setPage(page - 1)} className="px-3 py-1 rounded-lg bg-[#f5f4ef] hover:bg-[#e9e8e3] disabled:opacity-40 transition-colors">Previous</button>
+                <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} className="px-3 py-1 rounded-lg bg-[#f5f4ef] hover:bg-[#e9e8e3] disabled:opacity-40 transition-colors">Next</button>
               </div>
             </div>
           )}
@@ -327,13 +267,7 @@ export default function TagsPage() {
 
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="New Tag" size="sm">
         <form onSubmit={handleCreate} className="flex flex-col gap-4">
-          <Input
-            label="Tag Name"
-            placeholder="e.g. Deep Work"
-            value={createName}
-            onChange={(e) => setCreateName(e.target.value)}
-            error={createError}
-          />
+          <Input label="Tag Name" placeholder="e.g. Deep Work" value={createName} onChange={(e) => setCreateName(e.target.value)} error={createError} />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" type="button" onClick={() => setShowCreate(false)}>Cancel</Button>
             <Button variant="primary" type="submit" loading={createLoading}>Create Tag</Button>
@@ -341,19 +275,9 @@ export default function TagsPage() {
         </form>
       </Modal>
 
-      <Modal
-        open={!!editTag}
-        onClose={() => setEditTag(null)}
-        title="Rename Tag"
-        size="sm"
-      >
+      <Modal open={!!editTag} onClose={() => setEditTag(null)} title="Rename Tag" size="sm">
         <form onSubmit={handleEdit} className="flex flex-col gap-4">
-          <Input
-            label="Tag Name"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            error={editError}
-          />
+          <Input label="Tag Name" value={editName} onChange={(e) => setEditName(e.target.value)} error={editError} />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" type="button" onClick={() => setEditTag(null)}>Cancel</Button>
             <Button variant="primary" type="submit" loading={editLoading}>Save</Button>
@@ -361,46 +285,26 @@ export default function TagsPage() {
         </form>
       </Modal>
 
-      <Modal
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        title="Delete tag"
-        size="sm"
-      >
+      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete tag" size="sm">
         <div className="flex flex-col gap-4">
-          <p
-            className="text-sm text-[#5e605b]"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
+          <p className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             Delete &ldquo;{deleteTarget?.name}&rdquo;? Time entries will keep their data but lose this tag association. This cannot be undone.
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="primary" type="button" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="danger" type="button" loading={deleteLoading} onClick={handleDeleteSingle}>
-              Delete
-            </Button>
+            <Button variant="danger" type="button" loading={deleteLoading} onClick={handleDeleteSingle}>Delete</Button>
           </div>
         </div>
       </Modal>
 
-      <Modal
-        open={bulkDeleteOpen}
-        onClose={() => setBulkDeleteOpen(false)}
-        title="Delete tags"
-        size="sm"
-      >
+      <Modal open={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)} title="Delete tags" size="sm">
         <div className="flex flex-col gap-4">
-          <p
-            className="text-sm text-[#5e605b]"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
+          <p className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             Delete {selected.size} tag{selected.size !== 1 ? "s" : ""}? Time entries will keep their data but lose these tag associations. This cannot be undone.
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="primary" type="button" onClick={() => setBulkDeleteOpen(false)}>Cancel</Button>
-            <Button variant="danger" type="button" loading={bulkDeleteLoading} onClick={handleBulkDelete}>
-              Delete {selected.size}
-            </Button>
+            <Button variant="danger" type="button" loading={bulkDeleteLoading} onClick={handleBulkDelete}>Delete {selected.size}</Button>
           </div>
         </div>
       </Modal>

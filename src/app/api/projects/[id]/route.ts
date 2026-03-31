@@ -5,6 +5,7 @@ import { projects, timeEntries } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { canManageProjects } from "@/lib/permissions";
+import { broadcastDataChange } from "@/lib/realtime";
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
@@ -35,6 +36,7 @@ export async function PATCH(
     .returning();
 
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  broadcastDataChange("projects");
   return NextResponse.json({ project });
 }
 
@@ -62,6 +64,7 @@ export async function DELETE(
 
   await db.delete(timeEntries).where(eq(timeEntries.projectId, id));
   await db.delete(projects).where(eq(projects.id, id));
+  broadcastDataChange("projects");
 
   return NextResponse.json({ ok: true });
 }

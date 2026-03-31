@@ -6,6 +6,7 @@ import { teams } from "@/lib/db/schema";
 import { createTeamSlug } from "@/lib/invitations";
 import { canManageTeams, getAccessibleTeams } from "@/lib/permissions";
 import { z } from "zod";
+import { broadcastDataChange } from "@/lib/realtime";
 
 const createTeamSchema = z.object({
   name: z.string().min(1),
@@ -70,5 +71,6 @@ export async function POST(req: Request) {
     })
     .returning();
 
+  broadcastDataChange("team");
   return NextResponse.json({ team }, { status: 201 });
 }

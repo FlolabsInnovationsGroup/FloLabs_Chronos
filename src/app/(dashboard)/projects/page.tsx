@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Tooltip } from "@/components/ui/Tooltip";
-import type { Project } from "@/types";
-import { useAutoRefresh } from "@/hooks/use-auto-refresh";
+import type { Project, SSEEvent } from "@/types";
+import { useSSE } from "@/hooks/use-sse";
 
 const PROJECT_COLORS = [
   "#366769",
@@ -93,40 +93,22 @@ function ProjectForm({
           {icon}
         </span>
         <div className="min-w-0">
-          <p
-            className="text-xs uppercase tracking-wide text-[#5e605b]"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
+          <p className="text-xs uppercase tracking-wide text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             Preview
           </p>
-          <p
-            className="text-lg italic text-[#31332f] truncate"
-            style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
-          >
+          <p className="text-lg italic text-[#31332f] truncate" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>
             {name.trim() || "Your project name"}
           </p>
-          <p
-            className="text-xs text-[#b2b2ad] mt-0.5"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
+          <p className="text-xs text-[#b2b2ad] mt-0.5" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             {icon.replace(/_/g, " ")}
           </p>
         </div>
       </div>
 
-      <Input
-        label="Project Name"
-        placeholder="e.g. Website Redesign"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        error={error}
-      />
+      <Input label="Project Name" placeholder="e.g. Website Redesign" value={name} onChange={(e) => setName(e.target.value)} error={error} />
 
       <div className="flex flex-col gap-2">
-        <label
-          className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
-          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-        >
+        <label className="text-xs font-medium text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
           Color
         </label>
         <div className="flex flex-wrap gap-2">
@@ -136,36 +118,17 @@ function ProjectForm({
               type="button"
               onClick={() => setColor(c)}
               className="w-10 h-10 rounded-full transition-transform hover:scale-105 flex items-center justify-center"
-              style={{
-                backgroundColor: c,
-                outline: color === c ? "3px solid rgba(49, 51, 47, 0.25)" : "none",
-                outlineOffset: "2px",
-              }}
+              style={{ backgroundColor: c, outline: color === c ? "3px solid rgba(49, 51, 47, 0.25)" : "none", outlineOffset: "2px" }}
             >
-              {color === c && (
-                <span className="material-symbols-outlined text-white" style={{ fontSize: "16px" }}>
-                  check
-                </span>
-              )}
+              {color === c && <span className="material-symbols-outlined text-white" style={{ fontSize: "16px" }}>check</span>}
             </button>
           ))}
-          <input
-            type="color"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            className="w-10 h-10 rounded-full cursor-pointer border-0 p-0 bg-transparent"
-            title="Custom color"
-          />
+          <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-10 h-10 rounded-full cursor-pointer border-0 p-0 bg-transparent" title="Custom color" />
         </div>
       </div>
 
       <div className="flex flex-col gap-2">
-        <Input
-          label="Search Material icon"
-          placeholder="Search icons like folder, rocket, chart, palette..."
-          value={iconSearch}
-          onChange={(e) => setIconSearch(e.target.value)}
-        />
+        <Input label="Search Material icon" placeholder="Search icons like folder, rocket, chart, palette..." value={iconSearch} onChange={(e) => setIconSearch(e.target.value)} />
         <div className="rounded-2xl bg-[#f5f4ef] p-3 max-h-72 overflow-y-auto">
           <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
             {filteredIcons.map((item) => {
@@ -176,48 +139,27 @@ function ProjectForm({
                   type="button"
                   onClick={() => setIcon(item)}
                   className="group rounded-2xl px-2 py-3 flex flex-col items-center justify-center gap-2 transition-all hover:bg-[#fbf9f5]"
-                  style={{
-                    backgroundColor: active ? `${color}18` : "transparent",
-                    outline: active ? `2px solid ${color}` : "none",
-                  }}
+                  style={{ backgroundColor: active ? `${color}18` : "transparent", outline: active ? `2px solid ${color}` : "none" }}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: "24px", color: active ? color : "#5e605b" }}>
-                    {item}
-                  </span>
-                  <span
-                    className="text-[10px] leading-tight text-center break-words text-[#5e605b]"
-                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                  >
+                  <span className="material-symbols-outlined" style={{ fontSize: "24px", color: active ? color : "#5e605b" }}>{item}</span>
+                  <span className="text-[10px] leading-tight text-center break-words text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
                     {item.replace(/_/g, " ")}
                   </span>
                 </button>
               );
             })}
           </div>
-          {filteredIcons.length === 0 && (
-            <p
-              className="text-sm text-[#b2b2ad] text-center py-6"
-              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-            >
-              No icons found for that search.
-            </p>
-          )}
+          {filteredIcons.length === 0 && <p className="text-sm text-[#b2b2ad] text-center py-6" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>No icons found for that search.</p>}
         </div>
       </div>
 
       <div className="flex items-center justify-between gap-3 pt-2">
         <div>
-          {onDelete && initial?.id && (
-            <Button variant="danger" type="button" onClick={() => setConfirmDelete(true)}>
-              Delete Project
-            </Button>
-          )}
+          {onDelete && initial?.id && <Button variant="danger" type="button" onClick={() => setConfirmDelete(true)}>Delete Project</Button>}
         </div>
         <div className="flex justify-end gap-3">
           <Button variant="ghost" type="button" onClick={onCancel}>Cancel</Button>
-          <Button variant="primary" type="submit" loading={saving}>
-            {initial?.id ? "Save Changes" : "Create Project"}
-          </Button>
+          <Button variant="primary" type="submit" loading={saving}>{initial?.id ? "Save Changes" : "Create Project"}</Button>
         </div>
       </div>
 
@@ -271,7 +213,16 @@ export default function ProjectsPage() {
     };
   }, []);
 
-  useAutoRefresh(refreshProjects, { intervalMs: 5000 });
+  useSSE(
+    useCallback(
+      (event: SSEEvent) => {
+        if (event.type === "data:changed" && event.channel === "projects") {
+          void refreshProjects();
+        }
+      },
+      [refreshProjects]
+    )
+  );
 
   async function handleCreate(data: Partial<Project>) {
     await fetch("/api/projects", {
@@ -317,16 +268,8 @@ export default function ProjectsPage() {
     <div className="flex flex-col gap-8 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1
-            className="text-2xl font-light italic text-[#31332f]"
-            style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
-          >
-            Projects
-          </h1>
-          <p
-            className="text-sm text-[#5e605b] mt-0.5"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
+          <h1 className="text-2xl font-light italic text-[#31332f]" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Projects</h1>
+          <p className="text-sm text-[#5e605b] mt-0.5" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             {activeProjects.length} active project{activeProjects.length !== 1 ? "s" : ""}
           </p>
         </div>
@@ -340,19 +283,12 @@ export default function ProjectsPage() {
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-28 bg-[#f5f4ef] rounded-xl animate-pulse" />
-          ))}
+          {[...Array(6)].map((_, i) => <div key={i} className="h-28 bg-[#f5f4ef] rounded-xl animate-pulse" />)}
         </div>
       ) : activeProjects.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <span className="material-symbols-outlined text-[#b2b2ad]" style={{ fontSize: "40px" }}>
-            folder_open
-          </span>
-          <p
-            className="text-sm text-[#b2b2ad]"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
+          <span className="material-symbols-outlined text-[#b2b2ad]" style={{ fontSize: "40px" }}>folder_open</span>
+          <p className="text-sm text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             No projects yet. Create one to start tracking.
           </p>
         </div>
@@ -361,54 +297,27 @@ export default function ProjectsPage() {
           {activeProjects.map((project) => (
             <Card key={project.id} className="p-5 group relative">
               <div className="flex items-start gap-3">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: `${project.color}20` }}
-                >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: "20px", color: project.color ?? "#366769" }}
-                  >
-                    {project.icon ?? "folder"}
-                  </span>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${project.color}20` }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: "20px", color: project.color ?? "#366769" }}>{project.icon ?? "folder"}</span>
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p
-                    className="font-medium text-[#31332f] truncate"
-                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                  >
-                    {project.name}
-                  </p>
+                  <p className="font-medium text-[#31332f] truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{project.name}</p>
                   <div className="flex items-center gap-1.5 mt-1">
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: project.color ?? "#366769" }}
-                    />
-                    <span
-                      className="text-xs text-[#b2b2ad] font-mono"
-                      style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                    >
-                      {project.color}
-                    </span>
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: project.color ?? "#366769" }} />
+                    <span className="text-xs text-[#b2b2ad] font-mono" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{project.color}</span>
                   </div>
                 </div>
 
                 {canManageProjects && (
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Tooltip label="Edit">
-                      <button
-                        onClick={() => setEditProject(project)}
-                        className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors"
-                      >
+                      <button onClick={() => setEditProject(project)} className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors">
                         <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>edit</span>
                       </button>
                     </Tooltip>
                     <Tooltip label="Archive">
-                      <button
-                        onClick={() => handleArchive(project)}
-                        className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors"
-                      >
+                      <button onClick={() => handleArchive(project)} className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors">
                         <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>archive</span>
                       </button>
                     </Tooltip>
@@ -422,39 +331,20 @@ export default function ProjectsPage() {
 
       {archivedProjects.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h2
-            className="text-sm font-semibold text-[#b2b2ad] uppercase tracking-wide"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
+          <h2 className="text-sm font-semibold text-[#b2b2ad] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             Archived ({archivedProjects.length})
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {archivedProjects.map((project) => (
               <Card key={project.id} variant="tonal" className="p-5 opacity-60 group relative">
                 <div className="flex items-center gap-3">
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: `${project.color ?? "#366769"}18` }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "18px", color: project.color ?? "#366769" }}
-                    >
-                      {project.icon ?? "folder"}
-                    </span>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${project.color ?? "#366769"}18` }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: "18px", color: project.color ?? "#366769" }}>{project.icon ?? "folder"}</span>
                   </div>
-                  <p
-                    className="text-sm text-[#5e605b] flex-1 truncate"
-                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                  >
-                    {project.name}
-                  </p>
+                  <p className="text-sm text-[#5e605b] flex-1 truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{project.name}</p>
                   {canManageProjects && (
                     <Tooltip label="Unarchive">
-                      <button
-                        onClick={() => handleArchive(project)}
-                        className="p-1 rounded text-[#5e605b] hover:text-[#31332f] opacity-0 group-hover:opacity-100 transition-all"
-                      >
+                      <button onClick={() => handleArchive(project)} className="p-1 rounded text-[#5e605b] hover:text-[#31332f] opacity-0 group-hover:opacity-100 transition-all">
                         <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>unarchive</span>
                       </button>
                     </Tooltip>
@@ -466,26 +356,11 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {canManageProjects && (
-        <Modal open={showModal} onClose={() => setShowModal(false)} title="New Project">
-          <ProjectForm onSave={handleCreate} onCancel={() => setShowModal(false)} />
-        </Modal>
-      )}
+      {canManageProjects && <Modal open={showModal} onClose={() => setShowModal(false)} title="New Project"><ProjectForm onSave={handleCreate} onCancel={() => setShowModal(false)} /></Modal>}
 
       {canManageProjects && (
-        <Modal
-          open={!!editProject}
-          onClose={() => setEditProject(null)}
-          title="Edit Project"
-        >
-          {editProject && (
-            <ProjectForm
-              initial={editProject}
-              onSave={handleEdit}
-              onCancel={() => setEditProject(null)}
-              onDelete={() => handleDeleteProject(editProject)}
-            />
-          )}
+        <Modal open={!!editProject} onClose={() => setEditProject(null)} title="Edit Project">
+          {editProject && <ProjectForm initial={editProject} onSave={handleEdit} onCancel={() => setEditProject(null)} onDelete={() => handleDeleteProject(editProject)} />}
         </Modal>
       )}
     </div>

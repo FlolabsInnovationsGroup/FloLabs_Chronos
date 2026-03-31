@@ -99,18 +99,6 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     }
   }
 
-  async function handleDiscard() {
-    setSubmitting(true);
-    try {
-      await stop(true);
-      setDescription("");
-      setSelectedProjectId("");
-      setSelectedTagIds([]);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex flex-col gap-4 animate-pulse">
@@ -266,20 +254,12 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
             Start Session
           </Button>
         ) : (
-          <>
-            <Button variant="primary" size="lg" onClick={handleStop} loading={submitting}>
-              <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
-                stop
-              </span>
-              Stop Session
-            </Button>
-            <Button variant="danger" size="md" onClick={handleDiscard} disabled={submitting || tagSaving}>
-              <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
-                delete
-              </span>
-              Discard
-            </Button>
-          </>
+          <Button variant="primary" size="lg" onClick={handleStop} loading={submitting}>
+            <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
+              stop
+            </span>
+            Stop Session
+          </Button>
         )}
       </div>
     </div>

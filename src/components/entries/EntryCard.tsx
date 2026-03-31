@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { TagMultiSelect, type TagOption } from "@/components/ui/TagMultiSelect";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { formatDuration, formatTime } from "@/lib/utils";
 import type { TimeEntry } from "@/types";
@@ -16,12 +17,6 @@ interface Project {
   name: string;
   color: string;
   icon: string;
-}
-
-interface Tag {
-  id: string;
-  name: string;
-  color: string;
 }
 
 interface EntryCardProps {
@@ -40,11 +35,13 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
   const [editOpen, setEditOpen] = useState(false);
   const [editDesc, setEditDesc] = useState(entry.description ?? "");
   const [editProjectId, setEditProjectId] = useState(entry.projectId ?? "");
-  const [editTagId, setEditTagId] = useState(entry.tagId ?? "");
+  const [editTagIds, setEditTagIds] = useState<string[]>((entry.tags ?? []).map((t) => t.id));
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
-  const [tags, setTags] = useState<Tag[]>([]);
+  const [tagOptions, setTagOptions] = useState<TagOption[]>(
+    (entry.tags ?? []).map((t) => ({ id: t.id, name: t.name }))
+  );
   const [optionsLoaded, setOptionsLoaded] = useState(false);
 
   // Delete state
@@ -57,13 +54,12 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
 
   const projectColor = entry.project?.color ?? "#366769";
   const projectName = entry.project?.name ?? "Unknown";
-  const tagName = entry.tag?.name;
-  const tagColor = entry.tag?.color ?? "#755a40";
+  const entryTags = entry.tags ?? [];
 
   async function openEdit() {
     setEditDesc(entry.description ?? "");
     setEditProjectId(entry.projectId ?? "");
-    setEditTagId(entry.tagId ?? "");
+    setEditTagIds((entry.tags ?? []).map((t) => t.id));
     setEditError("");
     setEditOpen(true);
 
@@ -75,11 +71,36 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
         ]);
         const [projData, tagData] = await Promise.all([projRes.json(), tagRes.json()]);
         setProjects(projData.projects ?? []);
-        setTags(tagData.tags ?? []);
+        const fetchedTags: TagOption[] = (tagData.tags ?? []).map(
+          (t: { id: string; name: string }) => ({ id: t.id, name: t.name })
+        );
+        // Merge with any tags already on this entry that might not be in user's own list
+        const merged = [...fetchedTags];
+        for (const et of entry.tags ?? []) {
+          if (!merged.find((x) => x.id === et.id)) merged.push({ id: et.id, name: et.name });
+        }
+        setTagOptions(merged);
         setOptionsLoaded(true);
       } catch {
         // silently ignore load errors
       }
+    }
+  }
+
+  async function createTag(name: string): Promise<TagOption | null> {
+    try {
+      const res = await fetch("/api/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) return null;
+      const { tag } = await res.json();
+      const opt: TagOption = { id: tag.id, name: tag.name };
+      setTagOptions((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)));
+      return opt;
+    } catch {
+      return null;
     }
   }
 
@@ -94,7 +115,7 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
         body: JSON.stringify({
           description: editDesc,
           projectId: editProjectId || undefined,
-          tagId: editTagId || null,
+          tagIds: editTagIds,
         }),
       });
       if (!res.ok) {
@@ -144,7 +165,7 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
               onChange={() => onToggleSelect(entry.id)}
               onClick={(e) => e.stopPropagation()}
               className="w-4 h-4 rounded cursor-pointer accent-[#366769]"
-              aria-label={`Select entry`}
+              aria-label="Select entry"
             />
           </div>
         )}
@@ -177,12 +198,13 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
             <Badge color="primary" dot dotColor={projectColor}>
               {projectName}
             </Badge>
-            {/* Tag badge */}
-            {tagName && (
-              <Badge color="tertiary" dot dotColor={tagColor}>
-                {tagName}
+            {/* Tag badges (multiple) */}
+            {entryTags.map((tag) => (
+              <Badge key={tag.id} color="tertiary">
+                <span className="material-symbols-outlined mr-0.5" style={{ fontSize: "11px" }}>label</span>
+                {tag.name}
               </Badge>
-            )}
+            ))}
             {/* Time range */}
             <span
               className="text-xs text-[#b2b2ad]"
@@ -272,18 +294,21 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
             />
           )}
 
-          {tags.length > 0 && (
-            <Select
-              label="Tag"
-              value={editTagId}
-              onChange={setEditTagId}
-              options={[
-                { value: "", label: "No tag" },
-                ...tags.map((t) => ({ value: t.id, label: t.name })),
-              ]}
-              placeholder="Select tag"
+          <div className="flex flex-col gap-1.5">
+            <label
+              className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              Tags
+            </label>
+            <TagMultiSelect
+              value={editTagIds}
+              onChange={setEditTagIds}
+              options={tagOptions}
+              onCreate={createTag}
+              placeholder="Add tags…"
             />
-          )}
+          </div>
 
           {editError && (
             <p

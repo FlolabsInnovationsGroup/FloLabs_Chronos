@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTimer } from "@/hooks/use-timer";
 import { Button } from "@/components/ui/Button";
 import { DropdownSelect } from "@/components/ui/DropdownSelect";
+import { TagMultiSelect, type TagOption } from "@/components/ui/TagMultiSelect";
 import type { Project, Tag } from "@/types";
 
 interface TimerControlsProps {
@@ -11,15 +12,35 @@ interface TimerControlsProps {
   tags: Tag[];
 }
 
-export function TimerControls({ projects, tags }: TimerControlsProps) {
+export function TimerControls({ projects, tags: initialTags }: TimerControlsProps) {
   const { activeTimer, start, stop, loading } = useTimer();
 
   const [description, setDescription] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
-  const [selectedTagId, setSelectedTagId] = useState<string>("");
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [localTags, setLocalTags] = useState<TagOption[]>(
+    initialTags.map((t) => ({ id: t.id, name: t.name }))
+  );
   const [submitting, setSubmitting] = useState(false);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
+
+  async function createTag(name: string): Promise<TagOption | null> {
+    try {
+      const res = await fetch("/api/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) return null;
+      const { tag } = await res.json();
+      const opt: TagOption = { id: tag.id, name: tag.name };
+      setLocalTags((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)));
+      return opt;
+    } catch {
+      return null;
+    }
+  }
 
   async function handleStart() {
     if (!selectedProjectId) return;
@@ -27,7 +48,7 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
     try {
       await start({
         projectId: selectedProjectId,
-        tagId: selectedTagId || null,
+        tagIds: selectedTagIds,
         description,
       });
     } finally {
@@ -41,7 +62,7 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
       await stop(false);
       setDescription("");
       setSelectedProjectId("");
-      setSelectedTagId("");
+      setSelectedTagIds([]);
     } finally {
       setSubmitting(false);
     }
@@ -53,7 +74,7 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
       await stop(true);
       setDescription("");
       setSelectedProjectId("");
-      setSelectedTagId("");
+      setSelectedTagIds([]);
     } finally {
       setSubmitting(false);
     }
@@ -103,7 +124,7 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && selectedProjectId) handleStart();
+            if (e.key === "Enter" && selectedProjectId) void handleStart();
           }}
           placeholder="What are you working on?"
           className="w-full bg-transparent text-2xl italic text-[#31332f] placeholder:text-[#b2b2ad] outline-none py-2 border-b-2 border-[#efeee9] focus:border-[#366769] transition-colors"
@@ -121,7 +142,7 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
 
       {/* Pill selectors row */}
       {!activeTimer && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-start">
           <DropdownSelect
             value={selectedProjectId}
             onChange={setSelectedProjectId}
@@ -133,19 +154,16 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
               label: p.name,
               color: p.color ?? "#366769",
             }))}
+            className="min-w-[160px]"
           />
 
-          <DropdownSelect
-            value={selectedTagId}
-            onChange={setSelectedTagId}
-            placeholder="Add tag"
-            leadingIcon="label"
-            leadingIconColor="#755a40"
-            options={tags.map((t) => ({
-              value: t.id,
-              label: t.name,
-              color: t.color ?? "#755a40",
-            }))}
+          <TagMultiSelect
+            value={selectedTagIds}
+            onChange={setSelectedTagIds}
+            options={localTags}
+            onCreate={createTag}
+            placeholder="Add tags…"
+            className="flex-1 min-w-[160px]"
           />
         </div>
       )}
@@ -155,7 +173,8 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
         <div className="flex flex-wrap gap-2">
           {(() => {
             const proj = projects.find((p) => p.id === activeTimer.projectId);
-            const tag = activeTimer.tagId ? tags.find((t) => t.id === activeTimer.tagId) : null;
+            const timerTagIds: string[] = Array.isArray(activeTimer.tagIds) ? activeTimer.tagIds : [];
+            const activeTags = localTags.filter((t) => timerTagIds.includes(t.id));
             return (
               <>
                 {proj && (
@@ -170,18 +189,16 @@ export function TimerControls({ projects, tags }: TimerControlsProps) {
                     {proj.name}
                   </span>
                 )}
-                {tag && (
+                {activeTags.map((tag) => (
                   <span
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm bg-[#fed9b8] text-[#503921]"
+                    key={tag.id}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm bg-[#e9e8e3] text-[#31332f]"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: tag.color ?? "#755a40" }}
-                    />
+                    <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>label</span>
                     {tag.name}
                   </span>
-                )}
+                ))}
               </>
             );
           })()}

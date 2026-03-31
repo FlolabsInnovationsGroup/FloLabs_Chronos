@@ -138,14 +138,22 @@ async function main() {
     if (exists.length === 0) { await db.insert(projects).values(p); console.log("Created project:", p.name); }
   }
 
-  const sampleTags = [
-    { name: "Design", color: "#366769" },
-    { name: "Development", color: "#5c5e6e" },
-    { name: "Research", color: "#755a40" },
-  ];
-  for (const t of sampleTags) {
-    const exists = await db.select({ id: tags.id }).from(tags).where(eq(tags.name, t.name)).limit(1);
-    if (exists.length === 0) { await db.insert(tags).values(t); console.log("Created tag:", t.name); }
+  // Tags are now per-user; seed only if admin user exists
+  const adminUser = await db.select({ id: users.id }).from(users).where(eq(users.role, "admin")).limit(1);
+  if (adminUser.length > 0) {
+    const adminId = adminUser[0].id;
+    const sampleTagNames = ["Design", "Development", "Research"];
+    for (const name of sampleTagNames) {
+      const exists = await db
+        .select({ id: tags.id })
+        .from(tags)
+        .where(eq(tags.name, name))
+        .limit(1);
+      if (exists.length === 0) {
+        await db.insert(tags).values({ name, userId: adminId });
+        console.log("Created tag:", name);
+      }
+    }
   }
 
   console.log("Seed complete!");

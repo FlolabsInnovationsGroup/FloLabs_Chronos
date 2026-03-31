@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { TagMultiSelect, type TagOption } from "@/components/ui/TagMultiSelect";
 import { Button } from "@/components/ui/Button";
 import type { Project, Tag, TimeEntry } from "@/types";
 
@@ -31,11 +32,32 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
 
   const [description, setDescription] = useState(entry?.description ?? "");
   const [projectId, setProjectId] = useState(entry?.projectId ?? "");
-  const [tagId, setTagId] = useState(entry?.tagId ?? "");
+  const [tagIds, setTagIds] = useState<string[]>((entry?.tags ?? []).map((t) => t.id));
   const [startedAt, setStartedAt] = useState(toDatetimeLocal(entry?.startedAt));
   const [stoppedAt, setStoppedAt] = useState(toDatetimeLocal(entry?.stoppedAt));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const [tagOptions, setTagOptions] = useState<TagOption[]>(
+    tags.map((t) => ({ id: t.id, name: t.name }))
+  );
+
+  async function createTag(name: string): Promise<TagOption | null> {
+    try {
+      const res = await fetch("/api/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) return null;
+      const { tag } = await res.json();
+      const opt: TagOption = { id: tag.id, name: tag.name };
+      setTagOptions((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)));
+      return opt;
+    } catch {
+      return null;
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -61,7 +83,7 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
     try {
       const payload = {
         projectId,
-        tagId: tagId || null,
+        tagIds,
         description,
         startedAt: start.toISOString(),
         stoppedAt: stop.toISOString(),
@@ -89,10 +111,6 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
   }
 
   const projectOptions = projects.map((p) => ({ value: p.id, label: p.name }));
-  const tagOptions = [
-    { value: "", label: "No tag" },
-    ...tags.map((t) => ({ value: t.id, label: t.name })),
-  ];
 
   return (
     <Modal
@@ -117,12 +135,21 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
           placeholder="Select a project"
         />
 
-        <Select
-          label="Tag"
-          options={tagOptions}
-          value={tagId}
-          onChange={setTagId}
-        />
+        <div className="flex flex-col gap-1.5">
+          <label
+            className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          >
+            Tags
+          </label>
+          <TagMultiSelect
+            value={tagIds}
+            onChange={setTagIds}
+            options={tagOptions}
+            onCreate={createTag}
+            placeholder="Add tags…"
+          />
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <Input

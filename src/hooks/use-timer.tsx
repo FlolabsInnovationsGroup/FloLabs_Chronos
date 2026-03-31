@@ -16,7 +16,7 @@ interface TimerContextValue {
   activeTimer: ActiveTimer | null;
   elapsed: number;
   loading: boolean;
-  start: (payload: { projectId: string; tagId?: string | null; description: string }) => Promise<ActiveTimer>;
+  start: (payload: { projectId: string; tagIds?: string[]; description: string }) => Promise<ActiveTimer>;
   stop: (discard?: boolean) => Promise<void>;
 }
 
@@ -104,7 +104,7 @@ export function TimerProvider({ children, userId }: TimerProviderProps) {
   );
 
   const start = useCallback(
-    async (payload: { projectId: string; tagId?: string | null; description: string }) => {
+    async (payload: { projectId: string; tagIds?: string[]; description: string }) => {
       const res = await fetch("/api/timer/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

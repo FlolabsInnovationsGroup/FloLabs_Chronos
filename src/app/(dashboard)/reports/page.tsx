@@ -1,8 +1,19 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users } from "@/lib/db/schema";
-import { eq, and, gte, lte, isNotNull, desc, ilike, inArray, or, type SQL } from "drizzle-orm";
+import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
+import {
+  eq,
+  and,
+  gte,
+  lte,
+  isNotNull,
+  desc,
+  ilike,
+  inArray,
+  or,
+  type SQL,
+} from "drizzle-orm";
 import { ReportFilters } from "@/components/reports/ReportFilters";
 import { ReportChart } from "@/components/reports/ReportChart";
 import { ReportTable } from "@/components/reports/ReportTable";
@@ -32,17 +43,22 @@ async function getFilterData(sessionUser: {
   isActive: boolean;
 }) {
   if (!db) return { projects: [], tags: [], users: [] };
+
+  const isAdmin = userIsAdmin(sessionUser);
+
   const [projectRows, tagRows, userRows] = await Promise.all([
     db.select().from(projects).where(eq(projects.archived, false)).orderBy(projects.name),
-    db.select().from(tags).orderBy(tags.name),
+    // Tags for filter: admin sees all; others see their own
+    isAdmin
+      ? db.select().from(tags).orderBy(tags.name)
+      : db.select().from(tags).where(eq(tags.userId, sessionUser.id)).orderBy(tags.name),
     getAccessibleUsers(sessionUser),
   ]);
+
   return {
     projects: projectRows as Project[],
     tags: tagRows as Tag[],
-    users: (userIsAdmin(sessionUser) || sessionUser.role === "team_lead"
-      ? userRows
-      : []) as import("@/types").User[],
+    users: (isAdmin || sessionUser.role === "team_lead" ? userRows : []) as import("@/types").User[],
   };
 }
 
@@ -54,17 +70,14 @@ async function getEntries(
     teamId: string | null;
     isActive: boolean;
   }
-) {
+): Promise<TimeEntry[]> {
   if (!db) return [];
 
   const conditions: SQL[] = [isNotNull(timeEntries.stoppedAt)];
   const accessibleUserIds = await getAccessibleUserIds(sessionUser);
 
   if (accessibleUserIds !== null) {
-    if (params.userId && !accessibleUserIds.includes(params.userId)) {
-      return [];
-    }
-
+    if (params.userId && !accessibleUserIds.includes(params.userId)) return [];
     if (params.userId) {
       conditions.push(eq(timeEntries.userId, params.userId));
     } else if (accessibleUserIds.length === 1) {
@@ -83,14 +96,30 @@ async function getEntries(
     conditions.push(lte(timeEntries.startedAt, toDate));
   }
   if (params.projectId) conditions.push(eq(timeEntries.projectId, params.projectId));
-  if (params.tagId) conditions.push(eq(timeEntries.tagId, params.tagId));
+
+  // Tag filter via join table
+  if (params.tagId) {
+    const entryIdsWithTag = db
+      .select({ id: timeEntryTags.timeEntryId })
+      .from(timeEntryTags)
+      .where(eq(timeEntryTags.tagId, params.tagId));
+    conditions.push(inArray(timeEntries.id, entryIdsWithTag));
+  }
+
+  // Search via description, project name, user name, or tag name
   if (params.search) {
     const pattern = `%${params.search}%`;
+    const entryIdsMatchingTag = db
+      .select({ id: timeEntryTags.timeEntryId })
+      .from(timeEntryTags)
+      .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
+      .where(ilike(tags.name, pattern));
+
     const searchCondition = or(
       ilike(timeEntries.description, pattern),
       ilike(projects.name, pattern),
-      ilike(tags.name, pattern),
       ilike(users.name, pattern),
+      inArray(timeEntries.id, entryIdsMatchingTag),
     );
     if (searchCondition) conditions.push(searchCondition);
   }
@@ -102,22 +131,37 @@ async function getEntries(
     .select({
       entry: timeEntries,
       project: projects,
-      tag: tags,
       user: { id: users.id, name: users.name, email: users.email },
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-    .leftJoin(tags, eq(timeEntries.tagId, tags.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
     .where(and(...conditions))
     .orderBy(desc(timeEntries.startedAt));
 
   const rows = limitValue !== null ? await baseQuery.limit(limitValue) : await baseQuery;
 
-  return rows.map(({ entry, project, tag, user }) => ({
+  if (rows.length === 0) return [];
+
+  // Fetch tags for all returned entries
+  const entryIds = rows.map((r) => r.entry.id);
+  const tagRows = await db
+    .select({ timeEntryId: timeEntryTags.timeEntryId, tagId: tags.id, tagName: tags.name })
+    .from(timeEntryTags)
+    .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
+    .where(inArray(timeEntryTags.timeEntryId, entryIds));
+
+  const tagMap = new Map<string, { id: string; name: string }[]>();
+  for (const r of tagRows) {
+    const existing = tagMap.get(r.timeEntryId) ?? [];
+    existing.push({ id: r.tagId, name: r.tagName });
+    tagMap.set(r.timeEntryId, existing);
+  }
+
+  return rows.map(({ entry, project, user }) => ({
     ...entry,
     project: project ?? undefined,
-    tag: tag ?? null,
+    tags: tagMap.get(entry.id) ?? [],
     user: user ?? undefined,
   })) as TimeEntry[];
 }
@@ -146,25 +190,17 @@ function groupEntries(entries: TimeEntry[], groupBy: string): ReportRow[] {
         break;
       }
       default: {
-        // by day
         const d = new Date(entry.startedAt);
         key = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
         break;
       }
     }
     const existing = map.get(key) ?? { totalMs: 0, count: 0 };
-    map.set(key, {
-      totalMs: existing.totalMs + (entry.durationMs ?? 0),
-      count: existing.count + 1,
-    });
+    map.set(key, { totalMs: existing.totalMs + (entry.durationMs ?? 0), count: existing.count + 1 });
   }
 
   return Array.from(map.entries())
-    .map(([label, { totalMs, count }]) => ({
-      label,
-      totalMs,
-      entryCount: count,
-    }))
+    .map(([label, { totalMs, count }]) => ({ label, totalMs, entryCount: count }))
     .sort((a, b) => b.totalMs - a.totalMs);
 }
 
@@ -180,11 +216,7 @@ function buildChartData(entries: TimeEntry[]) {
     const ms = entries
       .filter((e) => new Date(e.startedAt).toISOString().split("T")[0] === dateStr)
       .reduce((sum, e) => sum + (e.durationMs ?? 0), 0);
-    days.push({
-      label: DAY_ABBR[d.getDay()],
-      date: dateStr,
-      hours: Math.round((ms / 3_600_000) * 10) / 10,
-    });
+    days.push({ label: DAY_ABBR[d.getDay()], date: dateStr, hours: Math.round((ms / 3_600_000) * 10) / 10 });
   }
   return days;
 }
@@ -227,12 +259,10 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
             {entries.length} entries &mdash; {totalHours}h total
           </p>
         </div>
-
-        {/* CSV export */}
         <ExportCSVButton entries={entries} />
       </div>
 
-      {/* Filters (client component needs Suspense) */}
+      {/* Filters */}
       <Suspense>
         <ReportFilters
           projects={filterData.projects}
@@ -282,7 +312,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       {/* Table */}
       <ReportTable rows={reportRows} title={`Breakdown by ${groupBy}`} />
 
-      {/* Detailed entries with multi-select and management */}
+      {/* Detailed entries */}
       <ReportEntries entries={entries} />
     </div>
   );

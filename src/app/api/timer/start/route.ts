@@ -9,7 +9,7 @@ import { sendDiscordEmbed, buildTimerStartEmbed } from "@/lib/discord";
 
 const startSchema = z.object({
   projectId: z.string().uuid(),
-  tagId: z.string().uuid().optional().nullable(),
+  tagIds: z.array(z.string().uuid()).optional().default([]),
   description: z.string().default(""),
 });
 
@@ -21,20 +21,19 @@ export async function POST(req: Request) {
   const parsed = startSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-  const { projectId, tagId, description } = parsed.data;
+  const { projectId, tagIds, description } = parsed.data;
   const userId = session.user.id;
   const startedAt = Date.now();
 
-  const timer = { userId, projectId, tagId: tagId ?? null, description, startedAt };
+  const timer = { userId, projectId, tagIds, description, startedAt };
 
   await setActiveTimer(userId, timer);
 
-  // Write a running entry to DB for crash recovery
+  // Write a running entry to DB for crash recovery (no tagIds on the entry row; set on stop)
   if (db) {
     await db.insert(timeEntries).values({
       userId,
       projectId,
-      tagId: tagId ?? null,
       description,
       startedAt: new Date(startedAt),
     });

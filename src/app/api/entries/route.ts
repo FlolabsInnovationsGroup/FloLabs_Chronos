@@ -1,10 +1,32 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users } from "@/lib/db/schema";
+import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
 import { eq, and, gte, lte, desc, inArray, isNotNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getAccessibleUserIds } from "@/lib/permissions";
+
+// Given a list of entry rows, fetch and attach tags from the join table.
+async function attachTags(
+  entryRows: { id: string }[]
+): Promise<Map<string, { id: string; name: string }[]>> {
+  const map = new Map<string, { id: string; name: string }[]>();
+  if (!db || entryRows.length === 0) return map;
+
+  const entryIds = entryRows.map((e) => e.id);
+  const rows = await db
+    .select({ timeEntryId: timeEntryTags.timeEntryId, tagId: tags.id, tagName: tags.name })
+    .from(timeEntryTags)
+    .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
+    .where(inArray(timeEntryTags.timeEntryId, entryIds));
+
+  for (const r of rows) {
+    const existing = map.get(r.timeEntryId) ?? [];
+    existing.push({ id: r.tagId, name: r.tagName });
+    map.set(r.timeEntryId, existing);
+  }
+  return map;
+}
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -16,15 +38,12 @@ export async function GET(req: Request) {
   const requestedUserId = url.searchParams.get("userId");
   const accessibleUserIds = await getAccessibleUserIds(session.user);
 
-  const conditions: SQL[] = [
-    isNotNull(timeEntries.stoppedAt),
-  ];
+  const conditions: SQL[] = [isNotNull(timeEntries.stoppedAt)];
 
   if (accessibleUserIds !== null) {
     if (requestedUserId && !accessibleUserIds.includes(requestedUserId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-
     if (requestedUserId) {
       conditions.push(eq(timeEntries.userId, requestedUserId));
     } else if (accessibleUserIds.length === 1) {
@@ -45,22 +64,22 @@ export async function GET(req: Request) {
     .select({
       entry: timeEntries,
       project: projects,
-      tag: tags,
       user: { id: users.id, name: users.name, email: users.email },
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-    .leftJoin(tags, eq(timeEntries.tagId, tags.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
     .where(and(...conditions))
     .orderBy(desc(timeEntries.startedAt))
     .limit(limit);
 
-  const entries = rows.map(({ entry, project, tag, user }) => ({
+  const tagMap = await attachTags(rows.map((r) => r.entry));
+
+  const entries = rows.map(({ entry, project, user }) => ({
     ...entry,
     project,
-    tag,
     user,
+    tags: tagMap.get(entry.id) ?? [],
   }));
 
   return NextResponse.json({ entries });
@@ -68,7 +87,7 @@ export async function GET(req: Request) {
 
 const createSchema = z.object({
   projectId: z.string().uuid(),
-  tagId: z.string().uuid().optional().nullable(),
+  tagIds: z.array(z.string().uuid()).optional().default([]),
   description: z.string(),
   startedAt: z.string(),
   stoppedAt: z.string(),
@@ -84,13 +103,24 @@ export async function POST(req: Request) {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-  const [entry] = await db.insert(timeEntries).values({
-    userId: session.user.id,
-    ...parsed.data,
-    startedAt: new Date(parsed.data.startedAt),
-    stoppedAt: new Date(parsed.data.stoppedAt),
-    tagId: parsed.data.tagId ?? null,
-  }).returning();
+  const { tagIds, ...rest } = parsed.data;
 
-  return NextResponse.json({ entry }, { status: 201 });
+  const [entry] = await db
+    .insert(timeEntries)
+    .values({
+      userId: session.user.id,
+      ...rest,
+      startedAt: new Date(rest.startedAt),
+      stoppedAt: new Date(rest.stoppedAt),
+    })
+    .returning();
+
+  if (tagIds.length > 0) {
+    await db
+      .insert(timeEntryTags)
+      .values(tagIds.map((tagId) => ({ timeEntryId: entry.id, tagId })))
+      .onConflictDoNothing();
+  }
+
+  return NextResponse.json({ entry: { ...entry, tags: [] } }, { status: 201 });
 }

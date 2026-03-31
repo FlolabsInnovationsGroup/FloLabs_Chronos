@@ -6,6 +6,7 @@ import { groupEntriesByDate, formatDuration } from "@/lib/utils";
 import { EntryCard } from "./EntryCard";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { DropdownSelect } from "@/components/ui/DropdownSelect";
 import type { TimeEntry } from "@/types";
 
 interface ProjectOption {
@@ -287,19 +288,15 @@ export function EntryList({
         size="sm"
       >
         <div className="flex flex-col gap-4">
-          <select
+          <DropdownSelect
             value={selectedProjectId}
-            onChange={(e) => setSelectedProjectId(e.target.value)}
-            className="px-2.5 py-2 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none focus:ring-2 focus:ring-[#366769]/20 w-full"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
-            <option value="">Select a project…</option>
-            {projectOptions.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            onChange={setSelectedProjectId}
+            options={[
+              { value: "", label: "Select a project…" },
+              ...projectOptions.map((p) => ({ value: p.id, label: p.name })),
+            ]}
+            placeholder="Select a project…"
+          />
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" size="sm" onClick={() => setChangeProjectOpen(false)}>
               Cancel

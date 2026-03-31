@@ -1,8 +1,19 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users } from "@/lib/db/schema";
-import { eq, and, gte, lte, isNotNull, desc, inArray, or, ilike, type SQL } from "drizzle-orm";
+import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
+import {
+  eq,
+  and,
+  gte,
+  lte,
+  isNotNull,
+  desc,
+  inArray,
+  or,
+  ilike,
+  type SQL,
+} from "drizzle-orm";
 import { getAccessibleUserIds } from "@/lib/permissions";
 
 export async function GET(req: Request) {
@@ -27,7 +38,6 @@ export async function GET(req: Request) {
     if (userId && !accessibleUserIds.includes(userId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-
     if (userId) {
       conditions.push(eq(timeEntries.userId, userId));
     } else if (accessibleUserIds.length === 1) {
@@ -40,16 +50,32 @@ export async function GET(req: Request) {
   }
 
   if (projectId) conditions.push(eq(timeEntries.projectId, projectId));
-  if (tagId) conditions.push(eq(timeEntries.tagId, tagId));
   if (from) conditions.push(gte(timeEntries.startedAt, new Date(from)));
   if (to) conditions.push(lte(timeEntries.startedAt, new Date(to)));
+
+  // Tag filter: entries that have this tag via join table
+  if (tagId) {
+    const entryIdsWithTag = db
+      .select({ id: timeEntryTags.timeEntryId })
+      .from(timeEntryTags)
+      .where(eq(timeEntryTags.tagId, tagId));
+    conditions.push(inArray(timeEntries.id, entryIdsWithTag));
+  }
+
+  // Search filter: match description, project name, user name, or tag name
   if (search) {
     const pattern = `%${search}%`;
+    const entryIdsMatchingTag = db
+      .select({ id: timeEntryTags.timeEntryId })
+      .from(timeEntryTags)
+      .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
+      .where(ilike(tags.name, pattern));
+
     const searchCondition = or(
       ilike(timeEntries.description, pattern),
       ilike(projects.name, pattern),
-      ilike(tags.name, pattern),
       ilike(users.name, pattern),
+      inArray(timeEntries.id, entryIdsMatchingTag),
     );
     if (searchCondition) conditions.push(searchCondition);
   }
@@ -58,27 +84,48 @@ export async function GET(req: Request) {
     .select({
       entry: timeEntries,
       project: { id: projects.id, name: projects.name, color: projects.color },
-      tag: { id: tags.id, name: tags.name },
       user: { id: users.id, name: users.name, email: users.email },
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-    .leftJoin(tags, eq(timeEntries.tagId, tags.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
     .where(and(...conditions))
     .orderBy(desc(timeEntries.startedAt));
 
+  // Fetch tags for all entries
+  const entryIds = rows.map((r) => r.entry.id);
+  const tagRows =
+    entryIds.length > 0
+      ? await db
+          .select({
+            timeEntryId: timeEntryTags.timeEntryId,
+            tagId: tags.id,
+            tagName: tags.name,
+          })
+          .from(timeEntryTags)
+          .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
+          .where(inArray(timeEntryTags.timeEntryId, entryIds))
+      : [];
+
+  const tagMap = new Map<string, { id: string; name: string }[]>();
+  for (const r of tagRows) {
+    const existing = tagMap.get(r.timeEntryId) ?? [];
+    existing.push({ id: r.tagId, name: r.tagName });
+    tagMap.set(r.timeEntryId, existing);
+  }
+
   // CSV export
   if (format === "csv") {
     const csvLines = [
-      "Date,User,Project,Tag,Description,Duration (h),Started,Stopped",
-      ...rows.map(({ entry, project, tag, user }) => {
+      "Date,User,Project,Tags,Description,Duration (h),Started,Stopped",
+      ...rows.map(({ entry, project, user }) => {
         const durationH = ((entry.durationMs ?? 0) / 3600000).toFixed(2);
+        const entryTags = (tagMap.get(entry.id) ?? []).map((t) => t.name).join("; ");
         return [
           new Date(entry.startedAt).toISOString().split("T")[0],
           user?.name ?? "",
           project?.name ?? "",
-          tag?.name ?? "",
+          `"${entryTags.replace(/"/g, '""')}"`,
           `"${(entry.description ?? "").replace(/"/g, '""')}"`,
           durationH,
           new Date(entry.startedAt).toISOString(),

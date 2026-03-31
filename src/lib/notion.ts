@@ -150,8 +150,9 @@ export async function syncEntryToNotion(entry: TimeEntry): Promise<string> {
   }
 
   const tagProperty = findPropertyName(dbProperties, ["Tag", "Tags"], ["select", "multi_select", "rich_text"]);
-  if (tagProperty && entry.tag?.name) {
-    properties[tagProperty] = buildSelectLikeValue(dbProperties[tagProperty].type, entry.tag.name);
+  const firstTag = (entry.tags ?? [])[0];
+  if (tagProperty && firstTag?.name) {
+    properties[tagProperty] = buildSelectLikeValue(dbProperties[tagProperty].type, firstTag.name);
   }
 
   const combinedDateProperty = findPropertyName(dbProperties, ["Date", "Started"], ["date"]);

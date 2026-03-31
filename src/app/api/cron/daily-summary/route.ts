@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users } from "@/lib/db/schema";
-import { eq, and, gte, isNotNull } from "drizzle-orm";
+import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
+import { eq, and, gte, isNotNull, inArray } from "drizzle-orm";
 import { sendDiscordEmbed, buildDailySummaryEmbed } from "@/lib/discord";
 import type { TimeEntry } from "@/types";
 
@@ -44,17 +44,14 @@ export async function GET(req: Request) {
     if (!user.discordWebhookUrl) continue;
 
     try {
-      // Fetch today's completed entries for this user
       const rows = await db
         .select({
           entry: timeEntries,
           project: projects,
-          tag: tags,
           user: { id: users.id, name: users.name, email: users.email },
         })
         .from(timeEntries)
         .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-        .leftJoin(tags, eq(timeEntries.tagId, tags.id))
         .leftJoin(users, eq(timeEntries.userId, users.id))
         .where(
           and(
@@ -64,11 +61,28 @@ export async function GET(req: Request) {
           )
         );
 
-      const userEntries = rows.map(({ entry, project, tag }) => ({
+      // Fetch tags for these entries
+      const entryIds = rows.map((r) => r.entry.id);
+      const tagRows = entryIds.length > 0
+        ? await db
+            .select({ timeEntryId: timeEntryTags.timeEntryId, tagId: tags.id, tagName: tags.name })
+            .from(timeEntryTags)
+            .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
+            .where(inArray(timeEntryTags.timeEntryId, entryIds))
+        : [];
+
+      const tagMap = new Map<string, { id: string; name: string }[]>();
+      for (const r of tagRows) {
+        const existing = tagMap.get(r.timeEntryId) ?? [];
+        existing.push({ id: r.tagId, name: r.tagName });
+        tagMap.set(r.timeEntryId, existing);
+      }
+
+      const userEntries = rows.map(({ entry, project }) => ({
         ...entry,
         project: project ?? undefined,
-        tag: tag ?? null,
-        user: user ? { id: user.id, name: user.name, email: user.email } : undefined,
+        tags: tagMap.get(entry.id) ?? [],
+        user: { id: user.id, name: user.name, email: user.email },
       })) as TimeEntry[];
 
       const embed = buildDailySummaryEmbed(user.name, userEntries);

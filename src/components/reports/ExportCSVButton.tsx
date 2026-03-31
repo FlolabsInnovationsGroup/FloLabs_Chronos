@@ -8,15 +8,16 @@ interface ExportCSVButtonProps {
 }
 
 function buildCSV(entries: TimeEntry[]): string {
-  const header = "Date,User,Project,Tag,Description,Duration (h)";
+  const header = "Date,User,Project,Tags,Description,Duration (h)";
   const rows = entries.map((e) => {
     const date = new Date(e.startedAt).toLocaleDateString("en-US");
     const user = `"${(e.user?.name ?? "").replace(/"/g, '""')}"`;
     const project = `"${(e.project?.name ?? "").replace(/"/g, '""')}"`;
-    const tag = `"${(e.tag?.name ?? "").replace(/"/g, '""')}"`;
+    const tagNames = (e.tags ?? []).map((t) => t.name).join("; ");
+    const tags = `"${tagNames.replace(/"/g, '""')}"`;
     const description = `"${(e.description ?? "").replace(/"/g, '""')}"`;
     const duration = e.durationMs ? (e.durationMs / 3_600_000).toFixed(2) : "";
-    return [date, user, project, tag, description, duration].join(",");
+    return [date, user, project, tags, description, duration].join(",");
   });
   return [header, ...rows].join("\n");
 }

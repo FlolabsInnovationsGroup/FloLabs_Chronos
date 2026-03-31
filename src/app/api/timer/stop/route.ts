@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getActiveTimer, deleteActiveTimer, broadcastTimerEvent } from "@/lib/redis";
 import { db } from "@/lib/db";
-import { timeEntries, users, projects } from "@/lib/db/schema";
+import { timeEntries, timeEntryTags, users, projects } from "@/lib/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { sendDiscordEmbed, buildTimerStopEmbed } from "@/lib/discord";
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
 
   if (db && !discard) {
     // Update the running entry
-    await db
+    const updated = await db
       .update(timeEntries)
       .set({
         stoppedAt: new Date(stoppedAt),
@@ -40,9 +40,20 @@ export async function POST(req: Request) {
           eq(timeEntries.projectId, timer.projectId),
           isNull(timeEntries.stoppedAt)
         )
-      );
+      )
+      .returning({ id: timeEntries.id });
+
+    // Insert tag associations for the completed entry
+    const tagIds: string[] = Array.isArray(timer.tagIds) ? timer.tagIds : [];
+    if (tagIds.length > 0 && updated.length > 0) {
+      const entryId = updated[0].id;
+      await db
+        .insert(timeEntryTags)
+        .values(tagIds.map((tagId) => ({ timeEntryId: entryId, tagId })))
+        .onConflictDoNothing();
+    }
   } else if (db && discard) {
-    // Delete the running entry
+    // Delete the running entry (timeEntryTags cascade automatically)
     await db
       .delete(timeEntries)
       .where(

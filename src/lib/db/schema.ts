@@ -7,6 +7,7 @@ import {
   bigint,
   index,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -77,11 +78,23 @@ export const projects = pgTable("projects", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
-export const tags = pgTable("tags", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").unique().notNull(),
-  color: text("color").default("#755a40"),
-});
+// Tags are per-user; unique per (name, userId).
+// ON DELETE CASCADE on userId means deleting a user also deletes their tags.
+export const tags = pgTable(
+  "tags",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    name: text("name").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("tags_name_user_unique").on(t.name, t.userId),
+    index("idx_tags_user").on(t.userId),
+  ]
+);
 
 export const timeEntries = pgTable(
   "time_entries",
@@ -93,7 +106,6 @@ export const timeEntries = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id),
-    tagId: uuid("tag_id").references(() => tags.id),
     description: text("description").notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     stoppedAt: timestamp("stopped_at", { withTimezone: true }),
@@ -108,7 +120,25 @@ export const timeEntries = pgTable(
     index("idx_entries_user").on(t.userId, t.startedAt),
     index("idx_entries_project").on(t.projectId, t.startedAt),
     index("idx_entries_date").on(t.startedAt),
-    index("idx_entries_tag").on(t.tagId),
+  ]
+);
+
+// Many-to-many join table between time entries and tags.
+// Both FKs cascade on delete so rows are cleaned up automatically.
+export const timeEntryTags = pgTable(
+  "time_entry_tags",
+  {
+    timeEntryId: uuid("time_entry_id")
+      .notNull()
+      .references(() => timeEntries.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.timeEntryId, t.tagId] }),
+    index("idx_entry_tags_entry").on(t.timeEntryId),
+    index("idx_entry_tags_tag").on(t.tagId),
   ]
 );
 
@@ -124,3 +154,4 @@ export type TagRecord = typeof tags.$inferSelect;
 export type NewTag = typeof tags.$inferInsert;
 export type TimeEntryRecord = typeof timeEntries.$inferSelect;
 export type NewTimeEntry = typeof timeEntries.$inferInsert;
+export type TimeEntryTagRecord = typeof timeEntryTags.$inferSelect;

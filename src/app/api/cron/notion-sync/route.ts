@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users } from "@/lib/db/schema";
-import { isNull, isNotNull, and, or, eq, lt } from "drizzle-orm";
+import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
+import { isNull, isNotNull, and, or, eq, lt, inArray } from "drizzle-orm";
 import { syncEntryToNotion } from "@/lib/notion";
 
 export const runtime = "nodejs";
@@ -22,19 +22,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Notion not configured" }, { status: 503 });
   }
 
-  // Find entries that need syncing:
-  // - notion_page_id IS NULL (never synced), AND stoppedAt IS NOT NULL (completed)
-  // We check up to 50 at a time
-  const pendingEntries = await db
+  const pendingRows = await db
     .select({
       entry: timeEntries,
       project: projects,
-      tag: tags,
       user: { id: users.id, name: users.name, email: users.email },
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-    .leftJoin(tags, eq(timeEntries.tagId, tags.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
     .where(
       and(
@@ -47,14 +42,31 @@ export async function GET(req: Request) {
     )
     .limit(50);
 
+  // Fetch tags for these entries
+  const entryIds = pendingRows.map((r) => r.entry.id);
+  const tagRows = entryIds.length > 0
+    ? await db
+        .select({ timeEntryId: timeEntryTags.timeEntryId, tagId: tags.id, tagName: tags.name })
+        .from(timeEntryTags)
+        .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
+        .where(inArray(timeEntryTags.timeEntryId, entryIds))
+    : [];
+
+  const tagMap = new Map<string, { id: string; name: string }[]>();
+  for (const r of tagRows) {
+    const existing = tagMap.get(r.timeEntryId) ?? [];
+    existing.push({ id: r.tagId, name: r.tagName });
+    tagMap.set(r.timeEntryId, existing);
+  }
+
   let synced = 0;
   const errors: string[] = [];
 
-  for (const row of pendingEntries) {
+  for (const row of pendingRows) {
     const entry = {
       ...row.entry,
       project: row.project ?? undefined,
-      tag: row.tag ?? null,
+      tags: tagMap.get(row.entry.id) ?? [],
       user: row.user ?? undefined,
     };
 
@@ -63,10 +75,7 @@ export async function GET(req: Request) {
 
       await db
         .update(timeEntries)
-        .set({
-          notionPageId,
-          syncedAt: new Date(),
-        })
+        .set({ notionPageId, syncedAt: new Date() })
         .where(eq(timeEntries.id, entry.id));
 
       synced++;

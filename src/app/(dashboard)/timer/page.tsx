@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users } from "@/lib/db/schema";
-import { eq, and, gte, isNotNull, desc } from "drizzle-orm";
+import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
+import { eq, and, gte, isNotNull, desc, inArray } from "drizzle-orm";
 import { TimerDisplay } from "@/components/timer/TimerDisplay";
 import { TimerControls } from "@/components/timer/TimerControls";
 import { ActiveTimerCard } from "@/components/timer/ActiveTimerCard";
@@ -21,15 +21,45 @@ async function getProjects(): Promise<Project[]> {
   return rows as Project[];
 }
 
-async function getTags(): Promise<Tag[]> {
+async function getUserTags(userId: string): Promise<Tag[]> {
   if (!db) return [];
-  const rows = await db.select().from(tags).orderBy(tags.name);
+  const rows = await db
+    .select()
+    .from(tags)
+    .where(eq(tags.userId, userId))
+    .orderBy(tags.name);
   return rows as Tag[];
+}
+
+async function buildEntriesWithTags(
+  rows: { entry: typeof timeEntries.$inferSelect; project: typeof projects.$inferSelect | null; user: { id: string; name: string; email: string } | null }[]
+): Promise<TimeEntry[]> {
+  if (!db || rows.length === 0) return [];
+
+  const entryIds = rows.map((r) => r.entry.id);
+  const tagRows = await db
+    .select({ timeEntryId: timeEntryTags.timeEntryId, tagId: tags.id, tagName: tags.name })
+    .from(timeEntryTags)
+    .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
+    .where(inArray(timeEntryTags.timeEntryId, entryIds));
+
+  const tagMap = new Map<string, { id: string; name: string }[]>();
+  for (const r of tagRows) {
+    const existing = tagMap.get(r.timeEntryId) ?? [];
+    existing.push({ id: r.tagId, name: r.tagName });
+    tagMap.set(r.timeEntryId, existing);
+  }
+
+  return rows.map(({ entry, project, user }) => ({
+    ...entry,
+    project: project ?? undefined,
+    tags: tagMap.get(entry.id) ?? [],
+    user: user ?? undefined,
+  })) as TimeEntry[];
 }
 
 async function getTodayEntries(userId: string): Promise<TimeEntry[]> {
   if (!db) return [];
-
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -37,29 +67,16 @@ async function getTodayEntries(userId: string): Promise<TimeEntry[]> {
     .select({
       entry: timeEntries,
       project: projects,
-      tag: tags,
       user: { id: users.id, name: users.name, email: users.email },
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-    .leftJoin(tags, eq(timeEntries.tagId, tags.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
-    .where(
-      and(
-        eq(timeEntries.userId, userId),
-        isNotNull(timeEntries.stoppedAt),
-        gte(timeEntries.startedAt, today)
-      )
-    )
+    .where(and(eq(timeEntries.userId, userId), isNotNull(timeEntries.stoppedAt), gte(timeEntries.startedAt, today)))
     .orderBy(desc(timeEntries.startedAt))
     .limit(50);
 
-  return rows.map(({ entry, project, tag, user }) => ({
-    ...entry,
-    project: project ?? undefined,
-    tag: tag ?? null,
-    user: user ?? undefined,
-  })) as TimeEntry[];
+  return buildEntriesWithTags(rows);
 }
 
 async function getRecentEntries(userId: string): Promise<TimeEntry[]> {
@@ -69,23 +86,16 @@ async function getRecentEntries(userId: string): Promise<TimeEntry[]> {
     .select({
       entry: timeEntries,
       project: projects,
-      tag: tags,
       user: { id: users.id, name: users.name, email: users.email },
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-    .leftJoin(tags, eq(timeEntries.tagId, tags.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
     .where(and(eq(timeEntries.userId, userId), isNotNull(timeEntries.stoppedAt)))
     .orderBy(desc(timeEntries.startedAt))
     .limit(50);
 
-  return rows.map(({ entry, project, tag, user }) => ({
-    ...entry,
-    project: project ?? undefined,
-    tag: tag ?? null,
-    user: user ?? undefined,
-  })) as TimeEntry[];
+  return buildEntriesWithTags(rows);
 }
 
 export default async function TimerPage() {
@@ -94,7 +104,7 @@ export default async function TimerPage() {
 
   const [projectsList, tagsList, todayEntries, recentEntries] = await Promise.all([
     getProjects(),
-    getTags(),
+    getUserTags(userId),
     getTodayEntries(userId),
     getRecentEntries(userId),
   ]);

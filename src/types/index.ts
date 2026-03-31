@@ -46,14 +46,16 @@ export interface Project {
 export interface Tag {
   id: string;
   name: string;
-  color: string;
+  userId: string;
+  createdAt?: Date;
+  // Optional: for admin views
+  user?: Pick<User, "id" | "name"> | null;
 }
 
 export interface TimeEntry {
   id: string;
   userId: string;
   projectId: string;
-  tagId: string | null;
   description: string;
   startedAt: Date;
   stoppedAt: Date | null;
@@ -65,13 +67,13 @@ export interface TimeEntry {
   // Joined fields
   user?: Pick<User, "id" | "name" | "email">;
   project?: Pick<Project, "id" | "name" | "color" | "icon">;
-  tag?: Pick<Tag, "id" | "name" | "color"> | null;
+  tags?: Pick<Tag, "id" | "name">[];
 }
 
 export interface ActiveTimer {
   userId: string;
   projectId: string;
-  tagId: string | null;
+  tagIds: string[];
   description: string;
   startedAt: number; // Unix ms timestamp
 }

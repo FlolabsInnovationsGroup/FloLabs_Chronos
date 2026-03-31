@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, users } from "@/lib/db/schema";
+import { timeEntries, users, tags } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { canManageTeams } from "@/lib/permissions";
@@ -123,6 +123,8 @@ export async function DELETE(
     );
   }
 
+  // Delete user's tags first (FK cascade would also do this, but be explicit)
+  await db.delete(tags).where(eq(tags.userId, id));
   await db.delete(users).where(eq(users.id, id));
   return NextResponse.json({ ok: true });
 }

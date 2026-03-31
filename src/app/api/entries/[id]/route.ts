@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries } from "@/lib/db/schema";
+import { timeEntries, timeEntryTags } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 const patchSchema = z.object({
   description: z.string().optional(),
   projectId: z.string().uuid().optional(),
-  tagId: z.string().uuid().nullable().optional(),
+  tagIds: z.array(z.string().uuid()).optional(),
 });
 
 export async function PATCH(
@@ -31,11 +31,29 @@ export async function PATCH(
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-  const [updated] = await db
-    .update(timeEntries)
-    .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(timeEntries.id, id))
-    .returning();
+  const { tagIds, ...entryFields } = parsed.data;
+
+  // Update the entry row if there are non-tag fields to change
+  let updated = entry;
+  if (Object.keys(entryFields).length > 0) {
+    const [u] = await db
+      .update(timeEntries)
+      .set({ ...entryFields, updatedAt: new Date() })
+      .where(eq(timeEntries.id, id))
+      .returning();
+    updated = u;
+  }
+
+  // Replace tags if provided
+  if (tagIds !== undefined) {
+    await db.delete(timeEntryTags).where(eq(timeEntryTags.timeEntryId, id));
+    if (tagIds.length > 0) {
+      await db
+        .insert(timeEntryTags)
+        .values(tagIds.map((tagId) => ({ timeEntryId: id, tagId })))
+        .onConflictDoNothing();
+    }
+  }
 
   return NextResponse.json({ entry: updated });
 }
@@ -56,6 +74,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // timeEntryTags rows cascade-delete automatically
   await db.delete(timeEntries).where(eq(timeEntries.id, id));
   return NextResponse.json({ success: true });
 }

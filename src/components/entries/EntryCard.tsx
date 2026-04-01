@@ -155,18 +155,20 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
         </div>
       </div>
 
-      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit entry" size="sm">
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit entry" size="md">
         <form onSubmit={handleEditSave} className="flex flex-col gap-4">
           <Input label="Description" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="What were you working on?" />
           {projects.length > 0 && <Select label="Project" value={editProjectId} onChange={setEditProjectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} placeholder="Select project" />}
           <div className="flex flex-col gap-1.5"><label className="text-xs font-medium text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Tags</label><TagMultiSelect value={editTagIds} onChange={setEditTagIds} options={tagOptions} onCreate={createTag} placeholder="Add tags…" /></div>
           {!!entry.stoppedAt && <div className="grid grid-cols-2 gap-3"><div className="flex flex-col gap-1.5"><div className="flex items-center gap-1.5"><label className="text-xs font-medium text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Start Time</label>{entry.editedField === "end" && <Tooltip label="Blocked — end was already edited"><span className="text-[#5e605b]">🔒</span></Tooltip>}</div><Input type="datetime-local" value={editStartedAt} onChange={(e) => setEditStartedAt(e.target.value)} disabled={entry.editedField === "end"} /></div><div className="flex flex-col gap-1.5"><div className="flex items-center gap-1.5"><label className="text-xs font-medium text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>End Time</label>{entry.editedField === "start" && <Tooltip label="Blocked — start was already edited"><span className="text-[#5e605b]">🔒</span></Tooltip>}</div><Input type="datetime-local" value={editStoppedAt} onChange={(e) => setEditStoppedAt(e.target.value)} disabled={entry.editedField === "start"} /></div></div>}
           {editError && <p className="text-sm text-[#a73b21]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{editError}</p>}
-          <div className="flex gap-2 justify-end pt-1"><Button type="button" variant="ghost" size="sm" onClick={() => setEditOpen(false)}>Cancel</Button><Button type="submit" variant="primary" size="sm" loading={editLoading}>Save</Button></div>
+          <div className="flex gap-2 justify-end pt-1"><Button type="button" variant="ghost" size="md" onClick={() => setEditOpen(false)}>Cancel</Button><Button type="submit" variant="primary" size="md" loading={editLoading}>Save</Button></div>
         </form>
       </Modal>
 
-      <Modal open={deleteConfirm} onClose={() => setDeleteConfirm(false)} title="Delete entry" size="sm"><div className="flex flex-col gap-4"><p className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Are you sure you want to delete this time entry? This cannot be undone.</p><div className="flex gap-2 justify-end"><Button variant="primary" size="sm" onClick={() => setDeleteConfirm(false)}>Cancel</Button><Button variant="danger" size="sm" loading={deleteLoading} onClick={handleDelete}>Delete</Button></div></div></Modal>
+      <Modal open={deleteConfirm} onClose={() => setDeleteConfirm(false)} title="Delete entry" size="md"><div className="flex flex-col gap-4"><p className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Are you sure you want to delete this time entry? This cannot be undone.</p><div className="flex gap-2 justify-end"><Button variant="primary" size="md" onClick={() => setDeleteConfirm(false)}>Cancel</Button><Button variant="danger" size="md" loading={deleteLoading} onClick={handleDelete}>Delete</Button></div></div></Modal>
     </>
   );
 }
+
+

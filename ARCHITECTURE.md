@@ -44,7 +44,8 @@ The V1 operating model is:
 ### Team Model
 
 Chronos now supports **multiple teams per user**.
-- The Team page member edit modal uses multi-select and saves all selected teams.
+- The Team page is split into a **Teams** tab and a **Users** tab.
+- The Users tab member edit modal uses multi-select and saves all selected teams.
 - `team_memberships` is the source of truth for user ↔ team membership.
 - `users.team_id` remains only as a legacy primary/default team pointer for backward compatibility.
 - A user can belong to zero, one, or many teams.
@@ -267,6 +268,7 @@ Additional `teams` columns:
 ---
 
 ### Start/End Editing Lock Rule
+- Time entry start/end edits are minute-level only in the UI (`datetime-local` without seconds).
 - `time_entries.edited_field` is `NULL | 'start' | 'end'`.
 - Once `edited_field` is set, the opposite field is permanently locked for that entry.
   - If `edited_field = 'start'`, PATCH requests that include `stoppedAt` are rejected (400).

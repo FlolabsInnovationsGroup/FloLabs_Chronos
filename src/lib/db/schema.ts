@@ -17,10 +17,17 @@ export const teams = pgTable(
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     name: text("name").notNull(),
     slug: text("slug").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    notionPageId: text("notion_page_id"),
+    generalWebhookUrl: text("general_webhook_url"),
+    meetingsWebhookUrl: text("meetings_webhook_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
-  (t) => [uniqueIndex("teams_slug_unique").on(t.slug)]
+  (t) => [
+    uniqueIndex("teams_slug_unique").on(t.slug),
+    uniqueIndex("teams_notion_page_id_unique").on(t.notionPageId),
+  ]
 );
 
 export const users = pgTable(

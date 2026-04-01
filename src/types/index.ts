@@ -17,6 +17,10 @@ export interface Team {
   id: string;
   name: string;
   slug: string;
+  isActive: boolean;
+  notionPageId?: string | null;
+  generalWebhookUrl?: string | null;
+  meetingsWebhookUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -72,6 +72,12 @@ This is not an open signup SaaS. Treat it as an internal operations tool with st
 - only admins can create, edit, archive, delete, or restore projects
 - deleting a project also deletes all linked time entries (with confirmation warning)
 
+### Team Rules (Notion-Driven)
+- teams are imported from Notion via `/api/cron/teams-sync` (every 15 min)
+- `NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23` — Teams DB
+- manual "Create Team" UI is removed; admins manage teams in Notion
+- invite form only shows active teams (`isActive = true`)
+
 ---
 
 ## Stack

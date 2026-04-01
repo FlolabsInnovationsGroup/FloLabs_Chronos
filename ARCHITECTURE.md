@@ -231,6 +231,23 @@ CREATE INDEX idx_invites_team     ON invitations(team_id);
 - Deleting a project also deletes all linked time entries.
 - Deleting a tag only removes associations; time entries are preserved.
 
+### Teams Model (Notion-Driven)
+
+Teams are imported and kept in sync from the Notion Teams database (`NOTION_TEAMS_DB_ID`). Manual team creation in the UI is disabled — teams are managed in Notion.
+
+Additional `teams` columns:
+- `is_active BOOLEAN NOT NULL DEFAULT true` — synced from Notion Status; Active → true, others → false
+- `notion_page_id TEXT UNIQUE` — Notion page ID, used as upsert key
+- `general_webhook_url TEXT` — Discord webhook for general team notifications
+- `meetings_webhook_url TEXT` — Discord webhook for meetings channel notifications
+
+**Sync cron:** `/api/cron/teams-sync` (every 15 min)
+- Paginates all pages in the Notion Teams DB
+- Upserts each team by `notionPageId` (INSERT … ON CONFLICT UPDATE name, slug, isActive, generalWebhookUrl, meetingsWebhookUrl, updatedAt)
+- Soft-deactivates any Chronos team whose `notionPageId` no longer appears in Notion
+
+---
+
 ### Start/End Editing Lock Rule
 - `time_entries.edited_field` is `NULL | 'start' | 'end'`.
 - Once `edited_field` is set, the opposite field is permanently locked for that entry.
@@ -449,6 +466,7 @@ The cron job replicates completed time entries to the Notion Time Entries DB and
 - `NOTION_API_KEY` — Notion integration token
 - `NOTION_DATABASE_ID` — Time Entries DB (`297a157695518075ab6cea94e60e4220`)
 - `NOTION_ONBOARDINGS_DB_ID` — Onboardings/Team Members DB (`a1a106fab63548089279dc54d63eab89`)
+- `NOTION_TEAMS_DB_ID` — Teams DB (`9828e33b94e64dcba86f8b4ad7a21a23`)
 - `CRON_SECRET` — Bearer auth for the cron endpoint
 
 #### Notion Page Properties

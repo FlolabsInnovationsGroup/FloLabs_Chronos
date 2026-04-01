@@ -51,14 +51,12 @@ export default function TeamPage() {
   const [error, setError] = useState("");
   const [copiedInviteUrl, setCopiedInviteUrl] = useState("");
 
-  const [showCreateTeam, setShowCreateTeam] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [editingUser, setEditingUser] = useState<TeamUser | null>(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<TeamUser | null>(null);
   const [confirmDisableInvite, setConfirmDisableInvite] = useState<TeamInvitation | null>(null);
   const [confirmDeleteInvite, setConfirmDeleteInvite] = useState<TeamInvitation | null>(null);
 
-  const [teamName, setTeamName] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"member" | "team_lead">("member");
@@ -140,27 +138,12 @@ export default function TeamPage() {
   );
 
   const visibleTeams = useMemo(() => {
-    if (teams.length > 0) return teams.map((team) => ({ id: team.id, name: team.name, slug: team.slug }));
+    if (teams.length > 0) return teams.map((team) => ({ id: team.id, name: team.name, slug: team.slug, isActive: team.isActive ?? true }));
     if (currentUser?.team?.id) {
-      return [{ id: currentUser.team.id, name: currentUser.team.name, slug: currentUser.team.slug }];
+      return [{ id: currentUser.team.id, name: currentUser.team.name, slug: currentUser.team.slug, isActive: true }];
     }
     return [];
   }, [currentUser?.team, teams]);
-
-  async function handleCreateTeam(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await readJson(await fetch("/api/teams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: teamName }) }));
-      setTeamName("");
-      setShowCreateTeam(false);
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create team.");
-    } finally {
-      setSaving(false);
-    }
-  }
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -298,7 +281,6 @@ export default function TeamPage() {
 
         {role === "admin" && (
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setShowCreateTeam(true)}>New Team</Button>
             <Button variant="primary" onClick={() => setShowInvite(true)}>Invite Member</Button>
           </div>
         )}
@@ -320,7 +302,10 @@ export default function TeamPage() {
           </div>
         ) : teamCards.map((team) => (
           <div key={team.id} className="bg-surface-container-lowest rounded-xl paper-shadow p-5">
-            <p className="text-xs uppercase tracking-wide text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Team</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase tracking-wide text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Team</p>
+              <Badge color={team.isActive ? "primary" : "secondary"}>{team.isActive ? "Active" : "Inactive"}</Badge>
+            </div>
             <h2 className="text-xl font-light italic text-[#31332f] mt-1" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>{team.name}</h2>
             <p className="text-xs text-[#b2b2ad] mt-1" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{team.slug}</p>
             <div className="grid grid-cols-2 gap-3 mt-4">
@@ -408,9 +393,7 @@ export default function TeamPage() {
         </div>
       )}
 
-      <Modal open={showCreateTeam} onClose={() => setShowCreateTeam(false)} title="Create Team"><form onSubmit={handleCreateTeam} className="flex flex-col gap-4"><Input label="Team Name" value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Creative Ops" /><div className="flex justify-end gap-3"><Button variant="ghost" type="button" onClick={() => setShowCreateTeam(false)}>Cancel</Button><Button variant="primary" type="submit" loading={saving}>Create Team</Button></div></form></Modal>
-
-      <Modal open={showInvite} onClose={() => setShowInvite(false)} title="Invite Member"><form onSubmit={handleInvite} className="flex flex-col gap-4"><Input label="Full Name" value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="Jane Smith" /><Input label="Email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="jane@example.com" /><Select label="Role" options={INVITE_ROLES} value={inviteRole} onChange={(value) => setInviteRole(value as "member" | "team_lead")} /><Select label="Team" options={teams.map((team) => ({ value: team.id, label: team.name }))} value={inviteTeamId} onChange={setInviteTeamId} placeholder="Choose a team" /><div className="flex justify-end gap-3"><Button variant="ghost" type="button" onClick={() => setShowInvite(false)}>Cancel</Button><Button variant="primary" type="submit" loading={saving}>Create Invitation</Button></div></form></Modal>
+      <Modal open={showInvite} onClose={() => setShowInvite(false)} title="Invite Member"><form onSubmit={handleInvite} className="flex flex-col gap-4"><Input label="Full Name" value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="Jane Smith" /><Input label="Email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="jane@example.com" /><Select label="Role" options={INVITE_ROLES} value={inviteRole} onChange={(value) => setInviteRole(value as "member" | "team_lead")} /><Select label="Team" options={teams.filter((team) => team.isActive ?? true).map((team) => ({ value: team.id, label: team.name }))} value={inviteTeamId} onChange={setInviteTeamId} placeholder="Choose a team" /><div className="flex justify-end gap-3"><Button variant="ghost" type="button" onClick={() => setShowInvite(false)}>Cancel</Button><Button variant="primary" type="submit" loading={saving}>Create Invitation</Button></div></form></Modal>
 
       <Modal open={!!editingUser} onClose={() => setEditingUser(null)} title="Edit Member"><form onSubmit={handleEditUser} className="flex flex-col gap-4">{role === "admin" && <><Select label="Role" options={EDIT_ROLES} value={editRole} onChange={(value) => setEditRole(value as Role)} /><Select label="Team" options={teams.map((team) => ({ value: team.id, label: team.name }))} value={editTeamId} onChange={setEditTeamId} placeholder={editRole === "admin" ? "Admins can stay unassigned" : "Choose a team"} disabled={editRole === "admin"} /><label className="flex items-center gap-2.5 cursor-pointer"><input type="checkbox" checked={editIsActive} onChange={(e) => setEditIsActive(e.target.checked)} className="w-4 h-4 rounded accent-[#366769]" /><span className="text-sm text-[#31332f]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Active account</span></label></>}<Input label="Weekly Target (hours)" type="number" value={String(editWeeklyTarget)} onChange={(e) => setEditWeeklyTarget(Math.max(0, Math.min(168, Number(e.target.value) || 0)))} hint={`Daily target: ${(editWeeklyTarget / 5).toFixed(1)}h (Mon–Fri)`} /><div className="flex justify-end gap-3"><Button variant="ghost" type="button" onClick={() => setEditingUser(null)}>Cancel</Button><Button variant="primary" type="submit" loading={saving}>Save Changes</Button></div></form></Modal>
 

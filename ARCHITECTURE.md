@@ -231,6 +231,15 @@ CREATE INDEX idx_invites_team     ON invitations(team_id);
 - Deleting a project also deletes all linked time entries.
 - Deleting a tag only removes associations; time entries are preserved.
 
+### Start/End Editing Lock Rule
+- `time_entries.edited_field` is `NULL | 'start' | 'end'`.
+- Once `edited_field` is set, the opposite field is permanently locked for that entry.
+  - If `edited_field = 'start'`, PATCH requests that include `stoppedAt` are rejected (400).
+  - If `edited_field = 'end'`, PATCH requests that include `startedAt` are rejected (400).
+- When editing an unedited entry, `edited_field` is set to whichever extreme was changed.
+- Active timers (no `stopped_at`) cannot have either time field edited.
+- `duration_ms` is recomputed whenever `started_at` or `stopped_at` changes.
+
 ---
 
 ## Access Control
@@ -430,6 +439,43 @@ Notion remains a **secondary backup**, not the source of truth. PostgreSQL is au
 
 ---
 
-## Discord Notifications
+## Notion Sync & Discord Notifications
 
-Discord webhook notifications remain optional and non-blocking.
+### Cron: `/api/cron/notion-sync` (every 5 minutes)
+
+The cron job replicates completed time entries to the Notion Time Entries DB and notifies users via Discord.
+
+#### Env Vars Required
+- `NOTION_API_KEY` — Notion integration token
+- `NOTION_DATABASE_ID` — Time Entries DB (`297a157695518075ab6cea94e60e4220`)
+- `NOTION_ONBOARDINGS_DB_ID` — Onboardings/Team Members DB (`a1a106fab63548089279dc54d63eab89`)
+- `CRON_SECRET` — Bearer auth for the cron endpoint
+
+#### Notion Page Properties
+Each time entry page in Notion has:
+- `User Key` (title) — `"{name} — {date}"`
+- `Entry ID` (rich_text) — Chronos UUID for deduplication
+- `Project` (select)
+- `Tags` (multi_select)
+- `Date` (date range: startedAt → stoppedAt)
+- `Updated` (date)
+- `Duration` (number, in seconds)
+- `Description` (rich_text)
+- `Team Member` (relation → Onboardings DB page)
+- `Status` (status: `Processed` | `Edited` | `Deleted` | `Notified` | `Ignored`)
+
+#### Status Flow
+- New entry synced → `Processed`
+- Entry updated (syncedAt < updatedAt) → `Edited`
+- Entry missing from Chronos DB → `Deleted`
+
+#### Team Member Resolution
+The `Team Member` relation is resolved by fuzzy Jaccard token matching between `users.name` and Onboardings DB page titles. The name index is cached in Redis for 2 hours (`notion:team-index`).
+
+#### Discord Notifications
+- Per-user Discord webhook URL stored in `users.discord_webhook_url`.
+- Messages are **plain-text Markdown** (not embeds).
+- New entry → `buildEntryAddedMessage`
+- Edited entry → `buildEntryEditedMessage`
+- Deleted entry → `buildEntryDeletedMessage`
+- Discord sends are fire-and-forget with 429 backoff. Failures do not abort the cron.

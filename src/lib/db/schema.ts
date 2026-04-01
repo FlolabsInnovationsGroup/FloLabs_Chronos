@@ -111,6 +111,8 @@ export const timeEntries = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     stoppedAt: timestamp("stopped_at", { withTimezone: true }),
     durationMs: bigint("duration_ms", { mode: "number" }),
+    // Tracks which extreme was edited (start or end). Once set, the other is locked.
+    editedField: text("edited_field"),
     // Notion backup integration
     notionPageId: text("notion_page_id"),
     syncedAt: timestamp("synced_at", { withTimezone: true }),

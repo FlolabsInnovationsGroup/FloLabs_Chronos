@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { TagMultiSelect, type TagOption } from "@/components/ui/TagMultiSelect";
 import { Button } from "@/components/ui/Button";
+import { Tooltip } from "@/components/ui/Tooltip";
 import type { Project, Tag, TimeEntry } from "@/types";
 
 interface EntryFormProps {
@@ -41,6 +42,12 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
   const [tagOptions, setTagOptions] = useState<TagOption[]>(
     tags.map((t) => ({ id: t.id, name: t.name }))
   );
+
+  // editedField lock state — only relevant when editing an existing completed entry
+  const editedField = entry?.editedField ?? null;
+  const hasStoppedAt = !!entry?.stoppedAt;
+  const startLocked = isEdit && editedField === "end";
+  const endLocked = isEdit && editedField === "start";
 
   async function createTag(name: string): Promise<TagOption | null> {
     try {
@@ -81,14 +88,28 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
     setError("");
 
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         projectId,
         tagIds,
         description,
-        startedAt: start.toISOString(),
-        stoppedAt: stop.toISOString(),
-        durationMs: stop.getTime() - start.getTime(),
       };
+
+      if (!isEdit) {
+        // New entry: always send both times and computed duration
+        payload.startedAt = start.toISOString();
+        payload.stoppedAt = stop.toISOString();
+        payload.durationMs = stop.getTime() - start.getTime();
+      } else {
+        // Edit: only send the times that are not locked
+        if (!startLocked) {
+          const origStart = toDatetimeLocal(entry?.startedAt);
+          if (startedAt !== origStart) payload.startedAt = start.toISOString();
+        }
+        if (!endLocked && hasStoppedAt) {
+          const origStop = toDatetimeLocal(entry?.stoppedAt);
+          if (stoppedAt !== origStop) payload.stoppedAt = stop.toISOString();
+        }
+      }
 
       const res = await fetch(
         isEdit ? `/api/entries/${entry!.id}` : "/api/entries",
@@ -99,12 +120,15 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
         }
       );
 
-      if (!res.ok) throw new Error("Failed to save entry");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to save entry");
+      }
 
       onSaved?.();
       onClose();
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -151,20 +175,56 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Input
-            label="Start Time"
-            type="datetime-local"
-            value={startedAt}
-            onChange={(e) => setStartedAt(e.target.value)}
-          />
-          <Input
-            label="End Time"
-            type="datetime-local"
-            value={stoppedAt}
-            onChange={(e) => setStoppedAt(e.target.value)}
-          />
-        </div>
+        {/* Show start/end time fields only when there is a stoppedAt (completed entry or new entry) */}
+        {(!isEdit || hasStoppedAt) && (
+          <div className="grid grid-cols-2 gap-3">
+            {/* Start time */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <label
+                  className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  Start Time
+                </label>
+                {startLocked && (
+                  <Tooltip label="Locked — end was already edited" position="top">
+                    <span className="text-[#5e605b] cursor-default select-none">🔒</span>
+                  </Tooltip>
+                )}
+              </div>
+              <Input
+                type="datetime-local"
+                value={startedAt}
+                onChange={(e) => setStartedAt(e.target.value)}
+                disabled={startLocked}
+              />
+            </div>
+
+            {/* End time */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <label
+                  className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  End Time
+                </label>
+                {endLocked && (
+                  <Tooltip label="Locked — start was already edited" position="top">
+                    <span className="text-[#5e605b] cursor-default select-none">🔒</span>
+                  </Tooltip>
+                )}
+              </div>
+              <Input
+                type="datetime-local"
+                value={stoppedAt}
+                onChange={(e) => setStoppedAt(e.target.value)}
+                disabled={endLocked}
+              />
+            </div>
+          </div>
+        )}
 
         {error && (
           <p

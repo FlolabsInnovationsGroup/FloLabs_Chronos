@@ -9,6 +9,8 @@ const patchSchema = z.object({
   description: z.string().optional(),
   projectId: z.string().uuid().optional(),
   tagIds: z.array(z.string().uuid()).optional(),
+  startedAt: z.string().datetime().optional(),
+  stoppedAt: z.string().datetime().optional(),
 });
 
 export async function PATCH(
@@ -31,7 +33,53 @@ export async function PATCH(
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-  const { tagIds, ...entryFields } = parsed.data;
+  const { tagIds, startedAt: startedAtStr, stoppedAt: stoppedAtStr, ...entryFields } = parsed.data;
+
+  // Enforce editedField lock for start/end time edits
+  if (startedAtStr !== undefined || stoppedAtStr !== undefined) {
+    // Active timers (no stoppedAt) cannot have start/end edited
+    if (!entry.stoppedAt) {
+      return NextResponse.json(
+        { error: "Cannot edit times on an active timer" },
+        { status: 400 }
+      );
+    }
+
+    if (startedAtStr !== undefined && entry.editedField === "end") {
+      return NextResponse.json(
+        { error: "Cannot edit start: end was already edited for this entry" },
+        { status: 400 }
+      );
+    }
+
+    if (stoppedAtStr !== undefined && entry.editedField === "start") {
+      return NextResponse.json(
+        { error: "Cannot edit end: start was already edited for this entry" },
+        { status: 400 }
+      );
+    }
+
+    // Compute the new start/stop, using existing values where not provided
+    const newStartedAt = startedAtStr ? new Date(startedAtStr) : entry.startedAt;
+    const newStoppedAt = stoppedAtStr ? new Date(stoppedAtStr) : entry.stoppedAt!;
+
+    if (newStoppedAt <= newStartedAt) {
+      return NextResponse.json(
+        { error: "End time must be after start time" },
+        { status: 400 }
+      );
+    }
+
+    const newDurationMs = newStoppedAt.getTime() - newStartedAt.getTime();
+    const newEditedField = entry.editedField ?? (startedAtStr !== undefined ? "start" : "end");
+
+    Object.assign(entryFields, {
+      startedAt: newStartedAt,
+      stoppedAt: newStoppedAt,
+      durationMs: newDurationMs,
+      editedField: newEditedField,
+    });
+  }
 
   // Update the entry row if there are non-tag fields to change
   let updated = entry;

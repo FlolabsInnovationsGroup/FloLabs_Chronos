@@ -1,9 +1,11 @@
 # GAME_MASTER.md — FloLabs Chronos Development Tracker
 
 ## Project Status
-**Date:** 2026-03-31
-**Phase:** V1 feature-complete, in testing
+**Date:** 2026-04-01
+**Phase:** V1 feature-complete → V1.1 active development
 **Stack:** Next.js 16 + Drizzle + Neon Postgres + Redis + NextAuth v5
+**URL:** https://athensgreecemarathon.com
+**Vercel project:** flo-labs-chronos (team: flomad-dev)
 
 ---
 
@@ -89,24 +91,105 @@
 ### Project Colors ✅
 - [x] Updated palette: deep teal, slate, warm red, orange, sky blue, marine blue, violet, light green
 
+### Domain & Infra ✅
+- [x] `athensgreecemarathon.com` connected to Vercel project, DNS verified
+- [x] `NEXTAUTH_URL` updated to `https://athensgreecemarathon.com`, redeployed
+- [x] `VERCEL_TOKEN` stored in `.env.local` and `.env.production.local`
+
+---
+
+## ✅ Completed Sprint — V1.1
+
+### Feature 1: Time Entry Start/End Editing Lock ✅
+
+- `editedField` column added to `time_entries` (migration: `scripts/migrate-edited-field.ts`)
+- PATCH `/api/entries/[id]` enforces lock: rejects edits to locked field, recomputes `durationMs`
+- `TimeEntry` type updated with `editedField: 'start' | 'end' | null`
+- `EntryForm` shows 🔒 tooltip on locked field; hides time fields for active timers
+
+### Feature 2: Notion + Discord Sync (replaces Python Lambda) ✅
+
+- `NOTION_ONBOARDINGS_DB_ID` added to `.env.local` and `.env.production.local`
+- `src/lib/notion.ts` — added `buildTeamMemberIndex`, `resolveTeamMemberPageId`, `buildNotionEntryProperties`, `syncEntryToNotionFull`, `markEntryDeleted`, `queryNotionEntriesWindow`
+- `src/lib/discord.ts` — added `sendDiscordText`, `buildEntryAddedMessage`, `buildEntryEditedMessage`, `buildEntryDeletedMessage`
+- `src/lib/redis-cache.ts` — thin Redis get/set wrapper for caching the team name index
+- `src/app/api/cron/notion-sync/route.ts` — full rewrite: upsert new/edited entries, detect deletes, fire Discord notifications fire-and-forget
+- `ARCHITECTURE.md` — documented start/end lock rule + full Notion Sync & Discord Notifications section
+
+---
+
+### Feature 3: Teams Import from Notion (replaces manual team creation)
+
+**Spec:**
+Teams in FloLabs Chronos must be automatically imported and kept in sync from the Notion Teams database. Manual team creation in the UI must be removed or locked to admins as a fallback only.
+
+**Notion Teams DB:** `9828e33b94e64dcba86f8b4ad7a21a23`
+
+**Relevant Notion properties to sync:**
+| Notion property | Chronos `teams` column |
+|---|---|
+| `Full Name` (title) | `name` |
+| `Full Name` slugified | `slug` |
+| `Status` (status) | `isActive` — Active → true, others → false |
+| `General Webhook` (url) | new column `generalWebhookUrl TEXT` |
+| `Meetings Webhook` (url) | new column `meetingsWebhookUrl TEXT` |
+| Notion page ID | new column `notionPageId TEXT UNIQUE` |
+
+**Schema changes:**
+- Add to `teams` table: `notionPageId TEXT UNIQUE`, `generalWebhookUrl TEXT`, `meetingsWebhookUrl TEXT`, `isActive BOOLEAN NOT NULL DEFAULT true`
+- Write migration script `scripts/migrate-teams-notion.ts`
+
+**New cron: `/api/cron/teams-sync`** (schedule: `*/15 * * * *` — every 15 min)
+- Auth with `CRON_SECRET`
+- Query Notion Teams DB (paginate all pages)
+- For each page: upsert into `teams` by `notionPageId` (INSERT … ON CONFLICT UPDATE name, slug, isActive, generalWebhookUrl, meetingsWebhookUrl, updatedAt)
+- Soft-deactivate any Chronos team whose `notionPageId` no longer appears in Notion (set `isActive = false`)
+- Return `{ upserted, deactivated, errors }`
+
+**New env var:**
+```
+NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
+```
+
+**UI changes:**
+- Remove the "Create team" button/form from the Team management page (admins can no longer manually create teams — they manage teams in Notion)
+- Teams list should show `isActive` status badge (Active / Inactive)
+- Team invite form: only show active teams in the team selector
+
+**`vercel.json` addition:**
+```json
+{ "path": "/api/cron/teams-sync", "schedule": "*/15 * * * *" }
+```
+
+**Files to touch:**
+- `src/lib/db/schema.ts` — add new columns to `teams`
+- `scripts/migrate-teams-notion.ts` — migration
+- `src/app/api/cron/teams-sync/route.ts` — new file
+- `vercel.json` — add cron entry
+- Team page UI — remove create team button, add isActive badge
+- Invitation form — filter to active teams only
+- `ARCHITECTURE.md` — document Notion-driven team sync
+- `CLAUDE.md` — note NOTION_TEAMS_DB_ID
+
+**Status:** 🔲 Not started
+
 ---
 
 ## Known State
 
-- Production is deployed on Vercel
-- Database schema is migrated (per-user tags, time_entry_tags join table)
+- Production deployed at https://athensgreecemarathon.com
+- Database schema migrated (per-user tags, time_entry_tags join table)
 - Build passes: `pnpm exec tsc --noEmit` and `pnpm build` both green
 - Admin account: `pm@flolabsinnovations.com`
 
 ---
 
-## What's Next (V1.1 candidates)
+## What's Next (V1.2 candidates)
 
 - [ ] Email delivery for invitations (Resend integration)
 - [ ] Password change in settings
 - [ ] Team lead ability to invite members to their own team
-- [ ] Notion sync updated for multi-tag entries
-- [ ] Active timer visibility for team leads/admins
+- [ ] Active timer visibility for team leads/admins (SSE broadcast)
 - [ ] Mobile-optimized bottom nav improvements
 - [ ] Audit log for admin actions
 
@@ -120,3 +203,4 @@ When continuing work:
 3. Run `pnpm exec tsc --noEmit && pnpm build` to verify green state
 4. Check `src/lib/db/schema.ts` matches the live database
 5. If schema changed, write a migration script in `scripts/` and run it
+6. After completing a feature, mark it ✅ here and update `ARCHITECTURE.md`

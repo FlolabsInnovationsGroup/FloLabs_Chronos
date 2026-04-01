@@ -61,6 +61,7 @@ export interface TimeEntry {
   startedAt: Date;
   stoppedAt: Date | null;
   durationMs: number | null;
+  editedField: 'start' | 'end' | null;
   notionPageId?: string | null;
   syncedAt?: Date | null;
   updatedAt?: Date;

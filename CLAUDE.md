@@ -84,7 +84,18 @@ This is not an open signup SaaS. Treat it as an internal operations tool with st
 - **Realtime:** Redis + SSE
 - **Validation:** Zod
 - **Styling:** Tailwind CSS with Vellum Ink tokens
-- **Deployment:** Vercel
+- **Deployment:** Vercel — project `flo-labs-chronos`, team `flomad-dev`
+
+---
+
+## Vercel API Access
+
+A no-expiration Vercel personal access token is stored as `VERCEL_TOKEN` in both `.env.local` and `.env.production.local`. Use it for Vercel API calls (domain management, deployments, etc.):
+
+- **Token env var:** `VERCEL_TOKEN`
+- **Team ID:** `team_6Y3HFbsxBOKvTmB6Hft71t5G`
+- **Project ID:** `prj_3MFDCbI5X7AEOozfYWvlNd5wwUL7`
+- **Custom domain:** `athensgreecemarathon.com` — verified, DNS via Dynadot (`ns1.dyna-ns.net` / `ns2.dyna-ns.net`), A records pointing to Vercel IPs
 
 ---
 

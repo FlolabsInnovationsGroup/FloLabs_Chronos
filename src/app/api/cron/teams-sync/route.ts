@@ -95,7 +95,7 @@ export async function GET(req: Request) {
 
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
 
-  if (!process.env.NOTION_API_KEY || !process.env.NOTION_TEAMS_DB_ID || !process.env.NOTION_ONBOARDINGS_DB_ID) {
+  if (!process.env.NOTION_API_KEY || !process.env.NOTION_TEAMS_DB_ID || !process.env.NOTION_TEAM_MEMBERS_DB_ID) {
     return NextResponse.json({ error: "Notion Teams DB not configured" }, { status: 503 });
   }
 
@@ -109,7 +109,7 @@ export async function GET(req: Request) {
   try {
     const [teamPages, memberPages, userRows] = await Promise.all([
       queryAllPages(process.env.NOTION_TEAMS_DB_ID),
-      queryAllPages(process.env.NOTION_ONBOARDINGS_DB_ID),
+      queryAllPages(process.env.NOTION_TEAM_MEMBERS_DB_ID),
       db.select({ id: users.id, name: users.name }).from(users),
     ]);
 

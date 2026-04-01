@@ -273,7 +273,7 @@ export default function TeamPage() {
     <div className="flex flex-col gap-8 max-w-6xl mx-auto">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-light italic text-[#31332f]" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Team</h1>
+          <h1 className="text-2xl font-light italic text-[#31332f]" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Teams</h1>
           <p className="text-sm text-[#5e605b] mt-1" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             {role === "admin" ? "Admins manage teams, invitations, and member roles." : role === "team_lead" ? "You can see the members in your team." : "You can see your current team assignment."}
           </p>
@@ -303,7 +303,7 @@ export default function TeamPage() {
         ) : teamCards.map((team) => (
           <div key={team.id} className="bg-surface-container-lowest rounded-xl paper-shadow p-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs uppercase tracking-wide text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Team</p>
+              <p className="text-xs uppercase tracking-wide text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Teams</p>
               <Badge color={team.isActive ? "primary" : "secondary"}>{team.isActive ? "Active" : "Inactive"}</Badge>
             </div>
             <h2 className="text-xl font-light italic text-[#31332f] mt-1" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>{team.name}</h2>

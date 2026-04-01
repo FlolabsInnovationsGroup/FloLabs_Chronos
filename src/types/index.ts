@@ -32,12 +32,14 @@ export interface Invitation {
   name: string;
   role: Exclude<Role, "admin">;
   teamId: string;
+  teamIds?: string[];
   token: string;
   invitedById: string;
   expiresAt: Date;
   acceptedAt: Date | null;
   createdAt: Date;
   team?: Pick<Team, "id" | "name" | "slug">;
+  teams?: Pick<Team, "id" | "name" | "slug">[];
 }
 
 export interface Project {

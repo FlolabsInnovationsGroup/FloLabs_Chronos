@@ -43,10 +43,11 @@ The V1 operating model is:
 
 ### Team Model
 
-V1 uses a **single primary team per user**. That keeps permissions and reporting simple:
-- `users.team_id` stores the team assignment.
-- A user can be in zero or one team.
-- `team_lead` is expressed by `users.role = 'team_lead'`, not by a second membership table.
+Chronos now supports **multiple teams per user**.
+- `team_memberships` is the source of truth for user ↔ team membership.
+- `users.team_id` remains only as a legacy primary/default team pointer for backward compatibility.
+- A user can belong to zero, one, or many teams.
+- `team_lead` is still expressed by `users.role = 'team_lead'`, but their visibility scope is the union of all teams they belong to.
 
 ### Tags Model
 
@@ -64,11 +65,13 @@ Tags are **per-user**:
 ### Invitations
 
 User onboarding is invite-based:
-1. An admin creates an invitation for an email address and selects a team + role.
+1. An admin or sync job creates an invitation for an email address and selects one or more teams + role.
 2. The system generates a one-time registration token.
 3. The invite link points to `/register?invite=<token>`.
 4. Registration is only allowed when the token is valid, unexpired, and matches the invite email.
-5. On success, the new user is created and assigned to the invite's team automatically.
+5. On success, the new user is created and assigned to all invited teams automatically via `team_memberships`.
+
+Invitation membership is stored in `invitation_team_memberships`. `invitations.team_id` remains as a legacy primary/default team pointer for compatibility.
 
 Admins can disable or delete pending invitation links from the Team page.
 
@@ -167,6 +170,13 @@ CREATE TABLE invitations (
   created_at     TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE invitation_team_memberships (
+  invitation_id  UUID NOT NULL REFERENCES invitations(id) ON DELETE CASCADE,
+  team_id        UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  created_at     TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (invitation_id, team_id)
+);
+
 -- Projects
 CREATE TABLE projects (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -217,6 +227,13 @@ CREATE INDEX idx_entry_tags_tag   ON time_entry_tags(tag_id);
 CREATE INDEX idx_users_team       ON users(team_id);
 CREATE INDEX idx_invites_email    ON invitations(email);
 CREATE INDEX idx_invites_team     ON invitations(team_id);
+
+CREATE TABLE team_memberships (
+  user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  team_id        UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  created_at     TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (user_id, team_id)
+);
 ```
 
 ### Data Rules

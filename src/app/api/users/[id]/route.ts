@@ -4,13 +4,14 @@ import { db } from "@/lib/db";
 import { timeEntries, users, tags } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { canManageTeams, isAdmin, isTeamLead } from "@/lib/permissions";
+import { canManageTeams, getAccessibleTeamIds, getUserTeams, isAdmin, isTeamLead, replaceUserTeamMemberships } from "@/lib/permissions";
 import { broadcastDataChange } from "@/lib/realtime";
 
 const updateSchema = z.object({
   role: z.enum(["admin", "team_lead", "member"]).optional(),
   name: z.string().min(1).optional(),
   teamId: z.string().uuid().nullable().optional(),
+  teamIds: z.array(z.string().uuid()).optional(),
   isActive: z.boolean().optional(),
   weeklyTargetHours: z.number().min(0).max(168).optional(),
   discordWebhookUrl: z.string().url().nullable().optional(),
@@ -52,7 +53,10 @@ export async function PATCH(
   }
 
   if (userIsTeamLead && !userIsAdmin) {
-    if (existingUser.teamId !== session.user.teamId) {
+    const accessibleTeamIds = await getAccessibleTeamIds(session.user);
+    const existingTeams = await getUserTeams(existingUser.id);
+    const overlap = existingTeams.some((team) => accessibleTeamIds?.includes(team.id));
+    if (!overlap && existingUser.id !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const allowedKeys = ["weeklyTargetHours"];
@@ -66,12 +70,13 @@ export async function PATCH(
   }
 
   const finalRole = parsed.data.role ?? existingUser.role;
-  const finalTeamId =
-    parsed.data.teamId !== undefined ? parsed.data.teamId : existingUser.teamId;
+  const requestedTeamIds = parsed.data.teamIds ?? (parsed.data.teamId !== undefined ? (parsed.data.teamId ? [parsed.data.teamId] : []) : undefined);
+  const existingTeams = await getUserTeams(existingUser.id);
+  const finalTeamIds = requestedTeamIds ?? existingTeams.map((team) => team.id);
 
-  if (finalRole !== "admin" && !finalTeamId) {
+  if (finalRole !== "admin" && finalTeamIds.length === 0) {
     return NextResponse.json(
-      { error: "Team leads and members must belong to a team." },
+      { error: "Team leads and members must belong to at least one team." },
       { status: 400 }
     );
   }
@@ -80,6 +85,7 @@ export async function PATCH(
   if (parsed.data.role !== undefined) updateData.role = parsed.data.role;
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
   if (parsed.data.teamId !== undefined) updateData.teamId = parsed.data.teamId;
+  if (requestedTeamIds !== undefined) updateData.teamId = requestedTeamIds[0] ?? null;
   if (parsed.data.isActive !== undefined) updateData.isActive = parsed.data.isActive;
   if (parsed.data.discordWebhookUrl !== undefined) updateData.discordWebhookUrl = parsed.data.discordWebhookUrl;
   if (parsed.data.notifyOnStart !== undefined) updateData.notifyOnStart = parsed.data.notifyOnStart;
@@ -107,8 +113,12 @@ export async function PATCH(
     });
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (requestedTeamIds !== undefined) {
+    await replaceUserTeamMemberships(id, requestedTeamIds);
+  }
+  const userTeams = await getUserTeams(id);
   broadcastDataChange("team");
-  return NextResponse.json({ user });
+  return NextResponse.json({ user: { ...user, teams: userTeams, team: userTeams[0] ?? null } });
 }
 
 export async function DELETE(

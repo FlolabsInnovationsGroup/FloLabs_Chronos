@@ -52,6 +52,24 @@ export const users = pgTable(
   (t) => [index("idx_users_team").on(t.teamId)]
 );
 
+export const teamMemberships = pgTable(
+  "team_memberships",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.teamId] }),
+    index("idx_team_memberships_user").on(t.userId),
+    index("idx_team_memberships_team").on(t.teamId),
+  ]
+);
+
 export const invitations = pgTable(
   "invitations",
   {
@@ -156,6 +174,8 @@ export type UserRecord = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type TeamRecord = typeof teams.$inferSelect;
 export type NewTeam = typeof teams.$inferInsert;
+export type TeamMembershipRecord = typeof teamMemberships.$inferSelect;
+export type NewTeamMembership = typeof teamMemberships.$inferInsert;
 export type InvitationRecord = typeof invitations.$inferSelect;
 export type NewInvitation = typeof invitations.$inferInsert;
 export type ProjectRecord = typeof projects.$inferSelect;

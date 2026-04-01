@@ -11,6 +11,7 @@ export interface User {
   createdAt: Date;
   updatedAt: Date;
   team?: Pick<Team, "id" | "name" | "slug"> | null;
+  teams?: Pick<Team, "id" | "name" | "slug" | "isActive">[];
 }
 
 export interface Team {

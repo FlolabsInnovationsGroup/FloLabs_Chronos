@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
-import type { Role } from "@/types";
+import { eq, inArray, sql } from "drizzle-orm";
+import type { Role, Team } from "@/types";
 import { db } from "@/lib/db";
-import { teams, users } from "@/lib/db/schema";
+import { teamMemberships, teams, users } from "@/lib/db/schema";
 
 export interface SessionUserLike {
   id: string;
@@ -38,24 +38,37 @@ export function canViewTeamDirectory(user?: SessionUserLike | null): boolean {
   return Boolean(user);
 }
 
+export async function getAccessibleTeamIds(user: SessionUserLike): Promise<string[] | null> {
+  if (isAdmin(user)) return null;
+  if (!db) return user.teamId ? [user.teamId] : [];
+
+  const rows = await db
+    .select({ teamId: teamMemberships.teamId })
+    .from(teamMemberships)
+    .where(eq(teamMemberships.userId, user.id));
+
+  if (rows.length > 0) {
+    return rows.map((row) => row.teamId);
+  }
+
+  return user.teamId ? [user.teamId] : [];
+}
+
 export async function getAccessibleUserIds(user: SessionUserLike): Promise<string[] | null> {
-  if (isAdmin(user)) {
-    return null;
-  }
+  if (isAdmin(user)) return null;
+  if (!db) return [user.id];
+  if (isMember(user)) return [user.id];
 
-  if (!db) {
-    return [user.id];
-  }
+  const teamIds = await getAccessibleTeamIds(user);
+  if (!teamIds || teamIds.length === 0) return [user.id];
 
-  if (isTeamLead(user) && user.teamId) {
-    const rows = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.teamId, user.teamId));
-    return rows.map((row) => row.id);
-  }
+  const rows = await db
+    .selectDistinct({ id: teamMemberships.userId })
+    .from(teamMemberships)
+    .where(inArray(teamMemberships.teamId, teamIds));
 
-  return [user.id];
+  const ids = rows.map((row) => row.id);
+  return ids.length > 0 ? ids : [user.id];
 }
 
 export async function canAccessUser(user: SessionUserLike, targetUserId: string): Promise<boolean> {
@@ -63,62 +76,87 @@ export async function canAccessUser(user: SessionUserLike, targetUserId: string)
   return accessibleIds === null ? true : accessibleIds.includes(targetUserId);
 }
 
-const userSelectFields = {
-  id: users.id,
-  email: users.email,
-  name: users.name,
-  role: users.role,
-  teamId: users.teamId,
-  isActive: users.isActive,
-  weeklyTargetHours: users.weeklyTargetHours,
-  discordWebhookUrl: users.discordWebhookUrl,
-  notifyOnStart: users.notifyOnStart,
-  notifyOnStop: users.notifyOnStop,
-  dailySummary: users.dailySummary,
-  createdAt: users.createdAt,
-  updatedAt: users.updatedAt,
-  team: { id: teams.id, name: teams.name, slug: teams.slug },
-};
-
 export async function getAccessibleUsers(user: SessionUserLike) {
-  if (!db) {
-    return [];
+  if (!db) return [];
+
+  const accessibleUserIds = await getAccessibleUserIds(user);
+  const baseUsers = accessibleUserIds === null
+    ? await db.select().from(users)
+    : accessibleUserIds.length === 0
+      ? []
+      : await db.select().from(users).where(inArray(users.id, accessibleUserIds));
+
+  if (baseUsers.length === 0) return [];
+
+  const membershipRows = await db
+    .select({
+      userId: teamMemberships.userId,
+      team: {
+        id: teams.id,
+        name: teams.name,
+        slug: teams.slug,
+        isActive: teams.isActive,
+        notionPageId: teams.notionPageId,
+        generalWebhookUrl: teams.generalWebhookUrl,
+        meetingsWebhookUrl: teams.meetingsWebhookUrl,
+        createdAt: teams.createdAt,
+        updatedAt: teams.updatedAt,
+      },
+    })
+    .from(teamMemberships)
+    .innerJoin(teams, eq(teamMemberships.teamId, teams.id))
+    .where(inArray(teamMemberships.userId, baseUsers.map((u) => u.id)));
+
+  const teamsByUser = new Map<string, Team[]>();
+  for (const row of membershipRows) {
+    const list = teamsByUser.get(row.userId) ?? [];
+    list.push(row.team as Team);
+    teamsByUser.set(row.userId, list);
   }
 
-  if (isAdmin(user)) {
-    return db
-      .select(userSelectFields)
-      .from(users)
-      .leftJoin(teams, eq(users.teamId, teams.id));
-  }
-
-  if (user.teamId) {
-    return db
-      .select(userSelectFields)
-      .from(users)
-      .leftJoin(teams, eq(users.teamId, teams.id))
-      .where(eq(users.teamId, user.teamId));
-  }
-
-  return db
-    .select(userSelectFields)
-    .from(users)
-    .leftJoin(teams, eq(users.teamId, teams.id))
-    .where(eq(users.id, user.id));
+  return baseUsers.map((u) => {
+    const userTeams = teamsByUser.get(u.id) ?? [];
+    return {
+      ...u,
+      teams: userTeams,
+      team: userTeams[0] ?? (u.teamId ? { id: u.teamId, name: "", slug: "" } : null),
+    };
+  });
 }
 
 export async function getAccessibleTeams(user: SessionUserLike) {
-  if (!db) {
-    return [];
-  }
+  if (!db) return [];
+  if (isAdmin(user)) return db.select().from(teams).orderBy(teams.name);
 
-  if (isAdmin(user)) {
-    return db.select().from(teams).orderBy(teams.name);
-  }
+  const teamIds = await getAccessibleTeamIds(user);
+  if (!teamIds || teamIds.length === 0) return [];
+  return db.select().from(teams).where(inArray(teams.id, teamIds)).orderBy(teams.name);
+}
 
-  if (!user.teamId) {
-    return [];
+export async function replaceUserTeamMemberships(userId: string, teamIds: string[]) {
+  if (!db) return;
+  await db.delete(teamMemberships).where(eq(teamMemberships.userId, userId));
+  if (teamIds.length > 0) {
+    await db.insert(teamMemberships).values(teamIds.map((teamId) => ({ userId, teamId }))).onConflictDoNothing();
   }
+}
 
-  return db.select().from(teams).where(eq(teams.id, user.teamId));
+export async function getUserTeams(userId: string) {
+  if (!db) return [];
+  const rows = await db
+    .select({
+      id: teams.id,
+      name: teams.name,
+      slug: teams.slug,
+      isActive: teams.isActive,
+      notionPageId: teams.notionPageId,
+      generalWebhookUrl: teams.generalWebhookUrl,
+      meetingsWebhookUrl: teams.meetingsWebhookUrl,
+      createdAt: teams.createdAt,
+      updatedAt: teams.updatedAt,
+    })
+    .from(teamMemberships)
+    .innerJoin(teams, eq(teamMemberships.teamId, teams.id))
+    .where(eq(teamMemberships.userId, userId));
+  return rows as Team[];
 }

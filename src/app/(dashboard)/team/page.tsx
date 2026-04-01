@@ -61,7 +61,7 @@ export default function TeamPage() {
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"member" | "team_lead">("member");
-  const [inviteTeamId, setInviteTeamId] = useState("");
+  const [inviteTeamIds, setInviteTeamIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   const [editRole, setEditRole] = useState<Role>("member");
@@ -116,8 +116,8 @@ export default function TeamPage() {
   );
 
   useEffect(() => {
-    if (!inviteTeamId && teams[0]?.id) setInviteTeamId(teams[0].id);
-  }, [inviteTeamId, teams]);
+    if (inviteTeamIds.length === 0 && teams[0]?.id) setInviteTeamIds([teams[0].id]);
+  }, [inviteTeamIds, teams]);
 
   useEffect(() => {
     if (!editingUser) return;
@@ -144,11 +144,12 @@ export default function TeamPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const data = await readJson(await fetch("/api/invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: inviteName, email: inviteEmail, role: inviteRole, teamId: inviteTeamId }) }));
+      const data = await readJson(await fetch("/api/invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: inviteName, email: inviteEmail, role: inviteRole, teamIds: inviteTeamIds }) }));
       setCopiedInviteUrl(data.inviteUrl ?? "");
       setInviteName("");
       setInviteEmail("");
       setInviteRole("member");
+      setInviteTeamIds([]);
       setShowInvite(false);
       await refresh();
     } catch (err) {
@@ -250,7 +251,7 @@ export default function TeamPage() {
   const teamCards = visibleTeams.map((team) => ({
     ...team,
     memberCount: users.filter((user) => (user.teams ?? []).some((t) => t.id === team.id) && user.isActive).length,
-    pendingInvites: openInvitations.filter((invite) => invite.teamId === team.id).length,
+    pendingInvites: openInvitations.filter((invite) => (invite.teamIds ?? [invite.teamId]).includes(team.id)).length,
   }));
 
   const activeTeamOptions = teams.filter((team) => team.isActive ?? true).map((team) => ({ id: team.id, name: team.name }));
@@ -312,9 +313,9 @@ export default function TeamPage() {
         </div>
       )}
 
-      {role === "admin" && <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-hidden"><table className="w-full"><thead><tr className="bg-[#f5f4ef]">{["Invitee", "Role", "Team", "Expires", "Actions"].map((heading) => <th key={heading} className="text-left px-5 py-3 text-xs font-semibold text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{heading}</th>)}</tr></thead><tbody>{openInvitations.length === 0 ? <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>No invitations yet.</td></tr> : openInvitations.map((invite, index) => (<tr key={invite.id} className={index % 2 === 0 ? "" : "bg-[#fbf9f5]"}><td className="px-5 py-4"><p className="text-sm font-medium text-[#31332f]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{invite.name}</p><p className="text-xs text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{invite.email}</p></td><td className="px-5 py-4"><Badge color={invite.role === "team_lead" ? "secondary" : "tertiary"}>{invite.role}</Badge></td><td className="px-5 py-4"><span className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{invite.team?.name ?? "Unknown"}</span></td><td className="px-5 py-4"><span className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{new Date(invite.expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span></td><td className="px-5 py-4"><div className="flex gap-2"><Button variant="ghost" size="sm" onClick={() => void handleCopyInvite(invite.inviteUrl)}>Copy Link</Button><Button variant="ghost" size="sm" onClick={() => setConfirmDisableInvite(invite)}>Disable</Button><Button variant="danger" size="sm" onClick={() => setConfirmDeleteInvite(invite)}>Delete</Button></div></td></tr>))}</tbody></table></div>}
+      {role === "admin" && <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-hidden"><table className="w-full"><thead><tr className="bg-[#f5f4ef]">{["Invitee", "Role", "Teams", "Expires", "Actions"].map((heading) => <th key={heading} className="text-left px-5 py-3 text-xs font-semibold text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{heading}</th>)}</tr></thead><tbody>{openInvitations.length === 0 ? <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>No invitations yet.</td></tr> : openInvitations.map((invite, index) => (<tr key={invite.id} className={index % 2 === 0 ? "" : "bg-[#fbf9f5]"}><td className="px-5 py-4"><p className="text-sm font-medium text-[#31332f]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{invite.name}</p><p className="text-xs text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{invite.email}</p></td><td className="px-5 py-4"><Badge color={invite.role === "team_lead" ? "secondary" : "tertiary"}>{invite.role}</Badge></td><td className="px-5 py-4"><span className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{(invite.teams ?? []).map((team) => team.name).join(", ") || "Unknown"}</span></td><td className="px-5 py-4"><span className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{new Date(invite.expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span></td><td className="px-5 py-4"><div className="flex gap-2"><Button variant="ghost" size="sm" onClick={() => void handleCopyInvite(invite.inviteUrl)}>Copy Link</Button><Button variant="ghost" size="sm" onClick={() => setConfirmDisableInvite(invite)}>Disable</Button><Button variant="danger" size="sm" onClick={() => setConfirmDeleteInvite(invite)}>Delete</Button></div></td></tr>))}</tbody></table></div>}
 
-      <Modal open={showInvite} onClose={() => setShowInvite(false)} title="Invite Member"><form onSubmit={handleInvite} className="flex flex-col gap-4"><Input label="Full Name" value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="Jane Smith" /><Input label="Email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="jane@example.com" /><Select label="Role" options={INVITE_ROLES} value={inviteRole} onChange={(value) => setInviteRole(value as "member" | "team_lead")} /><Select label="Initial Team" options={teams.filter((team) => team.isActive ?? true).map((team) => ({ value: team.id, label: team.name }))} value={inviteTeamId} onChange={setInviteTeamId} placeholder="Choose a team" /><div className="flex justify-end gap-3"><Button variant="ghost" type="button" onClick={() => setShowInvite(false)}>Cancel</Button><Button variant="primary" type="submit" loading={saving}>Create Invitation</Button></div></form></Modal>
+      <Modal open={showInvite} onClose={() => setShowInvite(false)} title="Invite Member"><form onSubmit={handleInvite} className="flex flex-col gap-4"><Input label="Full Name" value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="Jane Smith" /><Input label="Email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="jane@example.com" /><Select label="Role" options={INVITE_ROLES} value={inviteRole} onChange={(value) => setInviteRole(value as "member" | "team_lead")} /><div className="flex flex-col gap-1.5"><label className="text-xs font-medium text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Teams</label><MultiSelect options={activeTeamOptions} value={inviteTeamIds} onChange={setInviteTeamIds} placeholder="Choose one or more teams" /></div><div className="flex justify-end gap-3"><Button variant="ghost" type="button" onClick={() => setShowInvite(false)}>Cancel</Button><Button variant="primary" type="submit" loading={saving}>Create Invitation</Button></div></form></Modal>
 
       <Modal open={!!editingUser} onClose={() => setEditingUser(null)} title="Edit Member"><form onSubmit={handleEditUser} className="flex flex-col gap-4">{role === "admin" && <><Select label="Role" options={EDIT_ROLES} value={editRole} onChange={(value) => setEditRole(value as Role)} /><div className="flex flex-col gap-1.5"><label className="text-xs font-medium text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Teams</label><MultiSelect options={activeTeamOptions} value={editTeamIds} onChange={setEditTeamIds} placeholder={editRole === "admin" ? "Admins can stay unassigned" : "Choose one or more teams"} disabled={editRole === "admin"} /></div><label className="flex items-center gap-2.5 cursor-pointer"><input type="checkbox" checked={editIsActive} onChange={(e) => setEditIsActive(e.target.checked)} className="w-4 h-4 rounded accent-[#366769]" /><span className="text-sm text-[#31332f]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Active account</span></label></>}<Input label="Weekly Target (hours)" type="number" value={String(editWeeklyTarget)} onChange={(e) => setEditWeeklyTarget(Math.max(0, Math.min(168, Number(e.target.value) || 0)))} hint={`Daily target: ${(editWeeklyTarget / 5).toFixed(1)}h (Mon–Fri)`} /><div className="flex justify-end gap-3"><Button variant="ghost" type="button" onClick={() => setEditingUser(null)}>Cancel</Button><Button variant="primary" type="submit" loading={saving}>Save Changes</Button></div></form></Modal>
 
@@ -324,3 +325,5 @@ export default function TeamPage() {
     </div>
   );
 }
+
+

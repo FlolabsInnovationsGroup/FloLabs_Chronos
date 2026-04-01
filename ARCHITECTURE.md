@@ -44,6 +44,7 @@ The V1 operating model is:
 ### Team Model
 
 Chronos now supports **multiple teams per user**.
+- The Team page member edit modal uses multi-select and saves all selected teams.
 - `team_memberships` is the source of truth for user ↔ team membership.
 - `users.team_id` remains only as a legacy primary/default team pointer for backward compatibility.
 - A user can belong to zero, one, or many teams.
@@ -65,7 +66,7 @@ Tags are **per-user**:
 ### Invitations
 
 User onboarding is invite-based:
-1. An admin or sync job creates an invitation for an email address and selects one or more teams + role.
+1. An admin or sync job creates an invitation for an email address and selects one or more teams + role. The Team page invitation UI uses multi-select for teams.
 2. The system generates a one-time registration token.
 3. The invite link points to `/register?invite=<token>`.
 4. Registration is only allowed when the token is valid, unexpired, and matches the invite email.

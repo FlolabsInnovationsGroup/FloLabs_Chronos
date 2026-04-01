@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, isNotNull } from "drizzle-orm";
 import type { Role, Team } from "@/types";
 import { db } from "@/lib/db";
 import { teamMemberships, teams, users } from "@/lib/db/schema";
@@ -126,7 +126,7 @@ export async function getAccessibleUsers(user: SessionUserLike) {
 
 export async function getAccessibleTeams(user: SessionUserLike) {
   if (!db) return [];
-  if (isAdmin(user)) return db.select().from(teams).orderBy(teams.name);
+  if (isAdmin(user)) return db.select().from(teams).where(isNotNull(teams.notionPageId)).orderBy(teams.name);
 
   const teamIds = await getAccessibleTeamIds(user);
   if (!teamIds || teamIds.length === 0) return [];

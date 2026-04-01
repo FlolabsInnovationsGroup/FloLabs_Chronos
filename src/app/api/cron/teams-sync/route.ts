@@ -150,28 +150,59 @@ export async function GET(req: Request) {
         const slug = createTeamSlug(fullName);
         seenNotionPageIds.push(page.id);
 
-        const [team] = await db
-          .insert(teams)
-          .values({
-            name: fullName,
-            slug,
-            isActive,
-            notionPageId: page.id,
-            generalWebhookUrl,
-            meetingsWebhookUrl,
-          })
-          .onConflictDoUpdate({
-            target: teams.notionPageId,
-            set: {
+        const existingByNotion = await db
+          .select({ id: teams.id })
+          .from(teams)
+          .where(eq(teams.notionPageId, page.id))
+          .limit(1);
+
+        const existingBySlug = await db
+          .select({ id: teams.id, notionPageId: teams.notionPageId })
+          .from(teams)
+          .where(eq(teams.slug, slug))
+          .limit(1);
+
+        let team;
+        if (existingByNotion[0]) {
+          [team] = await db
+            .update(teams)
+            .set({
               name: fullName,
               slug,
               isActive,
               generalWebhookUrl,
               meetingsWebhookUrl,
               updatedAt: new Date(),
-            },
-          })
-          .returning({ id: teams.id });
+            })
+            .where(eq(teams.id, existingByNotion[0].id))
+            .returning({ id: teams.id });
+        } else if (existingBySlug[0]) {
+          [team] = await db
+            .update(teams)
+            .set({
+              name: fullName,
+              slug,
+              isActive,
+              notionPageId: page.id,
+              generalWebhookUrl,
+              meetingsWebhookUrl,
+              updatedAt: new Date(),
+            })
+            .where(eq(teams.id, existingBySlug[0].id))
+            .returning({ id: teams.id });
+        } else {
+          [team] = await db
+            .insert(teams)
+            .values({
+              name: fullName,
+              slug,
+              isActive,
+              notionPageId: page.id,
+              generalWebhookUrl,
+              meetingsWebhookUrl,
+            })
+            .returning({ id: teams.id });
+        }
 
         if (!team) continue;
         upserted++;

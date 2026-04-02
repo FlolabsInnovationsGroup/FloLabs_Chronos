@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, timeEntryTags } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { timeEntries, timeEntryTags, projects, tags, users } from "@/lib/db/schema";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
+import { deleteAndNotifyEntry, syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 
 const patchSchema = z.object({
   description: z.string().optional(),
@@ -112,6 +113,10 @@ export async function PATCH(
     }
   }
 
+  if (updated.stoppedAt) {
+    await syncAndNotifyEntry(updated.id).catch(() => {});
+  }
+
   return NextResponse.json({ entry: updated });
 }
 
@@ -131,7 +136,26 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const tagRows = await db.select({ tagId: timeEntryTags.tagId }).from(timeEntryTags).where(eq(timeEntryTags.timeEntryId, id));
+  const tagNames = tagRows.length > 0
+    ? (await db.select({ name: tags.name }).from(tags).where(inArray(tags.id, tagRows.map((row) => row.tagId)))).map((row) => row.name)
+    : [];
+  const [projectRow] = await db.select({ name: projects.name }).from(projects).where(eq(projects.id, entry.projectId)).limit(1);
+  const [userRow] = await db.select({ name: users.name, notionTeamMemberId: users.notionTeamMemberId }).from(users).where(eq(users.id, entry.userId)).limit(1);
+
   // timeEntryTags rows cascade-delete automatically
   await db.delete(timeEntries).where(eq(timeEntries.id, id));
+
+  await deleteAndNotifyEntry({
+    notionPageId: entry.notionPageId,
+    notionTeamMemberId: userRow?.notionTeamMemberId ?? null,
+    userName: userRow?.name ?? "Unknown",
+    project: projectRow?.name ?? "Unknown",
+    tags: tagNames,
+    description: entry.description ?? "",
+    durationMs: entry.durationMs ?? 0,
+    startedAt: new Date(entry.startedAt),
+  }).catch(() => {});
+
   return NextResponse.json({ success: true });
 }

@@ -5,6 +5,7 @@ import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/sche
 import { eq, and, gte, lte, desc, inArray, isNotNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getAccessibleUserIds } from "@/lib/permissions";
+import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 
 // Given a list of entry rows, fetch and attach tags from the join table.
 async function attachTags(
@@ -124,6 +125,10 @@ export async function POST(req: Request) {
 
   const createdTagMap = await attachTags([{ id: entry.id }]);
   const createdTags = createdTagMap.get(entry.id) ?? [];
+
+  if (entry.stoppedAt) {
+    await syncAndNotifyEntry(entry.id).catch(() => {});
+  }
 
   return NextResponse.json({ entry: { ...entry, tags: createdTags } }, { status: 201 });
 }

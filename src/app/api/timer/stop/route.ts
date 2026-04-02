@@ -6,6 +6,7 @@ import { timeEntries, timeEntryTags, users, projects } from "@/lib/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { sendDiscordEmbed, buildTimerStopEmbed } from "@/lib/discord";
+import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 
 const stopSchema = z.object({ discard: z.boolean().optional() });
 
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
           isNull(timeEntries.stoppedAt)
         )
       )
-      .returning({ id: timeEntries.id, startedAt: timeEntries.startedAt, description: timeEntries.description, updatedAt: timeEntries.updatedAt });
+      .returning({ id: timeEntries.id });
 
     // Insert tag associations for the completed entry
     const tagIds: string[] = Array.isArray(timer.tagIds) ? timer.tagIds : [];
@@ -60,6 +61,9 @@ export async function POST(req: Request) {
         .onConflictDoNothing();
     }
 
+    if (updated[0]?.id) {
+      await syncAndNotifyEntry(updated[0].id).catch(() => {});
+    }
   } else if (db && discard) {
     // Delete the running entry (timeEntryTags cascade automatically)
     await db

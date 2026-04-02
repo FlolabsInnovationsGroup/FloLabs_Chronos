@@ -178,10 +178,10 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
           value={description}
           onChange={(e) => {
             setDescription(e.target.value);
-            if (!activeTimer) setShowSuggestions(true);
+            setShowSuggestions(true);
           }}
           onFocus={() => {
-            if (!activeTimer) setShowSuggestions(true);
+            setShowSuggestions(true);
           }}
           onBlur={() => {
             setTimeout(() => setShowSuggestions(false), 120);

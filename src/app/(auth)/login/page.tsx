@@ -42,12 +42,10 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#fbf9f5] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         {/* Brand */}
-        <div className="text-center mb-10">
-          <div className="flex justify-center mb-4">
-            <Image src="/flchron-logo.svg" alt="FloLabs Chronos" width={180} height={42} priority className="h-10 w-auto" />
-          </div>
+        <div className="text-center mb-10 flex flex-col items-center">
+          <Image src="/flchron-logo.svg" alt="FloLabs Chronos" width={180} height={42} priority className="h-10 w-auto mb-4" />
           <p
-            className="text-sm text-[#5e605b] mt-2"
+            className="text-sm text-[#5e605b]"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Sign in to track your time

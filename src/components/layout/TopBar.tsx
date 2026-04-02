@@ -54,16 +54,6 @@ export function TopBar() {
             })}
           </nav>
 
-          {/* Search button */}
-          <button
-            className="p-2 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors"
-            aria-label="Search"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
-              search
-            </span>
-          </button>
-
           {/* User avatar */}
           <div
             className="w-8 h-8 rounded-full bg-[#366769] text-[#e3feff] flex items-center justify-center text-sm font-semibold cursor-pointer select-none"

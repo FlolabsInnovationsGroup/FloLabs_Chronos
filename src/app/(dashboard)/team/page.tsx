@@ -51,7 +51,7 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [copiedInviteUrl, setCopiedInviteUrl] = useState("");
-  const [activeTab, setActiveTab] = useState<"teams" | "users">("teams");
+  const [activeTab, setActiveTab] = useState<"teams" | "users">("users");
 
   const [showInvite, setShowInvite] = useState(false);
   const [editingUser, setEditingUser] = useState<TeamUser | null>(null);
@@ -185,7 +185,7 @@ export default function TeamPage() {
   const activeTeamOptions = teams.filter((team) => team.isActive ?? true).map((team) => ({ id: team.id, name: team.name }));
 
   return <div className="flex flex-col gap-8 max-w-6xl mx-auto">
-    <div className="flex items-start justify-between gap-4"><div><h1 className="text-2xl font-light italic text-[#31332f]" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Teams</h1><p className="text-sm text-[#5e605b] mt-1" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{role === "admin" ? "Admins manage teams, invitations, and member roles." : role === "team_lead" ? "You can see the members across all teams you belong to." : "You can see all teams you belong to."}</p></div>{role === "admin" && <div className="flex gap-2"><Button variant="primary" onClick={() => setShowInvite(true)}>Invite Member</Button></div>}</div>
+    <div className="flex items-start justify-between gap-4"><div><h1 className="text-2xl font-light italic text-[#31332f]" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Users</h1><p className="text-sm text-[#5e605b] mt-1" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{role === "admin" ? "Admins manage teams, invitations, and member roles." : role === "team_lead" ? "You can see the members across all teams you belong to." : "You can see all teams you belong to."}</p></div>{role === "admin" && <div className="flex gap-2"><Button variant="primary" onClick={() => setShowInvite(true)}>Invite Member</Button></div>}</div>
     <div className="inline-flex rounded-xl bg-[#f5f4ef] p-1 self-start"><button className={`px-4 py-2 rounded-lg text-sm ${activeTab === "teams" ? "bg-white text-[#31332f] shadow-sm" : "text-[#5e605b]"}`} onClick={() => setActiveTab("teams")}>Teams</button><button className={`px-4 py-2 rounded-lg text-sm ${activeTab === "users" ? "bg-white text-[#31332f] shadow-sm" : "text-[#5e605b]"}`} onClick={() => setActiveTab("users")}>Users</button></div>
     {copiedInviteUrl && <div className="rounded-xl bg-[#f5f4ef] p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><p className="text-sm text-[#31332f] break-all" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{copiedInviteUrl}</p><Button variant="ghost" size="sm" onClick={() => void handleCopyInvite(copiedInviteUrl)}>Copy Link</Button></div>}
     {error && <p className="text-sm text-[#a73b21] bg-[#fff7f6] px-4 py-3 rounded-xl" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{error}</p>}
@@ -198,3 +198,4 @@ export default function TeamPage() {
     <Modal open={!!confirmDeleteInvite} onClose={() => setConfirmDeleteInvite(null)} title="Delete invitation link" size="sm"><div className="flex flex-col gap-4"><p className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Delete the invitation for {confirmDeleteInvite?.email}? This cannot be undone.</p><div className="flex justify-end gap-3"><Button variant="primary" type="button" onClick={() => setConfirmDeleteInvite(null)}>Cancel</Button><Button variant="danger" type="button" onClick={() => void handleDeleteInvite()} loading={saving}>Delete link</Button></div></div></Modal>
   </div>;
 }
+

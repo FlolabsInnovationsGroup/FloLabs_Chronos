@@ -21,8 +21,10 @@ function notionHeaders() {
 interface NotionProperty {
   type: string;
   title?: { plain_text: string }[];
+  rich_text?: { plain_text: string }[];
   status?: { name: string };
   url?: string | null;
+  email?: string | null;
   relation?: { id: string }[];
 }
 
@@ -31,22 +33,52 @@ interface NotionPage {
   properties: Record<string, NotionProperty>;
 }
 
-function normalizeName(value: string) {
-  return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+/**
+ * Normalise a human name for fuzzy matching.
+ * Matches the approach in live_reports_bot.py:
+ *   - NFKD decomposition to strip accents / diacritics
+ *   - Latin letters with strokes (Ł, Ø, Đ …) mapped to ASCII base
+ *   - lowercase, strip punctuation, collapse whitespace
+ */
+function normalizeName(value: string): string {
+  let s = (value ?? "").normalize("NFKD");
+
+  // Map Latin letters with strokes/ligatures to ASCII base where possible
+  s = s.replace(/[\u0141\u0142]/g, "l")  // Ł ł → l
+       .replace(/[\u00D8\u00F8]/g, "o")  // Ø ø → o
+       .replace(/[\u0110\u0111]/g, "d")  // Đ đ → d
+       .replace(/[\u0126\u0127]/g, "h")  // Ħ ħ → h
+       .replace(/[\u0166\u0167]/g, "t")  // Ŧ ŧ → t
+       .replace(/[\u00C6\u00E6]/g, "ae") // Æ æ → ae
+       .replace(/[\u00DF]/g, "ss");       // ß → ss
+
+  // Strip remaining combining marks (accents)
+  s = s.replace(/[\u0300-\u036f]/g, "");
+
+  s = s.toLowerCase();
+
+  // Replace non-alphanumeric (except spaces) with space
+  s = s.replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  return s;
 }
 
-function scoreNameMatch(a: string, b: string) {
-  const aa = new Set(normalizeName(a).split(" ").filter(Boolean));
-  const bb = new Set(normalizeName(b).split(" ").filter(Boolean));
-  const inter = [...aa].filter((token) => bb.has(token)).length;
+function tokenize(s: string): Set<string> {
+  return new Set(normalizeName(s).split(" ").filter(Boolean));
+}
+
+function scoreNameMatch(a: string, b: string): number {
+  const aa = tokenize(a);
+  const bb = tokenize(b);
+  const inter = [...aa].filter((t) => bb.has(t)).length;
   const union = new Set([...aa, ...bb]).size;
-  return union === 0 ? 0 : inter / union;
+  if (union === 0) return 0;
+  let score = inter / union;
+  // Bonus for prefix/substring match (mirrors live_reports_bot.py)
+  const na = normalizeName(a);
+  const nb = normalizeName(b);
+  if (na.startsWith(nb) || nb.startsWith(na)) score += 0.15;
+  if (na.includes(nb) || nb.includes(na)) score += 0.10;
+  return Math.min(1, score);
 }
 
 async function queryAllPages(databaseId: string): Promise<NotionPage[]> {
@@ -110,28 +142,45 @@ export async function GET(req: Request) {
     const [teamPages, memberPages, userRows] = await Promise.all([
       queryAllPages(process.env.NOTION_TEAMS_DB_ID),
       queryAllPages(process.env.NOTION_TEAM_MEMBERS_DB_ID),
-      db.select({ id: users.id, name: users.name }).from(users),
+      db.select({ id: users.id, name: users.name, email: users.email }).from(users),
     ]);
 
-    const memberNameByPageId = new Map<string, string>();
-    for (const page of memberPages) {
-      const name = getTitle(page);
-      if (name) memberNameByPageId.set(page.id, name);
+    // Build email index for O(1) exact matching
+    const userByEmail = new Map<string, string>(); // email -> userId
+    for (const user of userRows) {
+      if (user.email) userByEmail.set(user.email.toLowerCase().trim(), user.id);
+    }
+
+    function getEmail(page: NotionPage): string | null {
+      for (const [key, prop] of Object.entries(page.properties)) {
+        if (prop.type === "email" && prop.email && (key === "Email" || key === "Personal Email")) {
+          return (prop.email as string).toLowerCase().trim();
+        }
+      }
+      return null;
     }
 
     const chronosUserByMemberPageId = new Map<string, string>();
-    for (const [pageId, memberName] of memberNameByPageId.entries()) {
+    for (const page of memberPages) {
+      const name = getTitle(page);
+      const email = getEmail(page);
+
+      // 1. Exact email match (fastest, most reliable)
+      if (email) {
+        const uid = userByEmail.get(email);
+        if (uid) { chronosUserByMemberPageId.set(page.id, uid); continue; }
+      }
+
+      // 2. Fuzzy name match (same algorithm as live_reports_bot.py)
+      if (!name) continue;
       let bestUserId: string | null = null;
       let bestScore = 0;
       for (const user of userRows) {
-        const score = scoreNameMatch(memberName, user.name);
-        if (score > bestScore) {
-          bestScore = score;
-          bestUserId = user.id;
-        }
+        const score = scoreNameMatch(name, user.name);
+        if (score > bestScore) { bestScore = score; bestUserId = user.id; }
       }
       if (bestUserId && bestScore >= 0.4) {
-        chronosUserByMemberPageId.set(pageId, bestUserId);
+        chronosUserByMemberPageId.set(page.id, bestUserId);
       }
     }
 

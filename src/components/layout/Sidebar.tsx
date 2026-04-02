@@ -14,7 +14,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/timer", icon: "schedule", label: "Timer" },
   { href: "/projects", icon: "folder", label: "Projects" },
   { href: "/tags", icon: "label", label: "Tags" },
-  { href: "/team", icon: "group", label: "Teams" },
+  { href: "/team", icon: "group", label: "Users" },
   { href: "/reports", icon: "bar_chart", label: "Reports" },
 ];
 

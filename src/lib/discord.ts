@@ -118,13 +118,26 @@ export async function resolveDiscordWebhookForTeamMember(
   return null;
 }
 
-/** Format a date as YYYY-MM-DD HH:MM:SS */
+/** Format a date as `2 April 2026 15:00:00 UTC` */
 function fmtDatetime(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
-    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  );
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+  }).format(d).replace(",", "") + " UTC";
+}
+
+function formatChangeValue(field: string, value: string): string {
+  if ((field === "startedAt" || field === "stoppedAt") && value) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return fmtDatetime(parsed);
+  }
+  return value;
 }
 
 /** Format durationMs as Xh Ym Zs */
@@ -189,10 +202,12 @@ export function buildEntryEditedMessage(params: {
   function maybeStrike(field: string, current: string): string {
     const ch = changedFields.get(field);
     if (!ch) return current;
-    return `~~${ch.oldValue}~~ ${ch.newValue}`;
+    return `~~${formatChangeValue(field, ch.oldValue)}~~ ${formatChangeValue(field, ch.newValue)}`;
   }
 
-  const changesSummary = changes.map((c) => `${c.field}: ~~${c.oldValue}~~ → ${c.newValue}`).join(", ");
+  const changesSummary = changes
+    .map((c) => `${c.field}: ~~${formatChangeValue(c.field, c.oldValue)}~~ → ${formatChangeValue(c.field, c.newValue)}`)
+    .join(", ");
 
   const lines = [
     "## ✍️ Time Entry Edited",

@@ -36,6 +36,15 @@ export async function PATCH(
 
   const { tagIds, startedAt: startedAtStr, stoppedAt: stoppedAtStr, ...entryFields } = parsed.data;
 
+  const previousTagIds = await db
+    .select({ tagId: timeEntryTags.tagId })
+    .from(timeEntryTags)
+    .where(eq(timeEntryTags.timeEntryId, id));
+  const previousTagNames = previousTagIds.length > 0
+    ? (await db.select({ name: tags.name }).from(tags).where(inArray(tags.id, previousTagIds.map((row) => row.tagId)))).map((row) => row.name)
+    : [];
+  const [previousProject] = await db.select({ name: projects.name }).from(projects).where(eq(projects.id, entry.projectId)).limit(1);
+
   // Enforce editedField lock for start/end time edits
   if (startedAtStr !== undefined || stoppedAtStr !== undefined) {
     // Active timers (no stoppedAt) cannot have start/end edited
@@ -113,8 +122,22 @@ export async function PATCH(
     }
   }
 
+  const nextTagIds = tagIds ?? previousTagIds.map((row) => row.tagId);
+  const nextTagNames = nextTagIds.length > 0
+    ? (await db.select({ name: tags.name }).from(tags).where(inArray(tags.id, nextTagIds))).map((row) => row.name)
+    : [];
+  const [updatedProject] = await db.select({ name: projects.name }).from(projects).where(eq(projects.id, updated.projectId)).limit(1);
+
+  const changes: Array<{ field: string; oldValue: string; newValue: string }> = [];
+  if ((entry.description ?? "") !== (updated.description ?? "")) changes.push({ field: "description", oldValue: entry.description ?? "No description", newValue: updated.description ?? "No description" });
+  if ((previousProject?.name ?? "Unknown") !== (updatedProject?.name ?? "Unknown")) changes.push({ field: "project", oldValue: previousProject?.name ?? "Unknown", newValue: updatedProject?.name ?? "Unknown" });
+  if (previousTagNames.join(", ") !== nextTagNames.join(", ")) changes.push({ field: "tags", oldValue: previousTagNames.join(", ") || "No tags", newValue: nextTagNames.join(", ") || "No tags" });
+  if ((entry.durationMs ?? 0) !== (updated.durationMs ?? 0)) changes.push({ field: "duration", oldValue: String(entry.durationMs ?? 0), newValue: String(updated.durationMs ?? 0) });
+  if (new Date(entry.startedAt).getTime() !== new Date(updated.startedAt).getTime()) changes.push({ field: "startedAt", oldValue: new Date(entry.startedAt).toISOString(), newValue: new Date(updated.startedAt).toISOString() });
+  if (entry.stoppedAt && updated.stoppedAt && new Date(entry.stoppedAt).getTime() !== new Date(updated.stoppedAt).getTime()) changes.push({ field: "stoppedAt", oldValue: new Date(entry.stoppedAt).toISOString(), newValue: new Date(updated.stoppedAt).toISOString() });
+
   if (updated.stoppedAt) {
-    await syncAndNotifyEntry(updated.id).catch(() => {});
+    await syncAndNotifyEntry(updated.id, changes).catch(() => {});
   }
 
   return NextResponse.json({ entry: updated });

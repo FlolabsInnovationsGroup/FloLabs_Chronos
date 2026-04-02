@@ -49,7 +49,10 @@ async function loadEntry(entryId: string) {
   };
 }
 
-export async function syncAndNotifyEntry(entryId: string) {
+export async function syncAndNotifyEntry(
+  entryId: string,
+  changes: Array<{ field: string; oldValue: string; newValue: string }> = []
+) {
   if (!db) return { synced: false, notified: false, reason: "db-unavailable" };
 
   const entry = await loadEntry(entryId);
@@ -88,7 +91,7 @@ export async function syncAndNotifyEntry(entryId: string) {
         startedAt: new Date(entry.startedAt),
         stoppedAt: entry.stoppedAt ? new Date(entry.stoppedAt) : null,
         updatedAt: new Date(entry.updatedAt ?? entry.startedAt),
-        changes: [],
+        changes,
       });
 
   if (delivered) {

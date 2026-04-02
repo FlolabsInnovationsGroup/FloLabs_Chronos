@@ -99,13 +99,21 @@ export async function POST(req: Request) {
   }
 
   // action === "changeProject"
+  const previousProjects = new Map<string, string>();
+  for (const entry of found) {
+    const [projectRow] = await db.select({ name: projects.name }).from(projects).innerJoin(timeEntries, eq(projects.id, timeEntries.projectId)).where(eq(timeEntries.id, entry.id)).limit(1);
+    previousProjects.set(entry.id, projectRow?.name ?? "Unknown");
+  }
+
+  const [newProject] = await db.select({ name: projects.name }).from(projects).where(eq(projects.id, parsed.data.projectId)).limit(1);
+
   await db
     .update(timeEntries)
     .set({ projectId: parsed.data.projectId, updatedAt: new Date() })
     .where(inArray(timeEntries.id, entryIds));
 
   for (const entryId of entryIds) {
-    await syncAndNotifyEntry(entryId).catch(() => {});
+    await syncAndNotifyEntry(entryId, [{ field: "project", oldValue: previousProjects.get(entryId) ?? "Unknown", newValue: newProject?.name ?? "Unknown" }]).catch(() => {});
   }
 
   return NextResponse.json({ success: true, updated: entryIds.length });

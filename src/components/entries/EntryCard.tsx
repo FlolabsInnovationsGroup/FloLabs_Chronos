@@ -25,6 +25,7 @@ interface EntryCardProps {
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   anySelected?: boolean;
+  showUser?: boolean;
 }
 
 function pad2(value: number) {
@@ -37,7 +38,7 @@ function toDatetimeLocal(value: Date | string | null | undefined) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
-export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect, anySelected = false }: EntryCardProps) {
+export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect, anySelected = false, showUser = false }: EntryCardProps) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -169,7 +170,7 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
       <div className="group flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-[#f5f4ef] transition-colors duration-150 cursor-default" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
         {onToggleSelect && <div className={`shrink-0 transition-opacity duration-150 ${anySelected || hovered ? "opacity-100" : "opacity-0"}`}><input type="checkbox" checked={isSelected} onChange={() => onToggleSelect(entry.id)} onClick={(e) => e.stopPropagation()} className="w-4 h-4 rounded cursor-pointer accent-[#366769]" aria-label="Select entry" /></div>}
         <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${projectColor}20` }}><span className="material-symbols-outlined" style={{ fontSize: "18px", color: projectColor }}>{entry.project?.icon ?? "timer"}</span></div>
-        <div className="flex-1 min-w-0 flex flex-col gap-1"><p className="text-base italic text-[#31332f] truncate" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>{entry.description || <span className="text-[#b2b2ad] not-italic">No description</span>}</p><div className="flex items-center gap-2 flex-wrap"><Badge color="primary" dot dotColor={projectColor}>{projectName}</Badge>{entryTags.map((tag) => <Badge key={tag.id} color="tertiary"><span className="material-symbols-outlined mr-0.5" style={{ fontSize: "11px" }}>label</span>{tag.name}</Badge>)}<span className="text-xs text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{startTime} – {endTime}</span></div></div>
+        <div className="flex-1 min-w-0 flex flex-col gap-1"><p className="text-base italic text-[#31332f] truncate" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>{entry.description || <span className="text-[#b2b2ad] not-italic">No description</span>}</p><div className="flex items-center gap-2 flex-wrap">{showUser && entry.user?.name && <Badge color="secondary"><span className="material-symbols-outlined mr-0.5" style={{ fontSize: "11px" }}>person</span>{entry.user.name}</Badge>}<Badge color="primary" dot dotColor={projectColor}>{projectName}</Badge>{entryTags.map((tag) => <Badge key={tag.id} color="tertiary"><span className="material-symbols-outlined mr-0.5" style={{ fontSize: "11px" }}>label</span>{tag.name}</Badge>)}<span className="text-xs text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{startTime} – {endTime}</span></div></div>
         <div className="flex items-center gap-1 shrink-0">
           {onResume && <Tooltip label="Resume"><button onClick={() => onResume(entry)} className={`p-1.5 rounded-lg text-[#366769] hover:bg-[#b9ecee] transition-all duration-150 ${hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`} aria-label="Resume this entry"><span className="material-symbols-outlined" style={{ fontSize: "18px" }}>play_arrow</span></button></Tooltip>}
           <Tooltip label="Edit"><button onClick={openEdit} className={`p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] transition-all duration-150 ${hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`} aria-label="Edit this entry"><span className="material-symbols-outlined" style={{ fontSize: "18px" }}>edit</span></button></Tooltip>

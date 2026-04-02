@@ -19,6 +19,7 @@ interface EntryListProps {
   onResume?: (entry: TimeEntry) => void;
   emptyMessage?: string;
   grouped?: boolean;
+  showUser?: boolean;
 }
 
 export function EntryList({
@@ -26,6 +27,7 @@ export function EntryList({
   onResume,
   emptyMessage = "No time entries yet. Start your first session above.",
   grouped = true,
+  showUser = false,
 }: EntryListProps) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -199,7 +201,8 @@ export function EntryList({
                       isSelected={selectedIds.has(entry.id)}
                       onToggleSelect={toggleSelect}
                       anySelected={anySelected}
-                    />
+                      showUser={showUser}
+              />
                   ))}
                 </div>
               </div>
@@ -215,6 +218,7 @@ export function EntryList({
                 isSelected={selectedIds.has(entry.id)}
                 onToggleSelect={toggleSelect}
                 anySelected={anySelected}
+                showUser={showUser}
               />
             ))}
           </div>
@@ -332,3 +336,5 @@ export function EntryList({
     </>
   );
 }
+
+

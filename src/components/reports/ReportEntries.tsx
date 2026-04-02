@@ -8,7 +8,7 @@ interface ReportEntriesProps {
   entries: TimeEntry[];
 }
 
-type SortKey = "duration" | "project" | "tags" | "date" | "description";
+type SortKey = "duration" | "project" | "tags" | "date" | "description" | "user";
 type SortDir = "asc" | "desc";
 
 export function ReportEntries({ entries }: ReportEntriesProps) {
@@ -42,6 +42,8 @@ export function ReportEntries({ entries }: ReportEntriesProps) {
         }
         case "description":
           return mult * (a.description ?? "").localeCompare(b.description ?? "");
+        case "user":
+          return mult * (a.user?.name ?? "").localeCompare(b.user?.name ?? "");
         case "date":
         default:
           return mult * (new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime());
@@ -53,6 +55,7 @@ export function ReportEntries({ entries }: ReportEntriesProps) {
 
   const columns: { label: string; key: SortKey }[] = [
     { label: "Date", key: "date" },
+    { label: "User", key: "user" },
     { label: "Description", key: "description" },
     { label: "Project", key: "project" },
     { label: "Tags", key: "tags" },
@@ -92,7 +95,7 @@ export function ReportEntries({ entries }: ReportEntriesProps) {
 
       {expanded && (
         <div className="px-2 py-2 flex flex-col gap-3">
-          <div className="grid grid-cols-5 gap-2 px-4 py-2 rounded-xl bg-[#f5f4ef]">
+          <div className="grid grid-cols-6 gap-2 px-4 py-2 rounded-xl bg-[#f5f4ef]">
             {columns.map((column) => (
               <button
                 key={column.key}
@@ -115,6 +118,7 @@ export function ReportEntries({ entries }: ReportEntriesProps) {
             entries={sortedEntries}
             emptyMessage="No entries match the current filters."
             grouped={false}
+            showUser
           />
         </div>
       )}

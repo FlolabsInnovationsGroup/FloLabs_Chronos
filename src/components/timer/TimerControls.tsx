@@ -174,7 +174,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
         />
         {activeTimer && !description.trim() && (
           <p className="text-xs text-[#a73b21]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
-            Add a description to unlock Stop Session.
+            Add a description to stop this timer.
           </p>
         )}
         {activeTimer && descriptionSaving && (

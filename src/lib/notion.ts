@@ -377,7 +377,8 @@ export async function resolveTeamMemberPageId(userName: string): Promise<string 
 export function buildNotionEntryProperties(
   entry: FullEntry,
   teamMemberPageId: string | null,
-  status: string
+  status: string,
+  dbProperties?: Record<string, NotionDatabaseProperty>
 ): Record<string, unknown> {
   const durationSecs = entry.durationMs ? Math.round(entry.durationMs / 1000) : 0;
   const tagNames = (entry.tags ?? []).map((t) => t.name);
@@ -385,24 +386,31 @@ export function buildNotionEntryProperties(
     ? `${entry.user.name} — ${new Date(entry.startedAt).toISOString().split("T")[0]}`
     : entry.id;
 
-  const properties: Record<string, unknown> = {
-    "User Key": buildTitleValue(userKey),
-    "Entry ID": buildRichTextValue(entry.id),
-    "Project": { select: { name: entry.project?.name ?? "Unknown" } },
-    "Tags": { multi_select: tagNames.map((n) => ({ name: n })) },
-    "Date": {
-      date: {
-        start: new Date(entry.startedAt).toISOString(),
-        end: entry.stoppedAt ? new Date(entry.stoppedAt).toISOString() : undefined,
-      },
+  const properties: Record<string, unknown> = {};
+  const schema = dbProperties ?? {};
+
+  const userKeyType = schema["User Key"]?.type;
+  properties["User Key"] = userKeyType === "rich_text" ? buildRichTextValue(userKey) : buildTitleValue(userKey);
+
+  const entryIdType = schema["Entry ID"]?.type;
+  properties["Entry ID"] = entryIdType === "number"
+    ? { number: Number.parseInt(entry.id.replace(/[^0-9]/g, "").slice(0, 15) || "0", 10) }
+    : buildRichTextValue(entry.id);
+
+  properties["Project"] = { select: { name: entry.project?.name ?? "Unknown" } };
+  properties["Tags"] = { multi_select: tagNames.map((n) => ({ name: n })) };
+  properties["Date"] = {
+    date: {
+      start: new Date(entry.startedAt).toISOString(),
+      end: entry.stoppedAt ? new Date(entry.stoppedAt).toISOString() : undefined,
     },
-    "Updated": {
-      date: { start: new Date(entry.updatedAt ?? entry.startedAt).toISOString() },
-    },
-    "Duration": { number: durationSecs },
-    "Description": buildRichTextValue(entry.description || ""),
-    "Status": { status: { name: status } },
   };
+  properties["Updated"] = {
+    date: { start: new Date(entry.updatedAt ?? entry.startedAt).toISOString() },
+  };
+  properties["Duration"] = { number: durationSecs };
+  properties["Description"] = buildRichTextValue(entry.description || "");
+  properties["Status"] = { status: { name: status } };
 
   if (teamMemberPageId) {
     properties["Team Member"] = { relation: [{ id: teamMemberPageId }] };
@@ -432,7 +440,8 @@ export async function syncEntryToNotionFull(entry: FullEntry): Promise<string | 
     teamMemberPageId = await resolveTeamMemberPageId(entry.user.name).catch(() => null);
   }
 
-  const properties = buildNotionEntryProperties(entry, teamMemberPageId, status);
+  const schema = await getDatabaseSchema(dbId);
+  const properties = buildNotionEntryProperties(entry, teamMemberPageId, status, schema.properties);
 
   if (!isNew) {
     const res = await fetch(`${NOTION_API_BASE}/pages/${entry.notionPageId}`, {

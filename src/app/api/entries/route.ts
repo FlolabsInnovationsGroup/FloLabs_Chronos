@@ -5,6 +5,7 @@ import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/sche
 import { eq, and, gte, lte, desc, inArray, isNotNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getAccessibleUserIds } from "@/lib/permissions";
+import { notifyEntryAdded } from "@/lib/discord";
 
 // Given a list of entry rows, fetch and attach tags from the join table.
 async function attachTags(
@@ -122,5 +123,28 @@ export async function POST(req: Request) {
       .onConflictDoNothing();
   }
 
-  return NextResponse.json({ entry: { ...entry, tags: [] } }, { status: 201 });
+  const createdTagMap = await attachTags([{ id: entry.id }]);
+  const createdTags = createdTagMap.get(entry.id) ?? [];
+
+  const [projectRow] = await db.select({ name: projects.name }).from(projects).where(eq(projects.id, entry.projectId)).limit(1);
+  const [userRow] = await db
+    .select({ name: users.name, notionTeamMemberId: users.notionTeamMemberId })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+
+  if (entry.stoppedAt && userRow?.notionTeamMemberId) {
+    void notifyEntryAdded({
+      notionTeamMemberId: userRow.notionTeamMemberId,
+      userName: userRow.name,
+      project: projectRow?.name ?? "Unknown",
+      tags: createdTags.map((tag) => tag.name),
+      description: entry.description ?? "",
+      durationMs: entry.durationMs ?? 0,
+      startedAt: new Date(entry.startedAt),
+      updatedAt: new Date(entry.updatedAt ?? entry.startedAt),
+    }).catch(() => {});
+  }
+
+  return NextResponse.json({ entry: { ...entry, tags: createdTags } }, { status: 201 });
 }

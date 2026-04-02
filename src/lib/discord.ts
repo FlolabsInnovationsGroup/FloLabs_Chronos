@@ -1,6 +1,18 @@
 import type { TimeEntry } from "@/types";
 import { formatDurationHuman } from "@/lib/utils";
 
+const NOTION_API_BASE = "https://api.notion.com/v1";
+const NOTION_VERSION = "2022-06-28";
+const webhookCache = new Map<string, string | null>();
+
+function notionHeaders() {
+  return {
+    Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
+    "Content-Type": "application/json",
+    "Notion-Version": NOTION_VERSION,
+  };
+}
+
 /**
  * Send an embed payload to a Discord webhook URL.
  */
@@ -51,6 +63,59 @@ export async function sendDiscordText(webhookUrl: string, content: string): Prom
     const text = await res.text();
     throw new Error(`Discord webhook failed (${res.status}): ${text}`);
   }
+}
+
+export async function resolveDiscordWebhookForTeamMember(
+  notionTeamMemberId?: string | null
+): Promise<string | null> {
+  if (!notionTeamMemberId || !process.env.NOTION_API_KEY) return null;
+  if (webhookCache.has(notionTeamMemberId)) return webhookCache.get(notionTeamMemberId) ?? null;
+
+  const res = await fetch(`${NOTION_API_BASE}/pages/${notionTeamMemberId}`, {
+    headers: notionHeaders(),
+  });
+
+  if (!res.ok) {
+    webhookCache.set(notionTeamMemberId, null);
+    return null;
+  }
+
+  const page = (await res.json()) as {
+    properties?: Record<string, {
+      type: string;
+      url?: string | null;
+      rich_text?: { plain_text: string }[];
+      title?: { plain_text: string }[];
+    }>;
+  };
+
+  const props = page.properties ?? {};
+  const candidates = [props["Webhook"], props["webhook"], props["Discord Webhook"], props["discordWebhookUrl"]].filter(Boolean);
+
+  for (const prop of candidates) {
+    if (!prop) continue;
+    if (prop.type === "url" && prop.url) {
+      webhookCache.set(notionTeamMemberId, prop.url);
+      return prop.url;
+    }
+    if (prop.type === "rich_text" && prop.rich_text?.length) {
+      const text = prop.rich_text.map((t) => t.plain_text).join("").trim();
+      if (text) {
+        webhookCache.set(notionTeamMemberId, text);
+        return text;
+      }
+    }
+    if (prop.type === "title" && prop.title?.length) {
+      const text = prop.title.map((t) => t.plain_text).join("").trim();
+      if (text) {
+        webhookCache.set(notionTeamMemberId, text);
+        return text;
+      }
+    }
+  }
+
+  webhookCache.set(notionTeamMemberId, null);
+  return null;
 }
 
 /** Format a date as YYYY-MM-DD HH:MM:SS */
@@ -275,6 +340,56 @@ export async function sendTimerStopNotification(
     webhookUrl,
     buildTimerStopEmbed(userName, projectName, description, durationMs)
   );
+}
+
+export async function notifyEntryAdded(params: {
+  notionTeamMemberId?: string | null;
+  userName: string;
+  project: string;
+  tags: string[];
+  description: string;
+  durationMs: number;
+  startedAt: Date;
+  updatedAt: Date;
+}) {
+  const webhookUrl = await resolveDiscordWebhookForTeamMember(params.notionTeamMemberId);
+  if (!webhookUrl) return false;
+  await sendDiscordText(webhookUrl, buildEntryAddedMessage(params));
+  return true;
+}
+
+export async function notifyEntryEdited(params: {
+  notionTeamMemberId?: string | null;
+  userName: string;
+  project: string;
+  tags: string[];
+  description: string;
+  durationMs: number;
+  startedAt: Date;
+  stoppedAt: Date | null;
+  updatedAt: Date;
+  changes: Array<{ field: string; oldValue: string; newValue: string }>;
+}) {
+  const webhookUrl = await resolveDiscordWebhookForTeamMember(params.notionTeamMemberId);
+  if (!webhookUrl) return false;
+  await sendDiscordText(webhookUrl, buildEntryEditedMessage(params));
+  return true;
+}
+
+export async function notifyEntryDeleted(params: {
+  notionTeamMemberId?: string | null;
+  userName: string;
+  project: string;
+  tags: string[];
+  description: string;
+  durationMs: number;
+  startedAt: Date;
+  deletedAt: Date;
+}) {
+  const webhookUrl = await resolveDiscordWebhookForTeamMember(params.notionTeamMemberId);
+  if (!webhookUrl) return false;
+  await sendDiscordText(webhookUrl, buildEntryDeletedMessage(params));
+  return true;
 }
 
 /**

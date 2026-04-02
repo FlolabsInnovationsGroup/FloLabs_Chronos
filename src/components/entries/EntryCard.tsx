@@ -27,9 +27,14 @@ interface EntryCardProps {
   anySelected?: boolean;
 }
 
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
 function toDatetimeLocal(value: Date | string | null | undefined) {
   if (!value) return "";
-  return new Date(value).toISOString().slice(0, 16);
+  const date = new Date(value);
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
 export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect, anySelected = false }: EntryCardProps) {

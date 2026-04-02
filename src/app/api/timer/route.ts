@@ -8,6 +8,7 @@ import { z } from "zod";
 
 const updateTimerSchema = z.object({
   tagIds: z.array(z.string().uuid()).default([]),
+  description: z.string().optional(),
 });
 
 export async function PATCH(req: Request) {
@@ -23,6 +24,7 @@ export async function PATCH(req: Request) {
   if (!activeTimer) return NextResponse.json({ error: "No active timer" }, { status: 404 });
 
   const requestedTagIds = [...new Set(parsed.data.tagIds)];
+  const nextDescription = parsed.data.description;
 
   if (db && requestedTagIds.length > 0) {
     const ownedTags = await db
@@ -38,6 +40,7 @@ export async function PATCH(req: Request) {
   const updatedTimer = {
     ...activeTimer,
     tagIds: requestedTagIds,
+    ...(nextDescription !== undefined ? { description: nextDescription } : {}),
   };
 
   await setActiveTimer(userId, updatedTimer);
@@ -59,6 +62,13 @@ export async function PATCH(req: Request) {
           .insert(timeEntryTags)
           .values(requestedTagIds.map((tagId) => ({ timeEntryId: activeEntry.id, tagId })))
           .onConflictDoNothing();
+      }
+
+      if (nextDescription !== undefined) {
+        await db
+          .update(timeEntries)
+          .set({ description: nextDescription, updatedAt: new Date() })
+          .where(eq(timeEntries.id, activeEntry.id));
       }
     }
   }

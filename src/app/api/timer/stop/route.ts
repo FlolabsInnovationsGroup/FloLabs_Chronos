@@ -20,6 +20,13 @@ export async function POST(req: Request) {
   const timer = await getActiveTimer(userId);
   if (!timer) return NextResponse.json({ error: "No active timer" }, { status: 404 });
 
+  if (!discard && !timer.description.trim()) {
+    return NextResponse.json(
+      { error: "Add a description before stopping the timer" },
+      { status: 400 }
+    );
+  }
+
   const stoppedAt = Date.now();
   const durationMs = stoppedAt - timer.startedAt;
 

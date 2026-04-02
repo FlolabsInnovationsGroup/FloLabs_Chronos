@@ -16,6 +16,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
   const { activeTimer, start, update, stop, loading } = useTimer();
 
   const [description, setDescription] = useState("");
+  const [descriptionSaving, setDescriptionSaving] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [localTags, setLocalTags] = useState<TagOption[]>(
@@ -27,6 +28,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
   useEffect(() => {
     if (activeTimer) {
       setSelectedTagIds(Array.isArray(activeTimer.tagIds) ? activeTimer.tagIds : []);
+      setDescription(activeTimer.description ?? "");
     }
   }, [activeTimer]);
 
@@ -90,12 +92,26 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
   async function handleStop() {
     setSubmitting(true);
     try {
+      if (activeTimer && description !== (activeTimer.description ?? "")) {
+        await handleDescriptionPersist(description);
+      }
       await stop(false);
       setDescription("");
       setSelectedProjectId("");
       setSelectedTagIds([]);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleDescriptionPersist(nextDescription: string) {
+    if (!activeTimer) return;
+
+    setDescriptionSaving(true);
+    try {
+      await update({ description: nextDescription, tagIds: selectedTagIds });
+    } finally {
+      setDescriptionSaving(false);
     }
   }
 
@@ -136,27 +152,37 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
 
   return (
     <div className="flex flex-col gap-5">
-      {!activeTimer ? (
+      <div className="flex flex-col gap-1.5">
         <input
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+          onBlur={() => {
+            if (activeTimer && description !== (activeTimer.description ?? "")) {
+              void handleDescriptionPersist(description);
+            }
+          }}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && selectedProjectId) void handleStart();
+            if (!activeTimer && e.key === "Enter" && selectedProjectId) void handleStart();
+            if (activeTimer && e.key === "Enter") {
+              e.currentTarget.blur();
+            }
           }}
           placeholder="What are you working on?"
           className="w-full bg-transparent text-2xl italic text-[#31332f] placeholder:text-[#b2b2ad] outline-none py-2 border-b-2 border-[#efeee9] focus:border-[#366769] transition-colors"
           style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
-          disabled={!!activeTimer}
         />
-      ) : (
-        <p
-          className="text-2xl italic text-[#5e605b] py-2 border-b-2 border-[#efeee9] truncate"
-          style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
-        >
-          {activeTimer.description || "No description"}
-        </p>
-      )}
+        {activeTimer && !description.trim() && (
+          <p className="text-xs text-[#a73b21]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+            Add a description to unlock Stop Session.
+          </p>
+        )}
+        {activeTimer && descriptionSaving && (
+          <p className="text-xs text-[#366769]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+            Saving description…
+          </p>
+        )}
+      </div>
 
       {!activeTimer && (
         <div className="flex flex-wrap gap-2 items-start">
@@ -254,7 +280,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
             Start Session
           </Button>
         ) : (
-          <Button variant="primary" size="lg" onClick={handleStop} loading={submitting}>
+          <Button variant="primary" size="lg" onClick={handleStop} loading={submitting} disabled={!description.trim() || descriptionSaving}>
             <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
               stop
             </span>

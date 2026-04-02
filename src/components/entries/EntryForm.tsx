@@ -7,6 +7,7 @@ import { Select } from "@/components/ui/Select";
 import { TagMultiSelect, type TagOption } from "@/components/ui/TagMultiSelect";
 import { Button } from "@/components/ui/Button";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { TaskSuggestions, type TaskSuggestion } from "@/components/entries/TaskSuggestions";
 import type { Project, Tag, TimeEntry } from "@/types";
 
 interface EntryFormProps {
@@ -38,6 +39,7 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
   const [stoppedAt, setStoppedAt] = useState(toDatetimeLocal(entry?.stoppedAt));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const [tagOptions, setTagOptions] = useState<TagOption[]>(
     tags.map((t) => ({ id: t.id, name: t.name }))
@@ -136,6 +138,13 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
 
   const projectOptions = projects.map((p) => ({ value: p.id, label: p.name }));
 
+  function applySuggestion(suggestion: TaskSuggestion) {
+    setDescription(suggestion.description);
+    setProjectId(suggestion.projectId);
+    setTagIds(suggestion.tagIds);
+    setShowSuggestions(false);
+  }
+
   return (
     <Modal
       open={open}
@@ -144,12 +153,20 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
       size="md"
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <Input
-          label="Description"
-          placeholder="What were you working on?"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
+        <div className="relative">
+          <Input
+            label="Description"
+            placeholder="What were you working on?"
+            value={description}
+            onChange={(e) => {
+              setDescription(e.target.value);
+              setShowSuggestions(true);
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 120)}
+          />
+          <TaskSuggestions query={description} open={showSuggestions} onPick={applySuggestion} />
+        </div>
 
         <Select
           label="Project"

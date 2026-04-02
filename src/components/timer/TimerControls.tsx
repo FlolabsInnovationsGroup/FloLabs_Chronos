@@ -5,6 +5,7 @@ import { useTimer } from "@/hooks/use-timer";
 import { Button } from "@/components/ui/Button";
 import { DropdownSelect } from "@/components/ui/DropdownSelect";
 import { TagMultiSelect, type TagOption } from "@/components/ui/TagMultiSelect";
+import { TaskSuggestions, type TaskSuggestion } from "@/components/entries/TaskSuggestions";
 import type { Project, Tag } from "@/types";
 
 interface TimerControlsProps {
@@ -24,6 +25,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
   );
   const [submitting, setSubmitting] = useState(false);
   const [tagSaving, setTagSaving] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     if (activeTimer) {
@@ -115,6 +117,13 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     }
   }
 
+  function applySuggestion(suggestion: TaskSuggestion) {
+    setDescription(suggestion.description);
+    setSelectedProjectId(suggestion.projectId);
+    setSelectedTagIds(suggestion.tagIds);
+    setShowSuggestions(false);
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col gap-4 animate-pulse">
@@ -152,12 +161,19 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 relative">
         <input
           type="text"
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => {
+            setDescription(e.target.value);
+            if (!activeTimer) setShowSuggestions(true);
+          }}
+          onFocus={() => {
+            if (!activeTimer) setShowSuggestions(true);
+          }}
           onBlur={() => {
+            setTimeout(() => setShowSuggestions(false), 120);
             if (activeTimer && description !== (activeTimer.description ?? "")) {
               void handleDescriptionPersist(description);
             }
@@ -172,6 +188,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
           className="w-full bg-transparent text-2xl italic text-[#31332f] placeholder:text-[#b2b2ad] outline-none py-2 border-b-2 border-[#efeee9] focus:border-[#366769] transition-colors"
           style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
         />
+        {!activeTimer && <TaskSuggestions query={description} open={showSuggestions} onPick={applySuggestion} />}
         {activeTimer && !description.trim() && (
           <p className="text-xs text-[#a73b21]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             Add a description to stop this timer.

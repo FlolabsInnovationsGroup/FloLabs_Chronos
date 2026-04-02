@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -42,12 +43,9 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="text-center mb-10">
-          <h1
-            className="text-4xl font-light italic text-[#31332f]"
-            style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
-          >
-            FloLabs Chronos
-          </h1>
+          <div className="flex justify-center mb-4">
+            <Image src="/flchron-logo.svg" alt="FloLabs Chronos" width={180} height={42} priority className="h-10 w-auto" />
+          </div>
           <p
             className="text-sm text-[#5e605b] mt-2"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}

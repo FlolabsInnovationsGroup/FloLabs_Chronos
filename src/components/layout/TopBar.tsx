@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -22,12 +23,9 @@ export function TopBar() {
     <header className="sticky top-0 z-30 bg-[#fbf9f5]/90 backdrop-blur-md">
       <div className="flex items-center justify-between px-6 h-14">
         {/* Brand */}
-        <span
-          className="text-xl font-semibold italic text-[#31332f] select-none"
-          style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
-        >
-          FloLabs Chronos
-        </span>
+        <Link href="/timer" className="flex items-center">
+          <Image src="/flchron-logo.svg" alt="FloLabs Chronos" width={140} height={32} priority className="h-8 w-auto" />
+        </Link>
 
         {/* Right side */}
         <div className="flex items-center gap-4">

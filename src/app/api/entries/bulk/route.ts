@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries } from "@/lib/db/schema";
-import { inArray } from "drizzle-orm";
+import { timeEntries, timeEntryTags, projects, tags, users } from "@/lib/db/schema";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
+import { deleteAndNotifyEntry, syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 
 const bulkSchema = z.discriminatedUnion("action", [
   z.object({
@@ -45,7 +46,55 @@ export async function POST(req: Request) {
   }
 
   if (action === "delete") {
+    const entries = await db
+      .select({
+        id: timeEntries.id,
+        notionPageId: timeEntries.notionPageId,
+        description: timeEntries.description,
+        durationMs: timeEntries.durationMs,
+        startedAt: timeEntries.startedAt,
+        projectId: timeEntries.projectId,
+        userId: timeEntries.userId,
+      })
+      .from(timeEntries)
+      .where(inArray(timeEntries.id, entryIds));
+
+    const deletePayloads = [] as Array<{
+      notionPageId: string | null;
+      notionTeamMemberId: string | null;
+      userName: string;
+      project: string;
+      tags: string[];
+      description: string;
+      durationMs: number;
+      startedAt: Date;
+    }>;
+
+    for (const entry of entries) {
+      const tagIds = await db.select({ tagId: timeEntryTags.tagId }).from(timeEntryTags).where(eq(timeEntryTags.timeEntryId, entry.id));
+      const tagNames = tagIds.length > 0
+        ? (await db.select({ name: tags.name }).from(tags).where(inArray(tags.id, tagIds.map((row) => row.tagId)))).map((row) => row.name)
+        : [];
+      const [projectRow] = await db.select({ name: projects.name }).from(projects).where(eq(projects.id, entry.projectId)).limit(1);
+      const [userRow] = await db.select({ name: users.name, notionTeamMemberId: users.notionTeamMemberId }).from(users).where(eq(users.id, entry.userId)).limit(1);
+      deletePayloads.push({
+        notionPageId: entry.notionPageId,
+        notionTeamMemberId: userRow?.notionTeamMemberId ?? null,
+        userName: userRow?.name ?? "Unknown",
+        project: projectRow?.name ?? "Unknown",
+        tags: tagNames,
+        description: entry.description ?? "",
+        durationMs: entry.durationMs ?? 0,
+        startedAt: new Date(entry.startedAt),
+      });
+    }
+
     await db.delete(timeEntries).where(inArray(timeEntries.id, entryIds));
+
+    for (const payload of deletePayloads) {
+      await deleteAndNotifyEntry(payload).catch(() => {});
+    }
+
     return NextResponse.json({ success: true, deleted: entryIds.length });
   }
 
@@ -54,5 +103,10 @@ export async function POST(req: Request) {
     .update(timeEntries)
     .set({ projectId: parsed.data.projectId, updatedAt: new Date() })
     .where(inArray(timeEntries.id, entryIds));
+
+  for (const entryId of entryIds) {
+    await syncAndNotifyEntry(entryId).catch(() => {});
+  }
+
   return NextResponse.json({ success: true, updated: entryIds.length });
 }

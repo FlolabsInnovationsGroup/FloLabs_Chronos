@@ -45,23 +45,32 @@ export async function PATCH(
       );
     }
 
-    if (startedAtStr !== undefined && entry.editedField === "end") {
+    const newStartedAt = startedAtStr ? new Date(startedAtStr) : entry.startedAt;
+    const newStoppedAt = stoppedAtStr ? new Date(stoppedAtStr) : entry.stoppedAt!;
+
+    const startChanged = startedAtStr !== undefined && newStartedAt.getTime() !== entry.startedAt.getTime();
+    const endChanged = stoppedAtStr !== undefined && newStoppedAt.getTime() !== entry.stoppedAt.getTime();
+
+    if (startChanged && entry.editedField === "end") {
       return NextResponse.json(
         { error: "Cannot edit start: end was already edited for this entry" },
         { status: 400 }
       );
     }
 
-    if (stoppedAtStr !== undefined && entry.editedField === "start") {
+    if (endChanged && entry.editedField === "start") {
       return NextResponse.json(
         { error: "Cannot edit end: start was already edited for this entry" },
         { status: 400 }
       );
     }
 
-    // Compute the new start/stop, using existing values where not provided
-    const newStartedAt = startedAtStr ? new Date(startedAtStr) : entry.startedAt;
-    const newStoppedAt = stoppedAtStr ? new Date(stoppedAtStr) : entry.stoppedAt!;
+    if (startChanged && endChanged) {
+      return NextResponse.json(
+        { error: "Only one time boundary can be edited for an entry" },
+        { status: 400 }
+      );
+    }
 
     if (newStoppedAt <= newStartedAt) {
       return NextResponse.json(
@@ -71,13 +80,13 @@ export async function PATCH(
     }
 
     const newDurationMs = newStoppedAt.getTime() - newStartedAt.getTime();
-    const newEditedField = entry.editedField ?? (startedAtStr !== undefined ? "start" : "end");
+    const newEditedField = entry.editedField ?? (startChanged ? "start" : endChanged ? "end" : null);
 
     Object.assign(entryFields, {
       startedAt: newStartedAt,
       stoppedAt: newStoppedAt,
       durationMs: newDurationMs,
-      editedField: newEditedField,
+      ...(newEditedField ? { editedField: newEditedField } : {}),
     });
   }
 

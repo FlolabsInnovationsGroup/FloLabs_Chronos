@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -41,6 +41,7 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
   const [editTagIds, setEditTagIds] = useState<string[]>((entry.tags ?? []).map((t) => t.id));
   const [editStartedAt, setEditStartedAt] = useState(toDatetimeLocal(entry.startedAt));
   const [editStoppedAt, setEditStoppedAt] = useState(toDatetimeLocal(entry.stoppedAt));
+  const [timeFieldSelection, setTimeFieldSelection] = useState<"start" | "end" | null>(entry.editedField);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
@@ -62,6 +63,7 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
     setEditTagIds((entry.tags ?? []).map((t) => t.id));
     setEditStartedAt(toDatetimeLocal(entry.startedAt));
     setEditStoppedAt(toDatetimeLocal(entry.stoppedAt));
+    setTimeFieldSelection(entry.editedField);
     setEditError("");
     setEditOpen(true);
 
@@ -98,6 +100,17 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
     }
   }
 
+  const originalStartedAt = useMemo(() => toDatetimeLocal(entry.startedAt), [entry.startedAt]);
+  const originalStoppedAt = useMemo(() => toDatetimeLocal(entry.stoppedAt), [entry.stoppedAt]);
+
+  const lockedStart = timeFieldSelection === "end";
+  const lockedEnd = timeFieldSelection === "start";
+
+  function selectTimeField(field: "start" | "end") {
+    if (entry.editedField && entry.editedField !== field) return;
+    setTimeFieldSelection((current) => current ?? field);
+  }
+
   async function handleEditSave(e: React.FormEvent) {
     e.preventDefault();
     setEditLoading(true);
@@ -108,8 +121,13 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
         projectId: editProjectId || undefined,
         tagIds: editTagIds,
       };
-      if (entry.editedField !== "end" && editStartedAt) payload.startedAt = new Date(editStartedAt).toISOString();
-      if (entry.editedField !== "start" && editStoppedAt) payload.stoppedAt = new Date(editStoppedAt).toISOString();
+
+      if (timeFieldSelection === "start" && editStartedAt && editStartedAt !== originalStartedAt) {
+        payload.startedAt = new Date(editStartedAt).toISOString();
+      }
+      if (timeFieldSelection === "end" && editStoppedAt && editStoppedAt !== originalStoppedAt) {
+        payload.stoppedAt = new Date(editStoppedAt).toISOString();
+      }
 
       const res = await fetch(`/api/entries/${entry.id}`, {
         method: "PATCH",
@@ -160,7 +178,65 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
           <Input label="Description" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="What were you working on?" />
           {projects.length > 0 && <Select label="Project" value={editProjectId} onChange={setEditProjectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} placeholder="Select project" />}
           <div className="flex flex-col gap-1.5"><label className="text-xs font-medium text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Tags</label><TagMultiSelect value={editTagIds} onChange={setEditTagIds} options={tagOptions} onCreate={createTag} placeholder="Add tags…" /></div>
-          {!!entry.stoppedAt && <div className="grid grid-cols-2 gap-3"><div className="flex flex-col gap-1.5"><div className="flex items-center gap-1.5"><label className="text-xs font-medium text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Start Time</label>{entry.editedField === "end" && <Tooltip label="Blocked — end was already edited"><span className="text-[#5e605b]">🔒</span></Tooltip>}</div><Input type="datetime-local" value={editStartedAt} onChange={(e) => setEditStartedAt(e.target.value)} disabled={entry.editedField === "end"} /></div><div className="flex flex-col gap-1.5"><div className="flex items-center gap-1.5"><label className="text-xs font-medium text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>End Time</label>{entry.editedField === "start" && <Tooltip label="Blocked — start was already edited"><span className="text-[#5e605b]">🔒</span></Tooltip>}</div><Input type="datetime-local" value={editStoppedAt} onChange={(e) => setEditStoppedAt(e.target.value)} disabled={entry.editedField === "start"} /></div></div>}
+          {!!entry.stoppedAt && (
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs font-medium text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                      Start Time
+                    </label>
+                    {lockedStart && (
+                      <Tooltip label={entry.editedField === "end" ? "Locked because end time was already edited" : "Locked while you edit the end time"}>
+                        <span className="text-[#8f918b]">🔒</span>
+                      </Tooltip>
+                    )}
+                  </div>
+                  <Input
+                    type="datetime-local"
+                    value={editStartedAt}
+                    onFocus={() => selectTimeField("start")}
+                    onChange={(e) => {
+                      selectTimeField("start");
+                      setEditStartedAt(e.target.value);
+                    }}
+                    disabled={lockedStart}
+                    className={lockedStart ? "bg-[#ece9e2] text-[#8f918b]" : undefined}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs font-medium text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                      End Time
+                    </label>
+                    {lockedEnd && (
+                      <Tooltip label={entry.editedField === "start" ? "Locked because start time was already edited" : "Locked while you edit the start time"}>
+                        <span className="text-[#8f918b]">🔒</span>
+                      </Tooltip>
+                    )}
+                  </div>
+                  <Input
+                    type="datetime-local"
+                    value={editStoppedAt}
+                    onFocus={() => selectTimeField("end")}
+                    onChange={(e) => {
+                      selectTimeField("end");
+                      setEditStoppedAt(e.target.value);
+                    }}
+                    disabled={lockedEnd}
+                    className={lockedEnd ? "bg-[#ece9e2] text-[#8f918b]" : undefined}
+                  />
+                </div>
+              </div>
+
+              {!entry.editedField && !timeFieldSelection && (
+                <p className="text-xs text-[#7a7c76]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                  Choose one boundary to edit. As soon as you select start or end, the other one locks.
+                </p>
+              )}
+            </div>
+          )}
           {editError && <p className="text-sm text-[#a73b21]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{editError}</p>}
           <div className="flex gap-2 justify-end pt-1"><Button type="button" variant="ghost" size="md" onClick={() => setEditOpen(false)}>Cancel</Button><Button type="submit" variant="primary" size="md" loading={editLoading}>Save</Button></div>
         </form>

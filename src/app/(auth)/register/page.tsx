@@ -118,7 +118,7 @@ function RegisterForm() {
       return;
     }
 
-    if (password.length < 8) {
+    if (!forgotMode && password.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
     }
@@ -186,7 +186,7 @@ function RegisterForm() {
             className="text-sm text-[#5e605b] mt-2"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
-            {invitation ? "Accept your invitation" : "Invitation required"}
+            {forgotMode ? "Reset your password" : resetToken ? "Choose a new password" : invitation ? "Accept your invitation" : "Invitation required"}
           </p>
         </div>
 
@@ -238,26 +238,28 @@ function RegisterForm() {
                 </p>
               </div>}
 
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="name"
-                  className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
-                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                >
-                  Full Name
-                </label>
-                <input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Jane Smith"
-                  required
-                  autoFocus
-                  className="w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
-                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                />
-              </div>
+              {!forgotMode && (
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor="name"
+                    className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    Full Name
+                  </label>
+                  <input
+                    id="name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Jane Smith"
+                    required
+                    autoFocus
+                    className="w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  />
+                </div>
+              )}
 
               <div className="flex flex-col gap-1.5">
                 <label
@@ -271,32 +273,37 @@ function RegisterForm() {
                   id="email"
                   type="email"
                   value={email}
-                  readOnly
-                  className="w-full px-3 py-2.5 text-sm text-[#5e605b] bg-[#efeee9] rounded-lg outline-none"
+                  onChange={(e) => setEmail(e.target.value)}
+                  readOnly={!forgotMode}
+                  autoFocus={forgotMode}
+                  placeholder="you@example.com"
+                  className={`w-full px-3 py-2.5 text-sm rounded-lg outline-none ${forgotMode ? "text-[#31332f] bg-[#f5f4ef] placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20" : "text-[#5e605b] bg-[#efeee9]"}`}
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 />
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="password"
-                  className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
-                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                >
-                  Password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 8 characters"
-                  required
-                  minLength={8}
-                  className="w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
-                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                />
-              </div>
+              {!forgotMode && (
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor="password"
+                    className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    Password
+                  </label>
+                  <input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="At least 8 characters"
+                    required
+                    minLength={8}
+                    className="w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  />
+                </div>
+              )}
 
               {error && (
                 <p
@@ -313,7 +320,7 @@ function RegisterForm() {
                 className="w-full py-2.5 px-4 text-sm font-medium rounded-md bg-[#366769] text-[#e3feff] hover:bg-[#295a5d] active:bg-[#104648] disabled:opacity-50 transition-colors cursor-pointer"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
-                {loading ? "Creating account..." : "Create account"}
+                {loading ? (forgotMode ? "Sending reset link..." : resetToken ? "Resetting password..." : "Creating account...") : forgotMode ? "Send reset link" : resetToken ? "Reset password" : "Create account"}
               </button>
             </form>
           )}

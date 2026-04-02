@@ -117,11 +117,22 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     }
   }
 
-  function applySuggestion(suggestion: TaskSuggestion) {
+  async function applySuggestion(suggestion: TaskSuggestion) {
     setDescription(suggestion.description);
+    setShowSuggestions(false);
+
+    if (activeTimer) {
+      setSelectedTagIds(suggestion.tagIds);
+      try {
+        await update({ description: suggestion.description, tagIds: suggestion.tagIds });
+      } catch {
+        // ignore suggestion apply failures on running timer
+      }
+      return;
+    }
+
     setSelectedProjectId(suggestion.projectId);
     setSelectedTagIds(suggestion.tagIds);
-    setShowSuggestions(false);
   }
 
   if (loading) {
@@ -188,7 +199,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
           className="w-full bg-transparent text-2xl italic text-[#31332f] placeholder:text-[#b2b2ad] outline-none py-2 border-b-2 border-[#efeee9] focus:border-[#366769] transition-colors"
           style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
         />
-        {!activeTimer && <TaskSuggestions query={description} open={showSuggestions} onPick={applySuggestion} />}
+        <TaskSuggestions query={description} open={showSuggestions} onPick={applySuggestion} />
         {activeTimer && !description.trim() && (
           <p className="text-xs text-[#a73b21]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             Add a description to stop this timer.

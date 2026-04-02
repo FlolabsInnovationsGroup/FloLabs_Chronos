@@ -6,12 +6,13 @@ import {
   syncEntryToNotionFull,
   markEntryDeleted,
   queryNotionEntriesWindow,
+  updateEntryStatus,
 } from "@/lib/notion";
 import {
-  sendDiscordText,
-  buildEntryAddedMessage,
-  buildEntryEditedMessage,
-  buildEntryDeletedMessage,
+  notifyEntryAdded,
+  notifyEntryEdited,
+  notifyEntryDeleted,
+  resolveDiscordWebhookForTeamMember,
 } from "@/lib/discord";
 
 export const runtime = "nodejs";
@@ -117,38 +118,36 @@ export async function GET(req: Request) {
         edited++;
       }
 
-      // Fire-and-forget Discord notification
-      const webhookUrl = row.user?.discordWebhookUrl;
-      if (webhookUrl) {
-        const userName = row.user?.name ?? "Unknown";
-        const projectName = row.project?.name ?? "Unknown";
-        const tagNames = entryTags.map((t) => t.name);
-
-        const msg = isNew
-          ? buildEntryAddedMessage({
-              userName,
-              project: projectName,
-              tags: tagNames,
+      const notionTeamMemberId = row.user?.notionTeamMemberId ?? null;
+      if (notionPageId && notionTeamMemberId) {
+        const delivered = isNew
+          ? await notifyEntryAdded({
+              notionTeamMemberId,
+              userName: row.user?.name ?? "Unknown",
+              project: row.project?.name ?? "Unknown",
+              tags: entryTags.map((t) => t.name),
               description: row.entry.description,
               durationMs: row.entry.durationMs ?? 0,
               startedAt: new Date(row.entry.startedAt),
               updatedAt: new Date(row.entry.updatedAt ?? row.entry.startedAt),
             })
-          : buildEntryEditedMessage({
-              userName,
-              project: projectName,
-              tags: tagNames,
+          : await notifyEntryEdited({
+              notionTeamMemberId,
+              userName: row.user?.name ?? "Unknown",
+              project: row.project?.name ?? "Unknown",
+              tags: entryTags.map((t) => t.name),
               description: row.entry.description,
               durationMs: row.entry.durationMs ?? 0,
               startedAt: new Date(row.entry.startedAt),
               stoppedAt: row.entry.stoppedAt ? new Date(row.entry.stoppedAt) : null,
               updatedAt: new Date(row.entry.updatedAt ?? row.entry.startedAt),
-              changes: [], // diff not computed here; cron doesn't track old values
+              changes: [],
             });
 
-        sendDiscordText(webhookUrl, msg)
-          .then(() => { notified++; })
-          .catch(() => { /* non-fatal */ });
+        if (delivered) {
+          notified++;
+          await updateEntryStatus(notionPageId, "Notified");
+        }
       }
     } catch (err) {
       errors.push(`Entry ${row.entry.id}: ${err instanceof Error ? err.message : String(err)}`);
@@ -182,7 +181,53 @@ export async function GET(req: Request) {
             await markEntryDeleted(page.notionPageId);
             deleted++;
 
-            // We can't look up user webhook since the entry is gone — skip Discord
+            const pageRes = await fetch(`https://api.notion.com/v1/pages/${page.notionPageId}`, {
+              headers: {
+                Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
+                "Content-Type": "application/json",
+                "Notion-Version": "2022-06-28",
+              },
+            });
+
+            if (pageRes.ok) {
+              const pageData = (await pageRes.json()) as {
+                properties?: Record<string, {
+                  type: string;
+                  title?: { plain_text: string }[];
+                  rich_text?: { plain_text: string }[];
+                  multi_select?: { name: string }[];
+                  select?: { name: string } | null;
+                  number?: number | null;
+                  date?: { start?: string | null } | null;
+                  relation?: { id: string }[];
+                }>;
+              };
+              const props = pageData.properties ?? {};
+              const notionTeamMemberId = props["Team Member"]?.relation?.[0]?.id ?? null;
+              if (notionTeamMemberId && await resolveDiscordWebhookForTeamMember(notionTeamMemberId)) {
+                const description = props["Description"]?.rich_text?.map((t) => t.plain_text).join("") ?? "";
+                const project = props["Project"]?.select?.name ?? "Unknown";
+                const tags = props["Tags"]?.multi_select?.map((tag) => tag.name) ?? [];
+                const durationMs = Math.round((props["Duration"]?.number ?? 0) * 1000);
+                const startedAt = new Date(props["Date"]?.date?.start ?? deletedNow.toISOString());
+                const userName = props["User Key"]?.title?.map((t) => t.plain_text).join("") ?? "Unknown";
+
+                const delivered = await notifyEntryDeleted({
+                  notionTeamMemberId,
+                  userName,
+                  project,
+                  tags,
+                  description,
+                  durationMs,
+                  startedAt,
+                  deletedAt: deletedNow,
+                });
+                if (delivered) {
+                  notified++;
+                  await updateEntryStatus(page.notionPageId, "Notified");
+                }
+              }
+            }
           } catch (err) {
             errors.push(
               `Delete sync ${page.notionPageId}: ${err instanceof Error ? err.message : String(err)}`

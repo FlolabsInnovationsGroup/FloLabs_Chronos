@@ -461,20 +461,24 @@ export async function syncEntryToNotionFull(entry: FullEntry): Promise<string | 
   return page.id;
 }
 
-/**
- * Mark a Notion page status as 'Deleted'.
- */
-export async function markEntryDeleted(notionPageId: string): Promise<void> {
+export async function updateEntryStatus(notionPageId: string, status: string): Promise<void> {
   if (!process.env.NOTION_API_KEY) return;
   await fetch(`${NOTION_API_BASE}/pages/${notionPageId}`, {
     method: "PATCH",
     headers: notionHeaders(),
     body: JSON.stringify({
       properties: {
-        "Status": { status: { name: "Deleted" } },
+        "Status": { status: { name: status } },
       },
     }),
   });
+}
+
+/**
+ * Mark a Notion page status as 'Deleted'.
+ */
+export async function markEntryDeleted(notionPageId: string): Promise<void> {
+  await updateEntryStatus(notionPageId, "Deleted");
 }
 
 /**

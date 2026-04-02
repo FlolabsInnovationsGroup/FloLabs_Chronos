@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getActiveTimer, deleteActiveTimer, broadcastTimerEvent } from "@/lib/redis";
 import { db } from "@/lib/db";
-import { timeEntries, timeEntryTags, users, projects, tags } from "@/lib/db/schema";
-import { eq, and, isNull, inArray } from "drizzle-orm";
+import { timeEntries, timeEntryTags, users, projects } from "@/lib/db/schema";
+import { eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { sendDiscordEmbed, buildTimerStopEmbed, notifyEntryAdded } from "@/lib/discord";
+import { sendDiscordEmbed, buildTimerStopEmbed } from "@/lib/discord";
 
 const stopSchema = z.object({ discard: z.boolean().optional() });
 
@@ -60,25 +60,6 @@ export async function POST(req: Request) {
         .onConflictDoNothing();
     }
 
-    if (updated[0]) {
-      const tagNames = tagIds.length > 0
-        ? (await db.select({ name: tags.name }).from(tags).where(inArray(tags.id, tagIds))).map((row) => row.name)
-        : [];
-      const [user] = await db.select({ name: users.name, notionTeamMemberId: users.notionTeamMemberId }).from(users).where(eq(users.id, userId)).limit(1);
-      const [project] = await db.select({ name: projects.name }).from(projects).where(eq(projects.id, timer.projectId)).limit(1);
-      if (user?.notionTeamMemberId) {
-        void notifyEntryAdded({
-          notionTeamMemberId: user.notionTeamMemberId,
-          userName: user.name,
-          project: project?.name ?? "Unknown",
-          tags: tagNames,
-          description: updated[0].description ?? timer.description ?? "",
-          durationMs,
-          startedAt: new Date(updated[0].startedAt),
-          updatedAt: new Date(updated[0].updatedAt ?? stoppedAt),
-        }).catch(() => {});
-      }
-    }
   } else if (db && discard) {
     // Delete the running entry (timeEntryTags cascade automatically)
     await db

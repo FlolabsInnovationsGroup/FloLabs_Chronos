@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { canManageTeams, getAccessibleTeamIds, getUserTeams, isAdmin, isTeamLead, replaceUserTeamMemberships } from "@/lib/permissions";
 import { broadcastDataChange } from "@/lib/realtime";
+import { updateTeamMemberName } from "@/lib/notion";
 
 const updateSchema = z.object({
   role: z.enum(["admin", "team_lead", "member"]).optional(),
@@ -43,7 +44,7 @@ export async function PATCH(
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
   const [existingUser] = await db
-    .select({ id: users.id, role: users.role, teamId: users.teamId })
+    .select({ id: users.id, role: users.role, teamId: users.teamId, name: users.name, notionTeamMemberId: users.notionTeamMemberId })
     .from(users)
     .where(eq(users.id, id))
     .limit(1);
@@ -113,6 +114,11 @@ export async function PATCH(
     });
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (parsed.data.name !== undefined && parsed.data.name.trim() !== existingUser.name && existingUser.notionTeamMemberId) {
+    await updateTeamMemberName(existingUser.notionTeamMemberId, parsed.data.name.trim()).catch(() => {});
+  }
+
   if (requestedTeamIds !== undefined) {
     await replaceUserTeamMemberships(id, requestedTeamIds);
   }

@@ -72,6 +72,19 @@ export const teamMemberships = pgTable(
   ]
 );
 
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [uniqueIndex("password_reset_tokens_token_unique").on(t.token)]
+);
+
 export const invitations = pgTable(
   "invitations",
   {

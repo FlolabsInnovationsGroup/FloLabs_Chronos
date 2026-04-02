@@ -117,6 +117,14 @@ export default function LoginPage() {
             >
               {loading ? "Signing in..." : "Sign In"}
             </button>
+
+            <Link
+              href="/register?forgot=1"
+              className="text-sm text-[#366769] hover:underline text-center"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              Forgot your password?
+            </Link>
           </form>
         </div>
 

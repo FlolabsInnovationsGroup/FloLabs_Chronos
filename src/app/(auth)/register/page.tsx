@@ -18,12 +18,20 @@ interface InvitationPayload {
   } | null;
 }
 
+interface ResetPayload {
+  email: string;
+  name: string;
+}
+
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite") ?? "";
+  const resetToken = searchParams.get("reset") ?? "";
+  const forgotMode = searchParams.get("forgot") === "1";
 
   const [invitation, setInvitation] = useState<InvitationPayload | null>(null);
+  const [reset, setReset] = useState<ResetPayload | null>(null);
   const [loadingInvite, setLoadingInvite] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -35,6 +43,32 @@ function RegisterForm() {
     let cancelled = false;
 
     async function loadInvitation() {
+      if (forgotMode) {
+        setLoadingInvite(false);
+        return;
+      }
+
+      if (resetToken) {
+        try {
+          const res = await fetch(`/api/auth/reset-password?token=${encodeURIComponent(resetToken)}`);
+          const data = await res.json();
+          if (!res.ok) {
+            if (!cancelled) setError(data.error ?? "This reset link is not valid.");
+            return;
+          }
+          if (!cancelled) {
+            setReset(data.reset);
+            setName(data.reset.name ?? "");
+            setEmail(data.reset.email ?? "");
+          }
+        } catch {
+          if (!cancelled) setError("Could not validate this reset link.");
+        } finally {
+          if (!cancelled) setLoadingInvite(false);
+        }
+        return;
+      }
+
       if (!inviteToken) {
         setLoadingInvite(false);
         return;
@@ -79,7 +113,7 @@ function RegisterForm() {
     e.preventDefault();
     setError("");
 
-    if (!invitation || !inviteToken) {
+    if (!forgotMode && !resetToken && (!invitation || !inviteToken)) {
       setError("A valid invitation is required.");
       return;
     }
@@ -92,20 +126,27 @@ function RegisterForm() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/register", {
+      const endpoint = forgotMode ? "/api/auth/forgot-password" : resetToken ? "/api/auth/reset-password" : "/api/auth/register";
+      const payload = forgotMode
+        ? { email: email.toLowerCase().trim() }
+        : resetToken
+          ? { token: resetToken, password }
+          : { token: inviteToken, name: name.trim(), email: email.toLowerCase().trim(), password };
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: inviteToken,
-          name: name.trim(),
-          email: email.toLowerCase().trim(),
-          password,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Registration failed.");
+        return;
+      }
+
+      if (forgotMode) {
+        setError("Reset email sent. Check your inbox.");
         return;
       }
 
@@ -129,7 +170,7 @@ function RegisterForm() {
     }
   }
 
-  const invitationRequired = !loadingInvite && !invitation;
+  const invitationRequired = !forgotMode && !resetToken && !loadingInvite && !invitation;
 
   return (
     <div className="min-h-screen bg-[#fbf9f5] flex items-center justify-center px-4">
@@ -182,7 +223,7 @@ function RegisterForm() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-              <div className="rounded-xl bg-[#f5f4ef] p-4">
+              {!forgotMode && !resetToken && <div className="rounded-xl bg-[#f5f4ef] p-4">
                 <p
                   className="text-xs font-medium uppercase tracking-wide text-[#5e605b]"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -195,7 +236,7 @@ function RegisterForm() {
                 >
                   {invitation?.team?.name ?? "Assigned team"} · {invitation?.role === "team_lead" ? "Team Lead" : "Member"}
                 </p>
-              </div>
+              </div>}
 
               <div className="flex flex-col gap-1.5">
                 <label

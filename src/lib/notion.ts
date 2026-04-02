@@ -470,6 +470,19 @@ export async function syncEntryToNotionFull(entry: FullEntry): Promise<string | 
   return page.id;
 }
 
+export async function updateTeamMemberName(notionPageId: string, name: string): Promise<void> {
+  if (!process.env.NOTION_API_KEY) return;
+  await fetch(`${NOTION_API_BASE}/pages/${notionPageId}`, {
+    method: "PATCH",
+    headers: notionHeaders(),
+    body: JSON.stringify({
+      properties: {
+        Name: { title: [{ text: { content: name } }] },
+      },
+    }),
+  });
+}
+
 export async function updateEntryStatus(notionPageId: string, status: string): Promise<void> {
   if (!process.env.NOTION_API_KEY) return;
   await fetch(`${NOTION_API_BASE}/pages/${notionPageId}`, {

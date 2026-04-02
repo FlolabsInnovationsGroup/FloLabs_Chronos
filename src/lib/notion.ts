@@ -421,9 +421,16 @@ export async function syncEntryToNotionFull(entry: FullEntry): Promise<string | 
 
   const isNew = !entry.notionPageId;
   const status = isNew ? "Processed" : "Edited";
-  const teamMemberPageId = entry.user?.name
-    ? await resolveTeamMemberPageId(entry.user.name).catch(() => null)
-    : null;
+
+  // Prefer the stored notionTeamMemberId on the user record (populated by teams-sync)
+  // before falling back to the slower fuzzy-match index lookup
+  let teamMemberPageId: string | null = null;
+  const storedId = (entry.user as { notionTeamMemberId?: string | null } | undefined)?.notionTeamMemberId ?? null;
+  if (storedId) {
+    teamMemberPageId = storedId;
+  } else if (entry.user?.name) {
+    teamMemberPageId = await resolveTeamMemberPageId(entry.user.name).catch(() => null);
+  }
 
   const properties = buildNotionEntryProperties(entry, teamMemberPageId, status);
 

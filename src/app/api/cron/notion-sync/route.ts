@@ -50,6 +50,7 @@ export async function GET(req: Request) {
         name: users.name,
         email: users.email,
         discordWebhookUrl: users.discordWebhookUrl,
+        notionTeamMemberId: users.notionTeamMemberId,
       },
     })
     .from(timeEntries)

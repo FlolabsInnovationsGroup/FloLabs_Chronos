@@ -166,25 +166,25 @@ function buildEntryEmbedBase(params: {
   changes?: Array<{ field: string; oldValue: string; newValue: string }>;
 }) {
   const fields = [
-    { name: "User", value: params.userName || "Unknown", inline: true },
-    { name: "Project", value: params.project || "Unknown", inline: true },
-    { name: "Task", value: taskLabel(params.taskTitle), inline: false },
-    { name: "Description", value: params.description?.trim() || "No description", inline: false },
-    { name: "Tags", value: params.tags.length > 0 ? params.tags.join(", ") : "No tags", inline: false },
-    { name: "Duration", value: fmtDurationSecs(params.durationMs), inline: true },
-    { name: "Start", value: fmtDatetime(params.startedAt), inline: true },
+    { name: "👤 User", value: params.userName || "Unknown", inline: true },
+    { name: "📁 Project", value: params.project || "Unknown", inline: true },
+    { name: "✅ Task", value: taskLabel(params.taskTitle), inline: false },
+    { name: "📝 Description", value: params.description?.trim() || "No description", inline: false },
+    { name: "🏷️ Tags", value: params.tags.length > 0 ? params.tags.join(", ") : "No tags", inline: false },
+    { name: "⏱️ Duration", value: fmtDurationSecs(params.durationMs), inline: true },
+    { name: "🗓️ Start", value: fmtDatetime(params.startedAt), inline: true },
   ];
 
   if (params.endedAt) {
-    fields.push({ name: "End", value: fmtDatetime(params.endedAt), inline: true });
+    fields.push({ name: "🕓 End", value: fmtDatetime(params.endedAt), inline: true });
   }
 
   if (params.updatedAt) {
-    fields.push({ name: "Updated", value: fmtDatetime(params.updatedAt), inline: true });
+    fields.push({ name: "🕑 Updated", value: fmtDatetime(params.updatedAt), inline: true });
   }
 
   if (params.deletedAt) {
-    fields.push({ name: "Deleted detected", value: fmtDatetime(params.deletedAt), inline: true });
+    fields.push({ name: "🗑️ Deleted detected", value: fmtDatetime(params.deletedAt), inline: true });
   }
 
   if (params.changes && params.changes.length > 0) {
@@ -192,7 +192,7 @@ function buildEntryEmbedBase(params: {
       .map((c) => `• **${c.field}**: ${formatChangeValue(c.field, c.oldValue)} → ${formatChangeValue(c.field, c.newValue)}`)
       .join("\n")
       .slice(0, 1000);
-    fields.push({ name: "Changes", value: rendered, inline: false });
+    fields.push({ name: "🛠️ Changes", value: rendered, inline: false });
   }
 
   return {
@@ -215,7 +215,7 @@ export function buildEntryAddedEmbed(params: {
   updatedAt: Date;
 }) {
   return buildEntryEmbedBase({
-    title: "New Time Entry Added",
+    title: "🆕 New Time Entry Added",
     color: BRAND_PRIMARY,
     ...params,
   });
@@ -234,7 +234,7 @@ export function buildEntryEditedEmbed(params: {
   changes: Array<{ field: string; oldValue: string; newValue: string }>;
 }) {
   return buildEntryEmbedBase({
-    title: "Time Entry Edited",
+    title: "✍️ Time Entry Edited",
     color: BRAND_DARK,
     userName: params.userName,
     project: params.project,
@@ -260,7 +260,7 @@ export function buildEntryDeletedEmbed(params: {
   deletedAt: Date;
 }) {
   return buildEntryEmbedBase({
-    title: "Time Entry Deleted",
+    title: "🗑️ Time Entry Deleted",
     color: 0xa73b21,
     userName: params.userName,
     project: params.project,
@@ -279,19 +279,19 @@ export function buildTimerStartEmbed(
   description: string
 ): object {
   return {
-    title: "Timer Started",
+    title: "▶️ Timer Started",
     description: description
       ? `**${userName}** started working on: *${description}*`
       : `**${userName}** started a new session`,
     color: BRAND_PRIMARY,
     fields: [
       {
-        name: "Project",
+        name: "📁 Project",
         value: projectName,
         inline: true,
       },
       {
-        name: "Started at",
+        name: "🕑 Started at",
         value: new Date().toLocaleTimeString("en-US", {
           hour: "numeric",
           minute: "2-digit",
@@ -314,19 +314,19 @@ export function buildTimerStopEmbed(
   durationMs: number
 ): object {
   return {
-    title: "Session Logged",
+    title: "⏹️ Session Logged",
     description: description
       ? `**${userName}** finished: *${description}*`
       : `**${userName}** stopped their session`,
     color: BRAND_DARK,
     fields: [
       {
-        name: "Project",
+        name: "📁 Project",
         value: projectName,
         inline: true,
       },
       {
-        name: "Duration",
+        name: "⏱️ Duration",
         value: formatDurationHuman(durationMs),
         inline: true,
       },
@@ -430,13 +430,13 @@ export function buildDailySummaryEmbed(
     .sort(([, a], [, b]) => b - a)
     .slice(0, 5)
     .map(([name, ms]) => ({
-      name,
+      name: `📁 ${name}`,
       value: formatDurationHuman(ms),
       inline: true,
     }));
 
   return {
-    title: `Daily Summary — ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`,
+    title: `📊 Daily Summary — ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`,
     description: `**${userName}** logged **${totalHours} hours** across **${entries.length} session${entries.length !== 1 ? "s" : ""}** today.`,
     color: BRAND_WARM,
     fields: projectFields.length > 0 ? projectFields : undefined,

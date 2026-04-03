@@ -189,7 +189,7 @@ function buildEntryEmbedBase(params: {
 
   if (params.changes && params.changes.length > 0) {
     const rendered = params.changes
-      .map((c) => `• **${c.field}**: ${formatChangeValue(c.field, c.oldValue)} → ${formatChangeValue(c.field, c.newValue)}`)
+      .map((c) => `• **${c.field}**: ~~${formatChangeValue(c.field, c.oldValue)}~~ → ${formatChangeValue(c.field, c.newValue)}`)
       .join("\n")
       .slice(0, 1000);
     fields.push({ name: "🛠️ Changes", value: rendered, inline: false });

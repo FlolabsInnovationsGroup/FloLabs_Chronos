@@ -34,12 +34,13 @@ export async function POST(req: Request) {
   await deleteActiveTimer(userId);
 
   if (db && !discard) {
-    // Update the running entry
     const updated = await db
       .update(timeEntries)
       .set({
         stoppedAt: new Date(stoppedAt),
         durationMs,
+        notionTaskPageId: timer.notionTaskPageId ?? null,
+        notionTaskTitle: timer.notionTaskTitle ?? null,
         updatedAt: new Date(stoppedAt),
       })
       .where(
@@ -51,7 +52,6 @@ export async function POST(req: Request) {
       )
       .returning({ id: timeEntries.id });
 
-    // Insert tag associations for the completed entry
     const tagIds: string[] = Array.isArray(timer.tagIds) ? timer.tagIds : [];
     if (tagIds.length > 0 && updated.length > 0) {
       const entryId = updated[0].id;
@@ -65,7 +65,6 @@ export async function POST(req: Request) {
       await syncAndNotifyEntry(updated[0].id).catch(() => {});
     }
   } else if (db && discard) {
-    // Delete the running entry (timeEntryTags cascade automatically)
     await db
       .delete(timeEntries)
       .where(
@@ -78,7 +77,6 @@ export async function POST(req: Request) {
 
   await broadcastTimerEvent({ type: "timer:stop", userId, data: null });
 
-  // Fire Discord stop notification fire-and-forget
   if (!discard) {
     (async () => {
       if (!db) return;

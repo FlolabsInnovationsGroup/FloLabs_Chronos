@@ -4,14 +4,14 @@
 
 Chronos is FloLabs' internal time-tracking and workforce coordination tool. It replaces Toggl for time capture, but the product is broader than a timer: it manages projects, role-scoped reporting, invite-only onboarding, Notion-backed team data, and downstream sync into Notion for operational visibility.
 
-The system is now beyond the original V1 assumptions. The current product model is:
+The current product model is:
 - Projects are global, but only admins can create, modify, archive, restore, or delete them.
 - Users can belong to multiple teams.
 - Access is role-scoped across three roles: `admin`, `team_lead`, `member`.
 - Account creation is invite-only.
 - Invitations can assign one or more teams.
 - Teams are sourced from Notion and synced into Chronos; Chronos is not the authority for creating/editing teams.
-- Team membership is also operationally Notion-driven: Chronos should not become a second source of truth for who belongs to which team.
+- Team membership is operationally Notion-driven.
 - Tags are per-user, and time entries support multiple tags.
 - Time entries can optionally link to a Notion Task page explicitly via stored task relation metadata.
 - PostgreSQL is the application source of truth for Chronos data; Notion is the external operations mirror / integration layer.
@@ -111,16 +111,47 @@ A time entry stores:
 - sync metadata for Notion
 - optional explicit Notion Task relation fields
 
-#### Task Assignment Model
+#### Current Task Linking Workaround
+
+Today, there is still a transitional workaround in use:
+- users can paste the Notion Task URL into the time entry description
+- a local Python script named **task linker** (living alongside the repo) scans synced time entries
+- it extracts the task page ID from the pasted Notion URL
+- it looks up the corresponding task in the Notion Tasks database
+- it writes the `Task` relation onto the Notion Time Entry page
+
+This is the **current compatibility path** and must be documented as real production behavior.
+
+Relevant Notion Tasks DB URL currently referenced by the team:
+- `https://www.notion.so/flolabsrd/b5a15559fffc4a4f97161bf12e6fb400?v=2d91fb6dc57044e2b93684c32b69a2e0&source=copy_link`
+- Database ID: `b5a15559fffc4a4f97161bf12e6fb400`
+
+#### Target Task Assignment Model
 
 Chronos is moving away from encoding task links inside free-text descriptions.
 
-The intended and now partially implemented model is:
+The replacement model is:
 - `description` = what the user is doing
 - `notionTaskPageId` = which Notion Task page the entry belongs to
 - `notionTaskTitle` = cached title for display and UX
 
 This allows the UI to provide a searchable task selector and lets Notion sync write a proper relation instead of parsing URLs from descriptions.
+
+#### Recommended UX (implemented direction)
+
+Chronos should support the combination of:
+
+**Option A — explicit task picker**
+- searchable task selector in the timer / entry UI
+- typeahead against the Notion Tasks database
+- selected task stored directly on the entry
+
+**Option B — recent-task suggestion**
+- suggest task/project/tag combinations from the user's last 2 weeks
+- when a previous entry had a task assigned, surface that previous task as part of the suggestion
+- applying a suggestion should prefill description, project, tags, and task when available
+
+This combination is the long-term replacement for the pasted-link workaround.
 
 ---
 
@@ -138,6 +169,7 @@ This allows the UI to provide a searchable task selector and lets Notion sync wr
 | External ops integration | **Notion API** | Teams, Team Members, Tasks, and time-entry mirror |
 | Optional delivery | **Email provider** (future / optional) | Invitation delivery |
 | Notifications | **Discord webhooks** | Entry sync notifications |
+| Transitional local integration | **Python task linker script** | Legacy task relation patching from description URLs |
 
 ---
 
@@ -161,8 +193,9 @@ This allows the UI to provide a searchable task selector and lets Notion sync wr
 2. API computes `durationMs`.
 3. API writes the completed entry to PostgreSQL.
 4. API writes tag associations to `time_entry_tags`.
-5. API removes the active timer from Redis.
-6. API broadcasts a stop event.
+5. Task metadata is persisted on the entry row when present.
+6. API removes the active timer from Redis.
+7. API broadcasts a stop event.
 
 ### Visibility Rules
 - Admins can inspect all active timers.
@@ -215,7 +248,6 @@ CREATE TABLE team_memberships (
   PRIMARY KEY (user_id, team_id)
 );
 
--- Password reset support
 CREATE TABLE password_reset_tokens (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -225,7 +257,6 @@ CREATE TABLE password_reset_tokens (
   created_at  TIMESTAMPTZ DEFAULT now()
 );
 
--- Invitations
 CREATE TABLE invitations (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email          TEXT NOT NULL,
@@ -246,7 +277,6 @@ CREATE TABLE invitation_team_memberships (
   PRIMARY KEY (invitation_id, team_id)
 );
 
--- Projects
 CREATE TABLE projects (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name        TEXT NOT NULL,
@@ -256,7 +286,6 @@ CREATE TABLE projects (
   created_at  TIMESTAMPTZ DEFAULT now()
 );
 
--- Tags
 CREATE TABLE tags (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name        TEXT NOT NULL,
@@ -266,7 +295,6 @@ CREATE TABLE tags (
 CREATE UNIQUE INDEX tags_name_user_unique ON tags(name, user_id);
 CREATE INDEX idx_tags_user ON tags(user_id);
 
--- Time entries
 CREATE TABLE time_entries (
   id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id              UUID NOT NULL REFERENCES users(id),
@@ -289,19 +317,6 @@ CREATE TABLE time_entry_tags (
   tag_id         UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
   PRIMARY KEY (time_entry_id, tag_id)
 );
-
-CREATE INDEX idx_entries_user ON time_entries(user_id, started_at DESC);
-CREATE INDEX idx_entries_project ON time_entries(project_id, started_at DESC);
-CREATE INDEX idx_entries_date ON time_entries(started_at DESC);
-CREATE INDEX idx_users_team ON users(team_id);
-CREATE INDEX idx_invitations_email ON invitations(email);
-CREATE INDEX idx_invitations_team ON invitations(team_id);
-CREATE INDEX idx_team_memberships_user ON team_memberships(user_id);
-CREATE INDEX idx_team_memberships_team ON team_memberships(team_id);
-CREATE INDEX idx_invitation_team_memberships_invitation ON invitation_team_memberships(invitation_id);
-CREATE INDEX idx_invitation_team_memberships_team ON invitation_team_memberships(team_id);
-CREATE INDEX idx_entry_tags_entry ON time_entry_tags(time_entry_id);
-CREATE INDEX idx_entry_tags_tag ON time_entry_tags(tag_id);
 ```
 
 ### Data Rules
@@ -313,6 +328,7 @@ CREATE INDEX idx_entry_tags_tag ON time_entry_tags(tag_id);
 - Tags are unique per `(name, user_id)`.
 - Time entries never store a direct single tag column.
 - Task linkage is optional and stored explicitly on the time entry.
+- Description may still temporarily contain a pasted Notion task URL for compatibility with the Python task linker.
 - Deleting a tag preserves the time entry.
 - Deleting a project deletes linked time entries.
 - Deleting a user cascades to their tags and membership rows; user deletion should still be product-gated by historical integrity rules.
@@ -335,7 +351,7 @@ Synced fields:
 - Notion page ID
 
 ### Sync endpoint
-- `GET/POST /api/cron/teams-sync` (implementation depends on current route handler style)
+- `/api/cron/teams-sync`
 - Intended schedule: every 15 minutes
 
 ### Sync rules
@@ -348,19 +364,20 @@ Synced fields:
 
 ## Task Search & Task Relation Model
 
-Chronos now exposes a task search API:
+Chronos exposes a task search API:
 - `GET /api/tasks?q=<query>`
 
 This queries the Notion Tasks database and returns task candidates for UI selection.
 
-### Intended UX
-- User types a description.
-- User can optionally search/select a task from Notion.
-- The selected task is stored on the time entry as `notionTaskPageId` and `notionTaskTitle`.
-- Future sync writes this as a proper Notion relation on the Time Entries database.
+### Implemented direction
+- timer UI supports explicit task selection from Notion Tasks
+- manual/edit entry UI supports explicit task selection from Notion Tasks
+- recent suggestions can carry forward previously used task relations
+- chosen task is stored as `notionTaskPageId` + `notionTaskTitle`
+- Notion sync writes the `Task` relation directly when task metadata is present
 
-### Why this model exists
-It replaces the older, fragile pattern of embedding/pasting task links into descriptions and later parsing them.
+### Transitional behavior
+If a task was not explicitly selected in Chronos, the older pasted-link + Python task linker path may still be used.
 
 ---
 
@@ -381,15 +398,6 @@ Authorization must be enforced in **every route handler and protected server rea
 
 ### Shared Permission Helpers
 Use centralized helpers in `src/lib/permissions.ts`.
-
-Typical helpers include:
-- `isAdmin(session)`
-- `isTeamLead(session)`
-- `isMember(session)`
-- `canManageProjects(session)`
-- `canManageTeams(session)`
-- `canManageInvitations(session)`
-- accessible-user / accessible-team helpers
 
 ### Route Rules
 
@@ -446,6 +454,7 @@ PostgreSQL is authoritative for Chronos. Notion is an integration target, not th
 - matching/syncing Team Member relations
 - handling edited and deleted entries
 - searching the Notion Tasks database for task selection
+- writing the `Task` relation directly when `notionTaskPageId` is present
 
 ### Expected env vars
 - `NOTION_API_KEY`
@@ -488,6 +497,7 @@ Depending on actual database schema detection, Chronos maps:
 ### UI Rules
 - Use custom dropdowns, not native `<select>` elements.
 - Use `TagMultiSelect` for tag picking.
+- Use task picker UI for explicit task selection instead of requiring a pasted link.
 - Icon-only buttons use delayed tooltips.
 - Destructive actions use confirmation modals where **Cancel is visually primary** and the destructive action is danger-styled.
 - Modals must fit viewport height and scroll internally.
@@ -557,6 +567,7 @@ FloLabs_Chronos/
 - **Redis** stores active timers and cache/pub-sub state
 - **Notion** is used for operational sync / mirror databases
 - **Discord webhooks** handle lightweight notifications
+- **Local Python task linker** may still be used during transition for entries that only contain pasted task URLs in descriptions
 
 Current live deployment has used:
 - project: `flo-labs-chronos`
@@ -566,7 +577,7 @@ Current live deployment has used:
 
 ## Documentation Rule
 
-`ARCHITECTURE.md` should describe the **actual current contract** of the product.
+`ARCHITECTURE.md` should describe the **actual current contract** of the product, including transitional workarounds that are still in use.
 
 If code and docs diverge:
 1. decide whether the code is an intentional evolution or stale drift,

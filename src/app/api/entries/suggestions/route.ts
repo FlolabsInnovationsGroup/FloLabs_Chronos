@@ -31,6 +31,7 @@ export async function GET(req: Request) {
       or(
         ilike(timeEntries.description, pattern),
         ilike(projects.name, pattern),
+        ilike(timeEntries.notionTaskTitle, pattern),
         inArray(timeEntries.id, entryIdsMatchingTag),
       )!
     );
@@ -70,13 +71,22 @@ export async function GET(req: Request) {
     projectName: string;
     tagIds: string[];
     tagNames: string[];
+    notionTaskPageId: string | null;
+    notionTaskTitle: string | null;
     startedAt: string;
   }>();
 
   for (const row of rows) {
     const tagList = tagMap.get(row.entry.id) ?? [];
-    const key = `${(row.entry.description ?? "").trim().toLowerCase()}::${row.entry.projectId}::${tagList.map((t) => t.id).sort().join(",")}`;
+    const key = [
+      (row.entry.description ?? "").trim().toLowerCase(),
+      row.entry.projectId,
+      tagList.map((t) => t.id).sort().join(","),
+      row.entry.notionTaskPageId ?? "",
+    ].join("::");
+
     if (deduped.has(key)) continue;
+
     deduped.set(key, {
       entryId: row.entry.id,
       description: row.entry.description ?? "",
@@ -84,6 +94,8 @@ export async function GET(req: Request) {
       projectName: row.project?.name ?? "Unknown",
       tagIds: tagList.map((t) => t.id),
       tagNames: tagList.map((t) => t.name),
+      notionTaskPageId: row.entry.notionTaskPageId ?? null,
+      notionTaskTitle: row.entry.notionTaskTitle ?? null,
       startedAt: new Date(row.entry.startedAt).toISOString(),
     });
   }

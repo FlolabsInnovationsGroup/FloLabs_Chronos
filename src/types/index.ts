@@ -65,6 +65,8 @@ export interface TimeEntry {
   userId: string;
   projectId: string;
   description: string;
+  notionTaskPageId?: string | null;
+  notionTaskTitle?: string | null;
   startedAt: Date;
   stoppedAt: Date | null;
   durationMs: number | null;
@@ -84,6 +86,8 @@ export interface ActiveTimer {
   projectId: string;
   tagIds: string[];
   description: string;
+  notionTaskPageId?: string | null;
+  notionTaskTitle?: string | null;
   startedAt: number; // Unix ms timestamp
 }
 

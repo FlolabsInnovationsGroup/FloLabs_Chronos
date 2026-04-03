@@ -7,7 +7,6 @@ import { z } from "zod";
 import { getAccessibleUserIds } from "@/lib/permissions";
 import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 
-// Given a list of entry rows, fetch and attach tags from the join table.
 async function attachTags(
   entryRows: { id: string }[]
 ): Promise<Map<string, { id: string; name: string }[]>> {
@@ -90,6 +89,8 @@ const createSchema = z.object({
   projectId: z.string().uuid(),
   tagIds: z.array(z.string().uuid()).optional().default([]),
   description: z.string(),
+  notionTaskPageId: z.string().optional().nullable(),
+  notionTaskTitle: z.string().optional().nullable(),
   startedAt: z.string(),
   stoppedAt: z.string(),
   durationMs: z.number(),
@@ -113,6 +114,8 @@ export async function POST(req: Request) {
       ...rest,
       startedAt: new Date(rest.startedAt),
       stoppedAt: new Date(rest.stoppedAt),
+      notionTaskPageId: rest.notionTaskPageId ?? null,
+      notionTaskTitle: rest.notionTaskTitle ?? null,
     })
     .returning();
 

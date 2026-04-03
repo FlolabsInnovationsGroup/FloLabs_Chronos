@@ -173,6 +173,8 @@ export const timeEntries = pgTable(
     editedField: text("edited_field"),
     // Notion backup integration
     notionPageId: text("notion_page_id"),
+    notionTaskPageId: text("notion_task_page_id"),
+    notionTaskTitle: text("notion_task_title"),
     syncedAt: timestamp("synced_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),

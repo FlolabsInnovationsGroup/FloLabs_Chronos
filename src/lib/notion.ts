@@ -11,6 +11,26 @@ interface NotionDatabaseResponse {
   properties: Record<string, NotionDatabaseProperty>;
 }
 
+export async function searchTasks(query: string): Promise<{ id: string; title: string }[]> {
+  const dbId = process.env.NOTION_TASKS_DB_ID;
+  if (!dbId || !process.env.NOTION_API_KEY) return [];
+
+  const res = await fetch(`${NOTION_API_BASE}/databases/${dbId}/query`, {
+    method: "POST",
+    headers: notionHeaders(),
+    body: JSON.stringify({
+      page_size: 10,
+      ...(query.trim() ? { filter: { property: "Name", title: { contains: query.trim() } } } : {}),
+    }),
+  });
+  if (!res.ok) return [];
+  const data = (await res.json()) as { results: Array<{ id: string; properties?: Record<string, { type: string; title?: { plain_text: string }[] }> }> };
+  return data.results.map((page) => ({
+    id: page.id,
+    title: Object.values(page.properties ?? {}).find((prop) => prop.type === "title")?.title?.map((t) => t.plain_text).join("") ?? "Untitled task",
+  }));
+}
+
 let databaseSchemaPromise: Promise<NotionDatabaseResponse> | null = null;
 
 function notionHeaders() {
@@ -414,6 +434,11 @@ export function buildNotionEntryProperties(
 
   if (teamMemberPageId) {
     properties["Team Member"] = { relation: [{ id: teamMemberPageId }] };
+  }
+
+  const taskPageId = (entry as TimeEntry & { notionTaskPageId?: string | null }).notionTaskPageId;
+  if (taskPageId) {
+    properties["Task"] = { relation: [{ id: taskPageId }] };
   }
 
   return properties;

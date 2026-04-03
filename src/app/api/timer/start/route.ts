@@ -11,6 +11,8 @@ const startSchema = z.object({
   projectId: z.string().uuid(),
   tagIds: z.array(z.string().uuid()).optional().default([]),
   description: z.string().default(""),
+  notionTaskPageId: z.string().optional().nullable(),
+  notionTaskTitle: z.string().optional().nullable(),
 });
 
 export async function POST(req: Request) {
@@ -21,11 +23,19 @@ export async function POST(req: Request) {
   const parsed = startSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-  const { projectId, tagIds, description } = parsed.data;
+  const { projectId, tagIds, description, notionTaskPageId, notionTaskTitle } = parsed.data;
   const userId = session.user.id;
   const startedAt = Date.now();
 
-  const timer = { userId, projectId, tagIds, description, startedAt };
+  const timer = {
+    userId,
+    projectId,
+    tagIds,
+    description,
+    notionTaskPageId: notionTaskPageId ?? null,
+    notionTaskTitle: notionTaskTitle ?? null,
+    startedAt,
+  };
 
   await setActiveTimer(userId, timer);
 
@@ -35,6 +45,8 @@ export async function POST(req: Request) {
       userId,
       projectId,
       description,
+      notionTaskPageId: notionTaskPageId ?? null,
+      notionTaskTitle: notionTaskTitle ?? null,
       startedAt: new Date(startedAt),
     });
   }

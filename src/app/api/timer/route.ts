@@ -9,6 +9,8 @@ import { z } from "zod";
 const updateTimerSchema = z.object({
   tagIds: z.array(z.string().uuid()).default([]),
   description: z.string().optional(),
+  notionTaskPageId: z.string().optional().nullable(),
+  notionTaskTitle: z.string().optional().nullable(),
 });
 
 export async function PATCH(req: Request) {
@@ -25,6 +27,8 @@ export async function PATCH(req: Request) {
 
   const requestedTagIds = [...new Set(parsed.data.tagIds)];
   const nextDescription = parsed.data.description;
+  const nextTaskPageId = parsed.data.notionTaskPageId;
+  const nextTaskTitle = parsed.data.notionTaskTitle;
 
   if (db && requestedTagIds.length > 0) {
     const ownedTags = await db
@@ -41,6 +45,8 @@ export async function PATCH(req: Request) {
     ...activeTimer,
     tagIds: requestedTagIds,
     ...(nextDescription !== undefined ? { description: nextDescription } : {}),
+    ...(nextTaskPageId !== undefined ? { notionTaskPageId: nextTaskPageId } : {}),
+    ...(nextTaskTitle !== undefined ? { notionTaskTitle: nextTaskTitle } : {}),
   };
 
   await setActiveTimer(userId, updatedTimer);
@@ -64,12 +70,12 @@ export async function PATCH(req: Request) {
           .onConflictDoNothing();
       }
 
-      if (nextDescription !== undefined) {
-        await db
-          .update(timeEntries)
-          .set({ description: nextDescription, updatedAt: new Date() })
-          .where(eq(timeEntries.id, activeEntry.id));
-      }
+      const updateFields: Record<string, unknown> = { updatedAt: new Date() };
+      if (nextDescription !== undefined) updateFields.description = nextDescription;
+      if (nextTaskPageId !== undefined) updateFields.notionTaskPageId = nextTaskPageId;
+      if (nextTaskTitle !== undefined) updateFields.notionTaskTitle = nextTaskTitle;
+
+      await db.update(timeEntries).set(updateFields).where(eq(timeEntries.id, activeEntry.id));
     }
   }
 

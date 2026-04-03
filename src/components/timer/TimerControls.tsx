@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { DropdownSelect } from "@/components/ui/DropdownSelect";
 import { TagMultiSelect, type TagOption } from "@/components/ui/TagMultiSelect";
 import { TaskSuggestions, type TaskSuggestion } from "@/components/entries/TaskSuggestions";
+import { TaskPicker } from "@/components/entries/TaskPicker";
 import type { Project, Tag } from "@/types";
 
 interface TimerControlsProps {
@@ -20,18 +21,31 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
   const [descriptionSaving, setDescriptionSaving] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [selectedTask, setSelectedTask] = useState<{ id: string; title: string } | null>(null);
   const [localTags, setLocalTags] = useState<TagOption[]>(
     initialTags.map((t) => ({ id: t.id, name: t.name }))
   );
   const [submitting, setSubmitting] = useState(false);
   const [tagSaving, setTagSaving] = useState(false);
+  const [taskSaving, setTaskSaving] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     if (activeTimer) {
       setSelectedTagIds(Array.isArray(activeTimer.tagIds) ? activeTimer.tagIds : []);
       setDescription(activeTimer.description ?? "");
+      setSelectedTask(
+        activeTimer.notionTaskPageId
+          ? {
+              id: activeTimer.notionTaskPageId,
+              title: activeTimer.notionTaskTitle ?? "Untitled task",
+            }
+          : null
+      );
+      return;
     }
+
+    setSelectedTask(null);
   }, [activeTimer]);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
@@ -61,6 +75,8 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
         projectId: selectedProjectId,
         tagIds: selectedTagIds,
         description,
+        notionTaskPageId: selectedTask?.id ?? null,
+        notionTaskTitle: selectedTask?.title ?? null,
       });
     } finally {
       setSubmitting(false);
@@ -73,9 +89,30 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
 
     setTagSaving(true);
     try {
-      await update({ tagIds: nextTagIds });
+      await update({
+        tagIds: nextTagIds,
+        notionTaskPageId: selectedTask?.id ?? null,
+        notionTaskTitle: selectedTask?.title ?? null,
+      });
     } finally {
       setTagSaving(false);
+    }
+  }
+
+  async function handleTaskChange(task: { id: string; title: string } | null) {
+    setSelectedTask(task);
+    if (!activeTimer) return;
+
+    setTaskSaving(true);
+    try {
+      await update({
+        tagIds: selectedTagIds,
+        description,
+        notionTaskPageId: task?.id ?? null,
+        notionTaskTitle: task?.title ?? null,
+      });
+    } finally {
+      setTaskSaving(false);
     }
   }
 
@@ -94,24 +131,38 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
   async function handleStop() {
     setSubmitting(true);
     try {
-      if (activeTimer && description !== (activeTimer.description ?? "")) {
-        await handleDescriptionPersist(description);
+      if (
+        activeTimer &&
+        (description !== (activeTimer.description ?? "") ||
+          (selectedTask?.id ?? null) !== (activeTimer.notionTaskPageId ?? null) ||
+          (selectedTask?.title ?? null) !== (activeTimer.notionTaskTitle ?? null))
+      ) {
+        await handleDescriptionPersist(description, selectedTask);
       }
       await stop(false);
       setDescription("");
       setSelectedProjectId("");
       setSelectedTagIds([]);
+      setSelectedTask(null);
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleDescriptionPersist(nextDescription: string) {
+  async function handleDescriptionPersist(
+    nextDescription: string,
+    nextTask: { id: string; title: string } | null = selectedTask
+  ) {
     if (!activeTimer) return;
 
     setDescriptionSaving(true);
     try {
-      await update({ description: nextDescription, tagIds: selectedTagIds });
+      await update({
+        description: nextDescription,
+        tagIds: selectedTagIds,
+        notionTaskPageId: nextTask?.id ?? null,
+        notionTaskTitle: nextTask?.title ?? null,
+      });
     } finally {
       setDescriptionSaving(false);
     }
@@ -119,12 +170,25 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
 
   async function applySuggestion(suggestion: TaskSuggestion) {
     setDescription(suggestion.description);
+    setSelectedTask(
+      suggestion.notionTaskPageId
+        ? {
+            id: suggestion.notionTaskPageId,
+            title: suggestion.notionTaskTitle ?? "Untitled task",
+          }
+        : null
+    );
     setShowSuggestions(false);
 
     if (activeTimer) {
       setSelectedTagIds(suggestion.tagIds);
       try {
-        await update({ description: suggestion.description, tagIds: suggestion.tagIds });
+        await update({
+          description: suggestion.description,
+          tagIds: suggestion.tagIds,
+          notionTaskPageId: suggestion.notionTaskPageId ?? null,
+          notionTaskTitle: suggestion.notionTaskTitle ?? null,
+        });
       } catch {
         // ignore suggestion apply failures on running timer
       }
@@ -139,6 +203,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     return (
       <div className="flex flex-col gap-4 animate-pulse">
         <div className="h-14 bg-[#f5f4ef] rounded-xl" />
+        <div className="h-11 bg-[#f5f4ef] rounded-xl" />
         <div className="flex gap-2">
           <div className="h-9 w-32 bg-[#f5f4ef] rounded-full" />
           <div className="h-9 w-24 bg-[#f5f4ef] rounded-full" />
@@ -211,6 +276,33 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
           </p>
         )}
       </div>
+
+      <TaskPicker
+        value={selectedTask}
+        onChange={(task) => void handleTaskChange(task)}
+        placeholder="Search Notion tasks…"
+        label="Task"
+        disabled={submitting || taskSaving}
+      />
+
+      {(activeTimer || selectedTask) && (
+        <div className="flex items-center justify-between gap-3 -mt-2">
+          <p
+            className="text-xs text-[#5e605b]"
+            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          >
+            {selectedTask ? `Selected task: ${selectedTask.title}` : "No task selected"}
+          </p>
+          {taskSaving && (
+            <span
+              className="text-xs text-[#366769]"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              Saving task…
+            </span>
+          )}
+        </div>
+      )}
 
       {!activeTimer && (
         <div className="flex flex-wrap gap-2 items-start">

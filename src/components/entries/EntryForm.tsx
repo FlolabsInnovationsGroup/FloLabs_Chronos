@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -8,6 +8,7 @@ import { TagMultiSelect, type TagOption } from "@/components/ui/TagMultiSelect";
 import { Button } from "@/components/ui/Button";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { TaskSuggestions, type TaskSuggestion } from "@/components/entries/TaskSuggestions";
+import { TaskPicker } from "@/components/entries/TaskPicker";
 import type { Project, Tag, TimeEntry } from "@/types";
 
 interface EntryFormProps {
@@ -35,6 +36,11 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
   const [description, setDescription] = useState(entry?.description ?? "");
   const [projectId, setProjectId] = useState(entry?.projectId ?? "");
   const [tagIds, setTagIds] = useState<string[]>((entry?.tags ?? []).map((t) => t.id));
+  const [selectedTask, setSelectedTask] = useState<{ id: string; title: string } | null>(
+    entry?.notionTaskPageId
+      ? { id: entry.notionTaskPageId, title: entry.notionTaskTitle ?? "Untitled task" }
+      : null
+  );
   const [startedAt, setStartedAt] = useState(toDatetimeLocal(entry?.startedAt));
   const [stoppedAt, setStoppedAt] = useState(toDatetimeLocal(entry?.stoppedAt));
   const [saving, setSaving] = useState(false);
@@ -45,7 +51,21 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
     tags.map((t) => ({ id: t.id, name: t.name }))
   );
 
-  // editedField lock state — only relevant when editing an existing completed entry
+  useEffect(() => {
+    if (!open) return;
+    setDescription(entry?.description ?? "");
+    setProjectId(entry?.projectId ?? "");
+    setTagIds((entry?.tags ?? []).map((t) => t.id));
+    setSelectedTask(
+      entry?.notionTaskPageId
+        ? { id: entry.notionTaskPageId, title: entry.notionTaskTitle ?? "Untitled task" }
+        : null
+    );
+    setStartedAt(toDatetimeLocal(entry?.startedAt));
+    setStoppedAt(toDatetimeLocal(entry?.stoppedAt));
+    setError("");
+  }, [entry, open]);
+
   const editedField = entry?.editedField ?? null;
   const hasStoppedAt = !!entry?.stoppedAt;
   const startLocked = isEdit && editedField === "end";
@@ -94,15 +114,15 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
         projectId,
         tagIds,
         description,
+        notionTaskPageId: selectedTask?.id ?? null,
+        notionTaskTitle: selectedTask?.title ?? null,
       };
 
       if (!isEdit) {
-        // New entry: always send both times and computed duration
         payload.startedAt = start.toISOString();
         payload.stoppedAt = stop.toISOString();
         payload.durationMs = stop.getTime() - start.getTime();
       } else {
-        // Edit: only send the times that are not locked
         if (!startLocked) {
           const origStart = toDatetimeLocal(entry?.startedAt);
           if (startedAt !== origStart) payload.startedAt = start.toISOString();
@@ -142,6 +162,11 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
     setDescription(suggestion.description);
     setProjectId(suggestion.projectId);
     setTagIds(suggestion.tagIds);
+    setSelectedTask(
+      suggestion.notionTaskPageId
+        ? { id: suggestion.notionTaskPageId, title: suggestion.notionTaskTitle ?? "Untitled task" }
+        : null
+    );
     setShowSuggestions(false);
   }
 
@@ -168,6 +193,14 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
           <TaskSuggestions query={description} open={showSuggestions} onPick={applySuggestion} />
         </div>
 
+        <TaskPicker
+          value={selectedTask}
+          onChange={setSelectedTask}
+          placeholder="Search Notion tasks…"
+          label="Task"
+          disabled={saving}
+        />
+
         <Select
           label="Project"
           options={projectOptions}
@@ -192,10 +225,8 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
           />
         </div>
 
-        {/* Show start/end time fields only when there is a stoppedAt (completed entry or new entry) */}
         {(!isEdit || hasStoppedAt) && (
           <div className="grid grid-cols-2 gap-3">
-            {/* Start time */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5">
                 <label
@@ -218,7 +249,6 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
               />
             </div>
 
-            {/* End time */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5">
                 <label

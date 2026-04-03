@@ -46,6 +46,9 @@ async function getInvitationTeams(invitationIds: string[]) {
 
 async function ensureNotionTeamMemberPage(email: string, name: string, notionTeamPageIds: string[]) {
   if (!process.env.NOTION_API_KEY || !process.env.NOTION_TEAM_MEMBERS_DB_ID) return;
+  if (notionTeamPageIds.length === 0) {
+    throw new Error("Cannot create Team Member page in Notion without Team relations.");
+  }
 
   const queryRes = await fetch(`${NOTION_API_BASE}/databases/${process.env.NOTION_TEAM_MEMBERS_DB_ID}/query`, {
     method: "POST",
@@ -125,7 +128,12 @@ export async function POST(req: Request) {
   const [invite] = await db.insert(invitations).values({ email: normalizedEmail, name: parsed.data.name.trim(), role: parsed.data.role, teamId: teamIds[0], token, invitedById: session.user.id, expiresAt }).returning();
   await db.insert(invitationTeamMemberships).values(teamIds.map((teamId) => ({ invitationId: invite.id, teamId }))).onConflictDoNothing();
 
-  await ensureNotionTeamMemberPage(normalizedEmail, parsed.data.name.trim(), teamRows.map((team) => team.notionPageId).filter((id): id is string => Boolean(id)));
+  const notionTeamPageIds = teamRows.map((team) => team.notionPageId).filter((id): id is string => Boolean(id));
+  if (notionTeamPageIds.length !== teamRows.length) {
+    return NextResponse.json({ error: "One or more selected teams are not linked to a Notion team page yet." }, { status: 409 });
+  }
+
+  await ensureNotionTeamMemberPage(normalizedEmail, parsed.data.name.trim(), notionTeamPageIds);
 
   broadcastDataChange("team");
   return NextResponse.json({ invitation: { ...invite, teams: teamRows, teamIds }, inviteUrl: buildInviteUrl(token, req.url), delivery: "manual" }, { status: 201 });

@@ -14,6 +14,7 @@ const createInvitationSchema = z.object({
   role: z.enum(["team_lead", "member"]).default("member"),
   teamId: z.string().uuid().optional(),
   teamIds: z.array(z.string().uuid()).optional(),
+  expiresAt: z.string().datetime().optional(),
 });
 
 const NOTION_API_BASE = "https://api.notion.com/v1";
@@ -113,8 +114,13 @@ export async function POST(req: Request) {
   }
 
   const token = createInvitationToken();
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
+  const expiresAt = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : new Date();
+  if (!parsed.data.expiresAt) {
+    expiresAt.setDate(expiresAt.getDate() + 7);
+  }
+  if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+    return NextResponse.json({ error: "Expiration must be a valid future date." }, { status: 400 });
+  }
 
   const [invite] = await db.insert(invitations).values({ email: normalizedEmail, name: parsed.data.name.trim(), role: parsed.data.role, teamId: teamIds[0], token, invitedById: session.user.id, expiresAt }).returning();
   await db.insert(invitationTeamMemberships).values(teamIds.map((teamId) => ({ invitationId: invite.id, teamId }))).onConflictDoNothing();

@@ -545,12 +545,12 @@ export function buildNotionEntryProperties(
   properties["Description"] = buildRichTextValue(entry.description || "");
   properties["Status"] = { status: { name: status } };
 
-  if (teamMemberPageId) {
+  if (teamMemberPageId && schema["Team Member"]?.type === "relation") {
     properties["Team Member"] = { relation: [{ id: teamMemberPageId }] };
   }
 
   const taskPageId = (entry as TimeEntry & { notionTaskPageId?: string | null }).notionTaskPageId;
-  if (taskPageId) {
+  if (taskPageId && schema["Task"]?.type === "relation") {
     properties["Task"] = { relation: [{ id: taskPageId }] };
   }
 

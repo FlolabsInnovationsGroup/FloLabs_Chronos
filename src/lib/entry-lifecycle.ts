@@ -59,7 +59,16 @@ export async function syncAndNotifyEntry(
   if (!entry || !entry.stoppedAt) return { synced: false, notified: false, reason: "entry-missing-or-running" };
 
   const isNew = !entry.notionPageId;
-  const notionPageId = await syncEntryToNotionFull(entry as Parameters<typeof syncEntryToNotionFull>[0]);
+  let notionPageId: string | null = null;
+  try {
+    notionPageId = await syncEntryToNotionFull(entry as Parameters<typeof syncEntryToNotionFull>[0]);
+  } catch (error) {
+    return {
+      synced: false,
+      notified: false,
+      reason: error instanceof Error ? error.message : "notion-sync-failed",
+    };
+  }
   if (!notionPageId) return { synced: false, notified: false, reason: "notion-sync-failed" };
 
   await db

@@ -144,8 +144,10 @@ export async function PATCH(
   if ((entry.description ?? "") !== (updated.description ?? "")) changes.push({ field: "description", oldValue: entry.description ?? "No description", newValue: updated.description ?? "No description" });
   if ((previousProject?.name ?? "Unknown") !== (updatedProject?.name ?? "Unknown")) changes.push({ field: "project", oldValue: previousProject?.name ?? "Unknown", newValue: updatedProject?.name ?? "Unknown" });
   if (previousTagNames.join(", ") !== nextTagNames.join(", ")) changes.push({ field: "tags", oldValue: previousTagNames.join(", ") || "No tags", newValue: nextTagNames.join(", ") || "No tags" });
-  if ((entry.notionTaskPageId ?? null) !== (updated.notionTaskPageId ?? null) || (entry.notionTaskTitle ?? "") !== (updated.notionTaskTitle ?? "")) {
-    changes.push({ field: "task", oldValue: entry.notionTaskTitle ?? "No task linked", newValue: updated.notionTaskTitle ?? "No task linked" });
+  const previousTaskLabel = entry.notionTaskTitle?.trim() || "No task linked";
+  const nextTaskLabel = updated.notionTaskTitle?.trim() || "No task linked";
+  if ((entry.notionTaskPageId ?? null) !== (updated.notionTaskPageId ?? null) || previousTaskLabel !== nextTaskLabel) {
+    changes.push({ field: "task", oldValue: previousTaskLabel, newValue: nextTaskLabel });
   }
   if ((entry.durationMs ?? 0) !== (updated.durationMs ?? 0)) changes.push({ field: "duration", oldValue: String(entry.durationMs ?? 0), newValue: String(updated.durationMs ?? 0) });
   if (new Date(entry.startedAt).getTime() !== new Date(updated.startedAt).getTime()) changes.push({ field: "startedAt", oldValue: new Date(entry.startedAt).toISOString(), newValue: new Date(updated.startedAt).toISOString() });

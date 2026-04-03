@@ -134,6 +134,27 @@ function formatChangeValue(field: string, value: string): string {
   return value;
 }
 
+function formatChangeFieldLabel(field: string): string {
+  switch (field) {
+    case "startedAt":
+      return "Start";
+    case "stoppedAt":
+      return "End";
+    case "duration":
+      return "Duration";
+    case "project":
+      return "Project";
+    case "tags":
+      return "Tags";
+    case "description":
+      return "Description";
+    case "task":
+      return "Task";
+    default:
+      return field;
+  }
+}
+
 function fmtDurationSecs(ms: number): string {
   const totalSecs = Math.floor(ms / 1000);
   const h = Math.floor(totalSecs / 3600);
@@ -189,7 +210,7 @@ function buildEntryEmbedBase(params: {
 
   if (params.changes && params.changes.length > 0) {
     const rendered = params.changes
-      .map((c) => `• **${c.field}**: ~~${formatChangeValue(c.field, c.oldValue)}~~ → ${formatChangeValue(c.field, c.newValue)}`)
+      .map((c) => `• **${formatChangeFieldLabel(c.field)}**: ~~${formatChangeValue(c.field, c.oldValue)}~~ → ${formatChangeValue(c.field, c.newValue)}`)
       .join("\n")
       .slice(0, 1000);
     fields.push({ name: "🛠️ Changes", value: rendered, inline: false });

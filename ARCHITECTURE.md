@@ -15,6 +15,7 @@ The current product model is:
 - Tags are per-user, and time entries support multiple tags.
 - Time entries can optionally link to a Notion Task page explicitly via stored task relation metadata.
 - PostgreSQL is the application source of truth for Chronos data; Notion is the external operations mirror / integration layer.
+- Discord webhooks are used for branded notifications about time-entry lifecycle events.
 
 ---
 
@@ -111,47 +112,42 @@ A time entry stores:
 - sync metadata for Notion
 - optional explicit Notion Task relation fields
 
-#### Current Task Linking Workaround
+#### Current State: Task Assignment
 
-Today, there is still a transitional workaround in use:
-- users can paste the Notion Task URL into the time entry description
-- a local Python script named **task linker** (living alongside the repo) scans synced time entries
-- it extracts the task page ID from the pasted Notion URL
+Chronos now supports **native task selection**.
+
+Implemented behavior:
+- timer UI supports a searchable task picker backed by the Notion Tasks database
+- create/manual log entry flows support the same task picker
+- the visible edit modal in the entries list (`EntryCard` modal) also supports task reassignment
+- recent-entry suggestions can carry forward previous task selections from the last 2 weeks
+- selected tasks are stored locally as:
+  - `notionTaskPageId`
+  - `notionTaskTitle`
+- Notion sync writes the `Task` relation directly when task metadata is present
+
+#### Transitional Compatibility Path
+
+A legacy compatibility workaround still exists in the operational environment:
+- users may still paste the Notion Task URL into the time entry description
+- a local Python script named **task linker** (living alongside the repo) can scan synced time entries
+- it extracts the task page ID from pasted Notion URLs
 - it looks up the corresponding task in the Notion Tasks database
 - it writes the `Task` relation onto the Notion Time Entry page
 
-This is the **current compatibility path** and must be documented as real production behavior.
+This is no longer the preferred path, but it remains part of the real system until fully retired.
 
-Relevant Notion Tasks DB URL currently referenced by the team:
+Relevant Notion Tasks DB URL:
 - `https://www.notion.so/flolabsrd/b5a15559fffc4a4f97161bf12e6fb400?v=2d91fb6dc57044e2b93684c32b69a2e0&source=copy_link`
 - Database ID: `b5a15559fffc4a4f97161bf12e6fb400`
 
-#### Target Task Assignment Model
+#### Edit Modal Reality
 
-Chronos is moving away from encoding task links inside free-text descriptions.
+There are two time-entry form paths in the codebase:
+- `EntryForm.tsx` — shared create/edit form component
+- `EntryCard.tsx` — the inline list-card edit modal actually used from the entry list UI
 
-The replacement model is:
-- `description` = what the user is doing
-- `notionTaskPageId` = which Notion Task page the entry belongs to
-- `notionTaskTitle` = cached title for display and UX
-
-This allows the UI to provide a searchable task selector and lets Notion sync write a proper relation instead of parsing URLs from descriptions.
-
-#### Recommended UX (implemented direction)
-
-Chronos should support the combination of:
-
-**Option A — explicit task picker**
-- searchable task selector in the timer / entry UI
-- typeahead against the Notion Tasks database
-- selected task stored directly on the entry
-
-**Option B — recent-task suggestion**
-- suggest task/project/tag combinations from the user's last 2 weeks
-- when a previous entry had a task assigned, surface that previous task as part of the suggestion
-- applying a suggestion should prefill description, project, tags, and task when available
-
-This combination is the long-term replacement for the pasted-link workaround.
+The entry-list edit experience must be considered authoritative for user-facing behavior, because that is the modal users interact with most often.
 
 ---
 
@@ -168,7 +164,7 @@ This combination is the long-term replacement for the pasted-link workaround.
 | Validation | **Zod** | Shared request validation |
 | External ops integration | **Notion API** | Teams, Team Members, Tasks, and time-entry mirror |
 | Optional delivery | **Email provider** (future / optional) | Invitation delivery |
-| Notifications | **Discord webhooks** | Entry sync notifications |
+| Notifications | **Discord webhooks** | Branded embed notifications for entry lifecycle events |
 | Transitional local integration | **Python task linker script** | Legacy task relation patching from description URLs |
 
 ---
@@ -196,6 +192,7 @@ This combination is the long-term replacement for the pasted-link workaround.
 5. Task metadata is persisted on the entry row when present.
 6. API removes the active timer from Redis.
 7. API broadcasts a stop event.
+8. Completed entries can then be synced to Notion and notified to Discord.
 
 ### Visibility Rules
 - Admins can inspect all active timers.
@@ -369,11 +366,22 @@ Chronos exposes a task search API:
 
 This queries the Notion Tasks database and returns task candidates for UI selection.
 
-### Implemented direction
-- timer UI supports explicit task selection from Notion Tasks
-- manual/edit entry UI supports explicit task selection from Notion Tasks
-- recent suggestions can carry forward previously used task relations
-- chosen task is stored as `notionTaskPageId` + `notionTaskTitle`
+### Search behavior
+- the API detects and uses the Tasks DB schema dynamically
+- it supports short queries such as `F`
+- it falls back to a broader scan/filter path if the filtered Notion query is empty
+- it can surface configuration errors in the response metadata for debugging
+
+### Implemented UI surfaces
+- timer UI task picker
+- create/manual log time-entry modal
+- entry-list edit modal (`EntryCard`)
+- suggestion carryover from recent entries
+
+### Persistence model
+- selected task is stored as:
+  - `notionTaskPageId`
+  - `notionTaskTitle`
 - Notion sync writes the `Task` relation directly when task metadata is present
 
 ### Transitional behavior
@@ -456,6 +464,14 @@ PostgreSQL is authoritative for Chronos. Notion is an integration target, not th
 - searching the Notion Tasks database for task selection
 - writing the `Task` relation directly when `notionTaskPageId` is present
 
+### Edited-entry behavior
+For completed entries edited through the API:
+- Chronos updates the local PostgreSQL row
+- Chronos immediately calls `syncAndNotifyEntry()`
+- Notion is updated as part of the same edit lifecycle
+- Discord edit notifications are also triggered from that same lifecycle
+- silent swallowing of sync failures has been removed for this path, so task-edit problems do not fail invisibly anymore
+
 ### Expected env vars
 - `NOTION_API_KEY`
 - `NOTION_DATABASE_ID` — Time Entries DB
@@ -478,9 +494,16 @@ Depending on actual database schema detection, Chronos maps:
 - Task relation when task linkage is present and target schema supports it
 
 ### Discord notifications
-- Per-user webhook URLs are stored on `users`
-- Notifications are plain-text Markdown
-- Notification failures should not block sync completion
+- Per-user/team-member webhook URLs are resolved from Notion Team Member records and/or stored user config
+- Notifications are sent as **Discord embeds**, not plain-text messages
+- Embeds use FloLabs Chronos brand colors
+- Entry notifications cover:
+  - new completed entry
+  - edited entry
+  - deleted entry
+- When present, linked task titles are included in the notification payload
+- Edit notifications include a change summary, with old values struck through
+- Notification failures are surfaced in lifecycle results instead of always failing silently
 
 ---
 
@@ -498,9 +521,14 @@ Depending on actual database schema detection, Chronos maps:
 - Use custom dropdowns, not native `<select>` elements.
 - Use `TagMultiSelect` for tag picking.
 - Use task picker UI for explicit task selection instead of requiring a pasted link.
+- Entry list cards surface linked task titles inline as badges when present.
 - Icon-only buttons use delayed tooltips.
 - Destructive actions use confirmation modals where **Cancel is visually primary** and the destructive action is danger-styled.
 - Modals must fit viewport height and scroll internally.
+
+### Branding
+- Sidebar shows the FloLabs logo as the primary persistent brand mark.
+- Top bar no longer duplicates the logo.
 
 ### Project Color Palette
 - `#366769` — deep teal
@@ -544,6 +572,11 @@ FloLabs_Chronos/
 │   │       ├── sse/
 │   │       └── cron/
 │   ├── components/
+│   │   ├── entries/
+│   │   ├── layout/
+│   │   ├── reports/
+│   │   ├── timer/
+│   │   └── ui/
 │   ├── hooks/
 │   ├── lib/
 │   │   ├── db/
@@ -551,8 +584,11 @@ FloLabs_Chronos/
 │   │   ├── permissions.ts
 │   │   ├── notion.ts
 │   │   ├── redis.ts
-│   │   └── discord.ts
+│   │   ├── discord.ts
+│   │   └── entry-lifecycle.ts
 │   └── types/
+├── assets/
+│   └── logo/
 ├── drizzle.config.ts
 ├── vercel.json
 └── .env.example
@@ -566,7 +602,7 @@ FloLabs_Chronos/
 - **Neon Postgres** stores durable app data
 - **Redis** stores active timers and cache/pub-sub state
 - **Notion** is used for operational sync / mirror databases
-- **Discord webhooks** handle lightweight notifications
+- **Discord webhooks** handle branded notification delivery
 - **Local Python task linker** may still be used during transition for entries that only contain pasted task URLs in descriptions
 
 Current live deployment has used:

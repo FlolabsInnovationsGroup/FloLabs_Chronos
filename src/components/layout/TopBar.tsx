@@ -1,11 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import floLabsLogo from "../../../assets/logo/FLChron_logo_512px.png";
 
 const NAV_LINKS = [
   { href: "/timer", label: "Dashboard" },
@@ -23,10 +21,7 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 bg-[#fbf9f5]/90 backdrop-blur-md">
       <div className="flex items-center justify-between px-6 h-14">
-        {/* Brand */}
-        <Link href="/timer" className="flex items-center">
-          <Image src={floLabsLogo} alt="FloLabs Chronos" priority className="h-8 w-auto" />
-        </Link>
+        <div />
 
         {/* Right side */}
         <div className="flex items-center gap-4">

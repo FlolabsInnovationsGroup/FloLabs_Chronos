@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -29,15 +30,17 @@ export function Sidebar() {
       {/* Logo */}
       <Link
         href="/timer"
-        className="w-12 h-12 flex items-center justify-center rounded-xl mb-3 hover:bg-[#f5f4ef] transition-colors"
+        className="w-14 h-14 flex items-center justify-center rounded-xl mb-3 hover:bg-[#f5f4ef] transition-colors"
         aria-label="FloLabs Chronos home"
       >
-        <span
-          className="text-2xl font-bold italic text-[#366769] select-none"
-          style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
-        >
-          FL
-        </span>
+        <Image
+          src="/flchron-logo.svg"
+          alt="FloLabs Chronos"
+          width={44}
+          height={44}
+          priority
+          className="h-11 w-11 object-contain"
+        />
       </Link>
 
       {/* Nav items */}

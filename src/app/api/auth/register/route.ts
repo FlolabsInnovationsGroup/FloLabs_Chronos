@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { normalizeEmail } from "@/lib/invitations";
+import { ensureDiscordResourcesForUser } from "@/lib/discord-provisioning";
 
 const registerSchema = z.object({
   token: z.string().min(1),
@@ -53,5 +54,8 @@ export async function POST(req: Request) {
   }
 
   await db.update(invitations).set({ acceptedAt: new Date() }).where(eq(invitations.id, invite.id));
+
+  await ensureDiscordResourcesForUser({ userId: user.id, name: user.name }).catch(() => null);
+
   return NextResponse.json({ user }, { status: 201 });
 }

@@ -26,10 +26,15 @@ export function ControlForm() {
   const [notionTasksDbId, setNotionTasksDbId] = useState("");
   const [notionTeamMembersDbId, setNotionTeamMembersDbId] = useState("");
   const [notionTeamsDbId, setNotionTeamsDbId] = useState("");
+  const [discordBotToken, setDiscordBotToken] = useState("");
+  const [discordGuildId, setDiscordGuildId] = useState("");
+  const [discordCategoryId, setDiscordCategoryId] = useState("");
+  const [discordChannelPrefix, setDiscordChannelPrefix] = useState("chronos");
   const [searchQuery, setSearchQuery] = useState("");
   const [databases, setDatabases] = useState<FoundDatabase[]>([]);
   const [apiKeyPresent, setApiKeyPresent] = useState(false);
   const [apiKeyMasked, setApiKeyMasked] = useState("");
+  const [discordBotTokenPresent, setDiscordBotTokenPresent] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -40,6 +45,10 @@ export function ControlForm() {
         setNotionTasksDbId(data.config?.notionTasksDbId ?? "");
         setNotionTeamMembersDbId(data.config?.notionTeamMembersDbId ?? "");
         setNotionTeamsDbId(data.config?.notionTeamsDbId ?? "");
+        setDiscordBotTokenPresent(Boolean(data.config?.discordBotTokenPresent));
+        setDiscordGuildId(data.config?.discordGuildId ?? "");
+        setDiscordCategoryId(data.config?.discordCategoryId ?? "");
+        setDiscordChannelPrefix(data.config?.discordChannelPrefix ?? "chronos");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load control settings.");
       } finally {
@@ -57,10 +66,11 @@ export function ControlForm() {
       await readJson(await fetch("/api/control", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notionApiKey, notionTasksDbId, notionTeamMembersDbId, notionTeamsDbId }),
+        body: JSON.stringify({ notionApiKey, notionTasksDbId, notionTeamMembersDbId, notionTeamsDbId, discordBotToken, discordGuildId, discordCategoryId, discordChannelPrefix }),
       }));
       setSuccess("Control settings saved.");
       setApiKeyPresent(true);
+      setDiscordBotTokenPresent(discordBotTokenPresent || Boolean(discordBotToken.trim()));
       setApiKeyMasked(notionApiKey ? `${notionApiKey.slice(0, 6)}••••••${notionApiKey.slice(-4)}` : apiKeyMasked);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save settings.");
@@ -97,11 +107,23 @@ export function ControlForm() {
           {error && <p className="text-sm text-[#a73b21] bg-[#fff7f6] px-4 py-3 rounded-xl">{error}</p>}
           {success && <p className="text-sm text-[#366769] bg-[#eef8f6] px-4 py-3 rounded-xl">{success}</p>}
 
-          <form onSubmit={handleSave} className="flex flex-col gap-4">
-            <Input label="Notion Integration Secret Key" type="password" value={notionApiKey} onChange={(e) => setNotionApiKey(e.target.value)} placeholder={apiKeyPresent ? "Saved in app config — leave empty to keep current key" : "ntn_..."} hint={apiKeyPresent && apiKeyMasked ? `Current key: ${apiKeyMasked}. Enter a new one only if you want to rotate it.` : "Stored in the app config store. Deployment env vars still take precedence if present."} />
-            <Input label="Tasks Database ID" value={notionTasksDbId} onChange={(e) => setNotionTasksDbId(e.target.value)} placeholder="b5a15559fffc4a4f97161bf12e6fb400" />
-            <Input label="Team Members Database ID" value={notionTeamMembersDbId} onChange={(e) => setNotionTeamMembersDbId(e.target.value)} placeholder="..." />
-            <Input label="Teams Database ID" value={notionTeamsDbId} onChange={(e) => setNotionTeamsDbId(e.target.value)} placeholder="..." />
+          <form onSubmit={handleSave} className="flex flex-col gap-6">
+            <div className="flex flex-col gap-4">
+              <h2 className="text-lg font-light italic text-[#31332f]" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Notion</h2>
+              <Input label="Notion Integration Secret Key" type="password" value={notionApiKey} onChange={(e) => setNotionApiKey(e.target.value)} placeholder={apiKeyPresent ? "Saved in app config — leave empty to keep current key" : "ntn_..."} hint={apiKeyPresent && apiKeyMasked ? `Current key: ${apiKeyMasked}. Enter a new one only if you want to rotate it.` : "Stored in the app config store. Deployment env vars still take precedence if present."} />
+              <Input label="Tasks Database ID" value={notionTasksDbId} onChange={(e) => setNotionTasksDbId(e.target.value)} placeholder="b5a15559fffc4a4f97161bf12e6fb400" />
+              <Input label="Team Members Database ID" value={notionTeamMembersDbId} onChange={(e) => setNotionTeamMembersDbId(e.target.value)} placeholder="..." />
+              <Input label="Teams Database ID" value={notionTeamsDbId} onChange={(e) => setNotionTeamsDbId(e.target.value)} placeholder="..." />
+            </div>
+
+            <div className="border-t border-[#efeee9] pt-6 flex flex-col gap-4">
+              <h2 className="text-lg font-light italic text-[#31332f]" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Discord Bot Provisioning</h2>
+              <Input label="Discord Bot Token" type="password" value={discordBotToken} onChange={(e) => setDiscordBotToken(e.target.value)} placeholder={discordBotTokenPresent ? "Saved in app config — leave empty to keep current token" : "Bot token"} hint="Used to create member channels and webhooks automatically when a user joins." />
+              <Input label="Discord Guild ID" value={discordGuildId} onChange={(e) => setDiscordGuildId(e.target.value)} placeholder="Server / guild ID" />
+              <Input label="Discord Category ID" value={discordCategoryId} onChange={(e) => setDiscordCategoryId(e.target.value)} placeholder="Optional category for member channels" />
+              <Input label="Channel Prefix" value={discordChannelPrefix} onChange={(e) => setDiscordChannelPrefix(e.target.value)} placeholder="chronos" />
+            </div>
+
             <div className="flex justify-end">
               <Button variant="primary" type="submit" loading={saving}>Save Control Settings</Button>
             </div>

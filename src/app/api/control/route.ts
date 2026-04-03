@@ -9,6 +9,10 @@ const controlSchema = z.object({
   notionTasksDbId: z.string().min(1),
   notionTeamMembersDbId: z.string().min(1),
   notionTeamsDbId: z.string().min(1),
+  discordBotToken: z.string().optional().default(""),
+  discordGuildId: z.string().optional().default(""),
+  discordCategoryId: z.string().optional().default(""),
+  discordChannelPrefix: z.string().optional().default("chronos"),
 });
 
 export async function GET() {
@@ -18,6 +22,11 @@ export async function GET() {
   }
 
   const config = await getNotionConfig();
+  const discordBotToken = await (await import("@/lib/app-config")).getAppConfigValue(APP_CONFIG_KEYS.discordBotToken as any);
+  const discordGuildId = await (await import("@/lib/app-config")).getAppConfigValue(APP_CONFIG_KEYS.discordGuildId as any);
+  const discordCategoryId = await (await import("@/lib/app-config")).getAppConfigValue(APP_CONFIG_KEYS.discordCategoryId as any);
+  const discordChannelPrefix = await (await import("@/lib/app-config")).getAppConfigValue(APP_CONFIG_KEYS.discordChannelPrefix as any);
+
   return NextResponse.json({
     config: {
       notionApiKeyPresent: Boolean(config.notionApiKey),
@@ -25,6 +34,10 @@ export async function GET() {
       notionTasksDbId: config.notionTasksDbId ?? "",
       notionTeamMembersDbId: config.notionTeamMembersDbId ?? "",
       notionTeamsDbId: config.notionTeamsDbId ?? "",
+      discordBotTokenPresent: Boolean(discordBotToken),
+      discordGuildId: discordGuildId ?? "",
+      discordCategoryId: discordCategoryId ?? "",
+      discordChannelPrefix: discordChannelPrefix ?? "chronos",
     },
   });
 }
@@ -49,6 +62,14 @@ export async function POST(req: Request) {
   if (parsed.data.notionApiKey.trim()) {
     values.unshift({ key: APP_CONFIG_KEYS.notionApiKey, value: parsed.data.notionApiKey.trim(), isSecret: true, updatedBy: session.user.id });
   }
+  if (parsed.data.discordBotToken.trim()) {
+    values.push({ key: APP_CONFIG_KEYS.discordBotToken, value: parsed.data.discordBotToken.trim(), isSecret: true, updatedBy: session.user.id });
+  }
+  if (parsed.data.discordGuildId.trim()) {
+    values.push({ key: APP_CONFIG_KEYS.discordGuildId, value: parsed.data.discordGuildId.trim(), updatedBy: session.user.id });
+  }
+  values.push({ key: APP_CONFIG_KEYS.discordCategoryId, value: parsed.data.discordCategoryId.trim(), updatedBy: session.user.id });
+  values.push({ key: APP_CONFIG_KEYS.discordChannelPrefix, value: parsed.data.discordChannelPrefix.trim() || "chronos", updatedBy: session.user.id });
 
   await setAppConfigValues(values);
 

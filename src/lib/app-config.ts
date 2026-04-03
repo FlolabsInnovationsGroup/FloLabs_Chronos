@@ -7,6 +7,10 @@ export const APP_CONFIG_KEYS = {
   notionTasksDbId: "notion.tasksDbId",
   notionTeamMembersDbId: "notion.teamMembersDbId",
   notionTeamsDbId: "notion.teamsDbId",
+  discordBotToken: "discord.botToken",
+  discordGuildId: "discord.guildId",
+  discordCategoryId: "discord.categoryId",
+  discordChannelPrefix: "discord.channelPrefix",
 } as const;
 
 export type AppConfigKey = (typeof APP_CONFIG_KEYS)[keyof typeof APP_CONFIG_KEYS];

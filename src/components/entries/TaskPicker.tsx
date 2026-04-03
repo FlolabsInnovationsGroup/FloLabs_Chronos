@@ -28,6 +28,7 @@ export function TaskPicker({
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<TaskOption[]>([]);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -35,14 +36,12 @@ export function TaskPicker({
     function handlePointerDown(event: PointerEvent) {
       if (!rootRef.current?.contains(event.target as Node)) {
         setOpen(false);
-        setQuery("");
       }
     }
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setOpen(false);
-        setQuery("");
         inputRef.current?.blur();
       }
     }
@@ -57,24 +56,43 @@ export function TaskPicker({
 
   useEffect(() => {
     if (!open) {
-      setOptions([]);
       setLoading(false);
+      setErrorMessage("");
       return;
     }
 
     const ctrl = new AbortController();
     const timer = setTimeout(async () => {
       setLoading(true);
+      setErrorMessage("");
       try {
         const res = await fetch(`/api/tasks?q=${encodeURIComponent(query)}`, { signal: ctrl.signal });
         const data = await res.json();
+
+        if (!res.ok) {
+          setOptions([]);
+          setErrorMessage(data.error ?? "Task search failed");
+          return;
+        }
+
         setOptions((data.tasks ?? []) as TaskOption[]);
+
+        if (data.meta && data.meta.taskSearchConfigured === false) {
+          setErrorMessage("Task search is not configured in the running environment.");
+          return;
+        }
+
+        if (data.error) {
+          setErrorMessage(data.error);
+          return;
+        }
       } catch {
         setOptions([]);
+        setErrorMessage("Could not load tasks.");
       } finally {
         setLoading(false);
       }
-    }, query.trim() ? 150 : 0);
+    }, query.trim() ? 120 : 0);
 
     return () => {
       clearTimeout(timer);
@@ -91,7 +109,7 @@ export function TaskPicker({
   function choose(option: TaskOption) {
     onChange({ id: option.id, title: option.title });
     setOpen(false);
-    setQuery("");
+    setQuery(option.title);
     inputRef.current?.blur();
   }
 
@@ -99,6 +117,7 @@ export function TaskPicker({
     onChange(null);
     setQuery("");
     setOptions([]);
+    setErrorMessage("");
   }
 
   return (
@@ -122,7 +141,7 @@ export function TaskPicker({
             onFocus={() => {
               if (disabled) return;
               setOpen(true);
-              setQuery("");
+              setQuery((current) => current || selectedTitle || "");
             }}
             onChange={(e) => {
               setOpen(true);
@@ -155,12 +174,19 @@ export function TaskPicker({
         {open && (
           <div className="absolute left-0 right-0 top-[calc(100%+0.4rem)] z-50 overflow-hidden rounded-2xl bg-[#fbf9f5] paper-shadow ring-1 ring-[#31332f]/6">
             <div className="max-h-72 overflow-y-auto overscroll-contain p-1.5">
-              {options.length === 0 ? (
+              {errorMessage ? (
+                <div
+                  className="px-3 py-2 text-sm text-[#a73b21]"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  {errorMessage}
+                </div>
+              ) : options.length === 0 ? (
                 <div
                   className="px-3 py-2 text-sm text-[#8f918b]"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
-                  {loading ? "Searching tasks…" : "No matching tasks"}
+                  {loading ? "Searching tasks…" : query.trim() ? "No matching tasks" : "Start typing to search tasks"}
                 </div>
               ) : (
                 options.map((option) => {

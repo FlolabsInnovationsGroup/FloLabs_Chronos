@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import floLabsLogo from "../../../assets/logo/FLChron_logo_512px.png";
 
 interface NavItem {
   href: string;
@@ -34,10 +35,8 @@ export function Sidebar() {
         aria-label="FloLabs Chronos home"
       >
         <Image
-          src="/flchron-logo.svg"
+          src={floLabsLogo}
           alt="FloLabs Chronos"
-          width={44}
-          height={44}
           priority
           className="h-11 w-11 object-contain"
         />

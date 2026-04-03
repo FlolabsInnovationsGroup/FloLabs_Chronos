@@ -11,24 +11,159 @@ interface NotionDatabaseResponse {
   properties: Record<string, NotionDatabaseProperty>;
 }
 
+interface NotionTitleFragment {
+  plain_text?: string;
+}
+
+interface NotionPagePropertyValue {
+  type: string;
+  title?: NotionTitleFragment[];
+  rich_text?: NotionTitleFragment[];
+}
+
+interface NotionPageResult {
+  id: string;
+  properties?: Record<string, NotionPagePropertyValue>;
+}
+
+function normalizeTaskQuery(query: string) {
+  return query.trim().toLowerCase();
+}
+
+function getPageTitle(page: NotionPageResult): string {
+  const titleProp = Object.values(page.properties ?? {}).find((prop) => prop.type === "title");
+  const title = titleProp?.title?.map((t) => t.plain_text ?? "").join("").trim();
+  return title || "Untitled task";
+}
+
+function matchesTaskQuery(title: string, query: string) {
+  if (!query) return true;
+  const normalizedTitle = title.toLowerCase();
+  const normalizedQuery = normalizeTaskQuery(query);
+  return normalizedTitle.includes(normalizedQuery);
+}
+
+async function queryTaskPages(params: {
+  databaseId: string;
+  pageSize: number;
+  filterPropertyName?: string | null;
+  query?: string;
+  startCursor?: string;
+}) {
+  const { databaseId, pageSize, filterPropertyName, query, startCursor } = params;
+  const trimmedQuery = query?.trim() ?? "";
+
+  const body: Record<string, unknown> = {
+    page_size: pageSize,
+  };
+
+  if (startCursor) {
+    body.start_cursor = startCursor;
+  }
+
+  if (trimmedQuery && filterPropertyName) {
+    body.filter = {
+      property: filterPropertyName,
+      title: {
+        contains: trimmedQuery,
+      },
+    };
+  }
+
+  const res = await fetch(`${NOTION_API_BASE}/databases/${databaseId}/query`, {
+    method: "POST",
+    headers: notionHeaders(),
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "");
+    return {
+      ok: false as const,
+      status: res.status,
+      errorText,
+      data: null,
+    };
+  }
+
+  const data = (await res.json()) as {
+    results: NotionPageResult[];
+    has_more?: boolean;
+    next_cursor?: string | null;
+  };
+
+  return {
+    ok: true as const,
+    status: res.status,
+    errorText: "",
+    data,
+  };
+}
+
+async function fallbackTaskSearch(databaseId: string, query: string): Promise<{ id: string; title: string }[]> {
+  const normalizedQuery = normalizeTaskQuery(query);
+  const matches: { id: string; title: string }[] = [];
+  const seen = new Set<string>();
+  let cursor: string | undefined;
+  let pagesScanned = 0;
+  const maxPagesToScan = normalizedQuery.length <= 1 ? 8 : 4;
+
+  do {
+    const response = await queryTaskPages({
+      databaseId,
+      pageSize: 100,
+      startCursor: cursor,
+    });
+
+    if (!response.ok || !response.data) break;
+
+    for (const page of response.data.results) {
+      const title = getPageTitle(page);
+      if (!matchesTaskQuery(title, normalizedQuery)) continue;
+      if (seen.has(page.id)) continue;
+      seen.add(page.id);
+      matches.push({ id: page.id, title });
+      if (matches.length >= 10) return matches;
+    }
+
+    pagesScanned += 1;
+    cursor = response.data.has_more && response.data.next_cursor ? response.data.next_cursor : undefined;
+  } while (cursor && pagesScanned < maxPagesToScan);
+
+  return matches;
+}
+
 export async function searchTasks(query: string): Promise<{ id: string; title: string }[]> {
   const dbId = process.env.NOTION_TASKS_DB_ID;
   if (!dbId || !process.env.NOTION_API_KEY) return [];
 
-  const res = await fetch(`${NOTION_API_BASE}/databases/${dbId}/query`, {
-    method: "POST",
-    headers: notionHeaders(),
-    body: JSON.stringify({
-      page_size: 10,
-      ...(query.trim() ? { filter: { property: "Name", title: { contains: query.trim() } } } : {}),
-    }),
-  });
-  if (!res.ok) return [];
-  const data = (await res.json()) as { results: Array<{ id: string; properties?: Record<string, { type: string; title?: { plain_text: string }[] }> }> };
-  return data.results.map((page) => ({
-    id: page.id,
-    title: Object.values(page.properties ?? {}).find((prop) => prop.type === "title")?.title?.map((t) => t.plain_text).join("") ?? "Untitled task",
-  }));
+  const trimmedQuery = query.trim();
+
+  try {
+    const schema = await getDatabaseSchema(dbId);
+    const titleProperty = findPropertyName(schema.properties, ["Name", "Title", "Task", "Task Name"], ["title"]);
+
+    const primary = await queryTaskPages({
+      databaseId: dbId,
+      pageSize: 10,
+      filterPropertyName: titleProperty,
+      query: trimmedQuery,
+    });
+
+    if (primary.ok && primary.data) {
+      const mapped = primary.data.results
+        .map((page) => ({ id: page.id, title: getPageTitle(page) }))
+        .filter((task) => matchesTaskQuery(task.title, trimmedQuery));
+
+      if (mapped.length > 0 || !trimmedQuery) {
+        return mapped.slice(0, 10);
+      }
+    }
+
+    return await fallbackTaskSearch(dbId, trimmedQuery);
+  } catch {
+    return [];
+  }
 }
 
 let databaseSchemaPromise: Promise<NotionDatabaseResponse> | null = null;
@@ -215,7 +350,6 @@ export async function syncEntryToNotion(entry: TimeEntry): Promise<string> {
     properties[chronosIdProperty] = buildRichTextValue(entry.id);
   }
 
-  // If we already have a page ID, update it; otherwise create
   if (entry.notionPageId) {
     const res = await fetch(`${NOTION_API_BASE}/pages/${entry.notionPageId}`, {
       method: "PATCH",
@@ -231,7 +365,6 @@ export async function syncEntryToNotion(entry: TimeEntry): Promise<string> {
     return entry.notionPageId;
   }
 
-  // Create new page
   const res = await fetch(`${NOTION_API_BASE}/pages`, {
     method: "POST",
     headers: notionHeaders(),
@@ -260,17 +393,14 @@ type FullEntry = TimeEntry & {
   tags?: { id: string; name: string }[];
 };
 
-/** Normalize a display name for fuzzy matching */
 function normalizeName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
 }
 
-/** Tokenize a normalized name */
 function tokenize(name: string): Set<string> {
   return new Set(name.split(/\s+/).filter(Boolean));
 }
 
-/** Jaccard similarity between two token sets */
 function jaccard(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 && b.size === 0) return 1;
   const intersection = [...a].filter((x) => b.has(x)).length;
@@ -278,11 +408,9 @@ function jaccard(a: Set<string>, b: Set<string>): number {
   return intersection / union;
 }
 
-/** Redis key for the team member name index */
 const TEAM_INDEX_KEY = "notion:team-index";
-const TEAM_INDEX_TTL = 7200; // seconds
+const TEAM_INDEX_TTL = 7200;
 
-/** Lazy-load a simple Redis get/set for caching the team index. */
 async function cacheGet(key: string): Promise<string | null> {
   try {
     const { kvGet } = await import("@/lib/redis-cache");
@@ -301,10 +429,6 @@ async function cacheSet(key: string, value: string, ttl: number): Promise<void> 
   }
 }
 
-/**
- * Build fuzzy name index: normalized_name -> Notion page ID
- * Queries Onboardings DB, paginates all results, caches in Redis.
- */
 export async function buildTeamMemberIndex(): Promise<Map<string, string>> {
   const dbId = process.env.NOTION_ONBOARDINGS_DB_ID;
   if (!dbId) return new Map();
@@ -331,7 +455,6 @@ export async function buildTeamMemberIndex(): Promise<Map<string, string>> {
     };
 
     for (const page of data.results) {
-      // Find the title property value (Name / Full Name / etc.)
       for (const prop of Object.values(page.properties)) {
         if (prop.type === "title" && prop.title?.length) {
           const rawName = prop.title.map((t) => t.plain_text).join("");
@@ -346,19 +469,13 @@ export async function buildTeamMemberIndex(): Promise<Map<string, string>> {
     cursor = data.has_more && data.next_cursor ? data.next_cursor : undefined;
   } while (cursor);
 
-  // Persist to cache
   const serialized = JSON.stringify([...index.entries()]);
   await cacheSet(TEAM_INDEX_KEY, serialized, TEAM_INDEX_TTL);
 
   return index;
 }
 
-/**
- * Resolve Onboardings page ID for a user display name using fuzzy token-Jaccard matching.
- * Uses Redis cache; rebuilds if missing.
- */
 export async function resolveTeamMemberPageId(userName: string): Promise<string | null> {
-  // Try cache first
   let index: Map<string, string> | null = null;
   const cached = await cacheGet(TEAM_INDEX_KEY);
   if (cached) {
@@ -387,13 +504,9 @@ export async function resolveTeamMemberPageId(userName: string): Promise<string 
     }
   }
 
-  // Require at least a modest overlap
   return bestScore >= 0.4 ? bestId : null;
 }
 
-/**
- * Build the full Notion property payload for a time entry.
- */
 export function buildNotionEntryProperties(
   entry: FullEntry,
   teamMemberPageId: string | null,
@@ -444,10 +557,6 @@ export function buildNotionEntryProperties(
   return properties;
 }
 
-/**
- * Full upsert: create if no notionPageId, update if notionPageId exists.
- * Returns the Notion page ID, or null on failure.
- */
 export async function syncEntryToNotionFull(entry: FullEntry): Promise<string | null> {
   const dbId = process.env.NOTION_DATABASE_ID;
   if (!dbId || !process.env.NOTION_API_KEY) return null;
@@ -455,8 +564,6 @@ export async function syncEntryToNotionFull(entry: FullEntry): Promise<string | 
   const isNew = !entry.notionPageId;
   const status = isNew ? "Processed" : "Edited";
 
-  // Prefer the stored notionTeamMemberId on the user record (populated by teams-sync)
-  // before falling back to the slower fuzzy-match index lookup
   let teamMemberPageId: string | null = null;
   const storedId = (entry.user as { notionTeamMemberId?: string | null } | undefined)?.notionTeamMemberId ?? null;
   if (storedId) {
@@ -481,7 +588,6 @@ export async function syncEntryToNotionFull(entry: FullEntry): Promise<string | 
     return entry.notionPageId!;
   }
 
-  // Create
   const res = await fetch(`${NOTION_API_BASE}/pages`, {
     method: "POST",
     headers: notionHeaders(),
@@ -515,49 +621,46 @@ export async function updateEntryStatus(notionPageId: string, status: string): P
     headers: notionHeaders(),
     body: JSON.stringify({
       properties: {
-        "Status": { status: { name: status } },
+        Status: { status: { name: status } },
       },
     }),
   });
 }
 
-/**
- * Mark a Notion page status as 'Deleted'.
- */
 export async function markEntryDeleted(notionPageId: string): Promise<void> {
-  await updateEntryStatus(notionPageId, "Deleted");
+  if (!process.env.NOTION_API_KEY) return;
+  await fetch(`${NOTION_API_BASE}/pages/${notionPageId}`, {
+    method: "PATCH",
+    headers: notionHeaders(),
+    body: JSON.stringify({
+      properties: {
+        Status: { status: { name: "Deleted" } },
+      },
+    }),
+  });
 }
 
-/**
- * Query Notion Time Entries DB for pages in a date window.
- * Returns [{ notionPageId, entryId }] for all pages found.
- */
-export async function queryNotionEntriesWindow(daysBack: number): Promise<{ notionPageId: string; entryId: string | null }[]> {
+export async function queryNotionEntriesWindow(
+  sinceHours: number
+): Promise<Array<{ notionPageId: string; entryId: string | null }>> {
   const dbId = process.env.NOTION_DATABASE_ID;
   if (!dbId || !process.env.NOTION_API_KEY) return [];
 
-  const since = new Date();
-  since.setDate(since.getDate() - daysBack);
-
-  const results: { notionPageId: string; entryId: string | null }[] = [];
+  const cutoff = new Date(Date.now() - sinceHours * 60 * 60 * 1000).toISOString();
+  const pages: Array<{ notionPageId: string; entryId: string | null }> = [];
   let cursor: string | undefined;
 
   do {
     const body: Record<string, unknown> = {
       page_size: 100,
       filter: {
-        and: [
-          {
-            property: "Date",
-            date: { on_or_after: since.toISOString().split("T")[0] },
-          },
-          {
-            property: "Status",
-            status: { does_not_equal: "Notified" },
-          },
-        ],
+        property: "Updated",
+        date: {
+          on_or_after: cutoff,
+        },
       },
     };
+
     if (cursor) body.start_cursor = cursor;
 
     const res = await fetch(`${NOTION_API_BASE}/databases/${dbId}/query`, {
@@ -565,31 +668,25 @@ export async function queryNotionEntriesWindow(daysBack: number): Promise<{ noti
       headers: notionHeaders(),
       body: JSON.stringify(body),
     });
+
     if (!res.ok) break;
 
     const data = (await res.json()) as {
-      results: {
+      results: Array<{
         id: string;
-        properties: Record<string, {
-          type: string;
-          rich_text?: { plain_text: string }[];
-          status?: { name: string };
-        }>;
-      }[];
-      has_more: boolean;
-      next_cursor: string | null;
+        properties?: Record<string, { type: string; rich_text?: { plain_text: string }[] }>;
+      }>;
+      has_more?: boolean;
+      next_cursor?: string | null;
     };
 
     for (const page of data.results) {
-      const entryIdProp = page.properties["Entry ID"];
-      const entryId = entryIdProp?.type === "rich_text" && entryIdProp.rich_text?.length
-        ? entryIdProp.rich_text.map((t) => t.plain_text).join("")
-        : null;
-      results.push({ notionPageId: page.id, entryId });
+      const entryId = page.properties?.["Entry ID"]?.rich_text?.map((t) => t.plain_text ?? "").join("") || null;
+      pages.push({ notionPageId: page.id, entryId });
     }
 
     cursor = data.has_more && data.next_cursor ? data.next_cursor : undefined;
   } while (cursor);
 
-  return results;
+  return pages;
 }

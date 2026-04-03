@@ -29,12 +29,14 @@ export function ControlForm() {
   const [searchQuery, setSearchQuery] = useState("");
   const [databases, setDatabases] = useState<FoundDatabase[]>([]);
   const [apiKeyPresent, setApiKeyPresent] = useState(false);
+  const [apiKeyMasked, setApiKeyMasked] = useState("");
 
   useEffect(() => {
     void (async () => {
       try {
         const data = await readJson(await fetch("/api/control", { cache: "no-store" }));
         setApiKeyPresent(Boolean(data.config?.notionApiKeyPresent));
+        setApiKeyMasked(data.config?.notionApiKeyMasked ?? "");
         setNotionTasksDbId(data.config?.notionTasksDbId ?? "");
         setNotionTeamMembersDbId(data.config?.notionTeamMembersDbId ?? "");
         setNotionTeamsDbId(data.config?.notionTeamsDbId ?? "");
@@ -59,9 +61,7 @@ export function ControlForm() {
       }));
       setSuccess("Control settings saved.");
       setApiKeyPresent(true);
-      if (!notionApiKey) {
-        setError("You must provide the Notion integration key when saving from this screen.");
-      }
+      setApiKeyMasked(notionApiKey ? `${notionApiKey.slice(0, 6)}••••••${notionApiKey.slice(-4)}` : apiKeyMasked);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save settings.");
     } finally {
@@ -98,7 +98,7 @@ export function ControlForm() {
           {success && <p className="text-sm text-[#366769] bg-[#eef8f6] px-4 py-3 rounded-xl">{success}</p>}
 
           <form onSubmit={handleSave} className="flex flex-col gap-4">
-            <Input label="Notion Integration Secret Key" type="password" value={notionApiKey} onChange={(e) => setNotionApiKey(e.target.value)} placeholder={apiKeyPresent ? "Saved in app config — enter a new one to replace it" : "ntn_..."} hint="Stored in the app config store. Deployment env vars still take precedence if present." />
+            <Input label="Notion Integration Secret Key" type="password" value={notionApiKey} onChange={(e) => setNotionApiKey(e.target.value)} placeholder={apiKeyPresent ? "Saved in app config — leave empty to keep current key" : "ntn_..."} hint={apiKeyPresent && apiKeyMasked ? `Current key: ${apiKeyMasked}. Enter a new one only if you want to rotate it.` : "Stored in the app config store. Deployment env vars still take precedence if present."} />
             <Input label="Tasks Database ID" value={notionTasksDbId} onChange={(e) => setNotionTasksDbId(e.target.value)} placeholder="b5a15559fffc4a4f97161bf12e6fb400" />
             <Input label="Team Members Database ID" value={notionTeamMembersDbId} onChange={(e) => setNotionTeamMembersDbId(e.target.value)} placeholder="..." />
             <Input label="Teams Database ID" value={notionTeamsDbId} onChange={(e) => setNotionTeamsDbId(e.target.value)} placeholder="..." />

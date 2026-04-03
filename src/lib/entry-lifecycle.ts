@@ -70,31 +70,36 @@ export async function syncAndNotifyEntry(
   const notionTeamMemberId = entry.user?.notionTeamMemberId || (entry.user?.name ? await resolveTeamMemberPageId(entry.user.name) : null);
   if (!notionTeamMemberId) return { synced: true, notified: false, reason: "team-member-unresolved" };
 
-  const delivered = isNew
-    ? await notifyEntryAdded({
-        notionTeamMemberId,
-        userName: entry.user?.name ?? "Unknown",
-        project: entry.project?.name ?? "Unknown",
-        tags: (entry.tags ?? []).map((tag) => tag.name),
-        description: entry.description ?? "",
-        taskTitle: entry.notionTaskTitle ?? null,
-        durationMs: entry.durationMs ?? 0,
-        startedAt: new Date(entry.startedAt),
-        updatedAt: new Date(entry.updatedAt ?? entry.startedAt),
-      })
-    : await notifyEntryEdited({
-        notionTeamMemberId,
-        userName: entry.user?.name ?? "Unknown",
-        project: entry.project?.name ?? "Unknown",
-        tags: (entry.tags ?? []).map((tag) => tag.name),
-        description: entry.description ?? "",
-        taskTitle: entry.notionTaskTitle ?? null,
-        durationMs: entry.durationMs ?? 0,
-        startedAt: new Date(entry.startedAt),
-        stoppedAt: entry.stoppedAt ? new Date(entry.stoppedAt) : null,
-        updatedAt: new Date(entry.updatedAt ?? entry.startedAt),
-        changes,
-      });
+  let delivered = false;
+  try {
+    delivered = isNew
+      ? await notifyEntryAdded({
+          notionTeamMemberId,
+          userName: entry.user?.name ?? "Unknown",
+          project: entry.project?.name ?? "Unknown",
+          tags: (entry.tags ?? []).map((tag) => tag.name),
+          description: entry.description ?? "",
+          taskTitle: entry.notionTaskTitle ?? null,
+          durationMs: entry.durationMs ?? 0,
+          startedAt: new Date(entry.startedAt),
+          updatedAt: new Date(entry.updatedAt ?? entry.startedAt),
+        })
+      : await notifyEntryEdited({
+          notionTeamMemberId,
+          userName: entry.user?.name ?? "Unknown",
+          project: entry.project?.name ?? "Unknown",
+          tags: (entry.tags ?? []).map((tag) => tag.name),
+          description: entry.description ?? "",
+          taskTitle: entry.notionTaskTitle ?? null,
+          durationMs: entry.durationMs ?? 0,
+          startedAt: new Date(entry.startedAt),
+          stoppedAt: entry.stoppedAt ? new Date(entry.stoppedAt) : null,
+          updatedAt: new Date(entry.updatedAt ?? entry.startedAt),
+          changes,
+        });
+  } catch {
+    return { synced: true, notified: false, notionPageId, reason: "discord-send-failed" };
+  }
 
   if (delivered) {
     await updateEntryStatus(notionPageId, "Notified");

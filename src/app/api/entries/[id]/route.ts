@@ -152,7 +152,13 @@ export async function PATCH(
   if (entry.stoppedAt && updated.stoppedAt && new Date(entry.stoppedAt).getTime() !== new Date(updated.stoppedAt).getTime()) changes.push({ field: "stoppedAt", oldValue: new Date(entry.stoppedAt).toISOString(), newValue: new Date(updated.stoppedAt).toISOString() });
 
   if (updated.stoppedAt) {
-    await syncAndNotifyEntry(updated.id, changes).catch(() => {});
+    const syncResult = await syncAndNotifyEntry(updated.id, changes);
+    if (!syncResult.synced) {
+      return NextResponse.json(
+        { error: `Entry updated locally, but Notion sync failed: ${syncResult.reason ?? "unknown"}` },
+        { status: 500 }
+      );
+    }
   }
 
   return NextResponse.json({ entry: updated });

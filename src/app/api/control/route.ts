@@ -35,6 +35,7 @@ export async function GET() {
       notionTeamMembersDbId: config.notionTeamMembersDbId ?? "",
       notionTeamsDbId: config.notionTeamsDbId ?? "",
       discordBotTokenPresent: Boolean(discordBotToken),
+      discordBotTokenMasked: discordBotToken ? `${discordBotToken.slice(0, 6)}••••••${discordBotToken.slice(-4)}` : "",
       discordGuildId: discordGuildId ?? "",
       discordCategoryId: discordCategoryId ?? "",
       discordChannelPrefix: discordChannelPrefix ?? "chronos",

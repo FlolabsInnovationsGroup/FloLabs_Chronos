@@ -35,6 +35,7 @@ export function ControlForm() {
   const [apiKeyPresent, setApiKeyPresent] = useState(false);
   const [apiKeyMasked, setApiKeyMasked] = useState("");
   const [discordBotTokenPresent, setDiscordBotTokenPresent] = useState(false);
+  const [discordBotTokenMasked, setDiscordBotTokenMasked] = useState("");
 
   useEffect(() => {
     void (async () => {
@@ -46,6 +47,7 @@ export function ControlForm() {
         setNotionTeamMembersDbId(data.config?.notionTeamMembersDbId ?? "");
         setNotionTeamsDbId(data.config?.notionTeamsDbId ?? "");
         setDiscordBotTokenPresent(Boolean(data.config?.discordBotTokenPresent));
+        setDiscordBotTokenMasked(data.config?.discordBotTokenMasked ?? "");
         setDiscordGuildId(data.config?.discordGuildId ?? "");
         setDiscordCategoryId(data.config?.discordCategoryId ?? "");
         setDiscordChannelPrefix(data.config?.discordChannelPrefix ?? "chronos");
@@ -71,6 +73,7 @@ export function ControlForm() {
       setSuccess("Control settings saved.");
       setApiKeyPresent(true);
       setDiscordBotTokenPresent(discordBotTokenPresent || Boolean(discordBotToken.trim()));
+      setDiscordBotTokenMasked(discordBotToken ? `${discordBotToken.slice(0, 6)}••••••${discordBotToken.slice(-4)}` : discordBotTokenMasked);
       setApiKeyMasked(notionApiKey ? `${notionApiKey.slice(0, 6)}••••••${notionApiKey.slice(-4)}` : apiKeyMasked);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save settings.");
@@ -118,7 +121,7 @@ export function ControlForm() {
 
             <div className="border-t border-[#efeee9] pt-6 flex flex-col gap-4">
               <h2 className="text-lg font-light italic text-[#31332f]" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Discord Bot Provisioning</h2>
-              <Input label="Discord Bot Token" type="password" value={discordBotToken} onChange={(e) => setDiscordBotToken(e.target.value)} placeholder={discordBotTokenPresent ? "Saved in app config — leave empty to keep current token" : "Bot token"} hint="Used to create member channels and webhooks automatically when a user joins." />
+              <Input label="Discord Bot Token" type="password" value={discordBotToken} onChange={(e) => setDiscordBotToken(e.target.value)} placeholder={discordBotTokenPresent ? "Saved in app config — leave empty to keep current token" : "Bot token"} hint={discordBotTokenPresent && discordBotTokenMasked ? `Current token: ${discordBotTokenMasked}. Enter a new one only if you want to rotate it.` : "Used to create member channels and webhooks automatically when a user joins."} />
               <Input label="Discord Guild ID" value={discordGuildId} onChange={(e) => setDiscordGuildId(e.target.value)} placeholder="Server / guild ID" />
               <Input label="Discord Category ID" value={discordCategoryId} onChange={(e) => setDiscordCategoryId(e.target.value)} placeholder="Optional category for member channels" />
               <Input label="Channel Prefix" value={discordChannelPrefix} onChange={(e) => setDiscordChannelPrefix(e.target.value)} placeholder="chronos" />

@@ -144,7 +144,11 @@ export async function GET(req: Request) {
         if (delivered) {
           notified++;
           await updateEntryStatus(notionPageId, "Notified");
+        } else {
+          await updateEntryStatus(notionPageId, "Processed");
         }
+      } else if (notionPageId) {
+        await updateEntryStatus(notionPageId, "Processed");
       }
     } catch (err) {
       errors.push(`Entry ${row.entry.id}: ${err instanceof Error ? err.message : String(err)}`);

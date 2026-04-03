@@ -503,6 +503,8 @@ Depending on actual database schema detection, Chronos maps:
   - deleted entry
 - When present, linked task titles are included in the notification payload
 - Edit notifications include a change summary, with old values struck through
+- If a webhook cannot be resolved yet (for example the rollup/relation-backed webhook path is empty), the entry is still synced to Notion and its Notion status is left/set to **Processed** rather than **Notified**
+- That `Processed` state acts as a queue marker for later delivery attempts when a webhook becomes available
 - Notification failures are surfaced in lifecycle results instead of always failing silently
 
 ---

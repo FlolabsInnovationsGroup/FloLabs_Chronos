@@ -77,7 +77,10 @@ export async function syncAndNotifyEntry(
     .where(eq(timeEntries.id, entryId));
 
   const notionTeamMemberId = entry.user?.notionTeamMemberId || (entry.user?.name ? await resolveTeamMemberPageId(entry.user.name) : null);
-  if (!notionTeamMemberId) return { synced: true, notified: false, reason: "team-member-unresolved" };
+  if (!notionTeamMemberId) {
+    await updateEntryStatus(notionPageId, "Processed").catch(() => {});
+    return { synced: true, notified: false, notionPageId, reason: "queued-no-team-member" };
+  }
 
   let delivered = false;
   try {
@@ -107,14 +110,17 @@ export async function syncAndNotifyEntry(
           changes,
         });
   } catch {
-    return { synced: true, notified: false, notionPageId, reason: "discord-send-failed" };
+    await updateEntryStatus(notionPageId, "Processed").catch(() => {});
+    return { synced: true, notified: false, notionPageId, reason: "queued-no-webhook" };
   }
 
   if (delivered) {
     await updateEntryStatus(notionPageId, "Notified");
+  } else {
+    await updateEntryStatus(notionPageId, "Processed").catch(() => {});
   }
 
-  return { synced: true, notified: delivered, notionPageId, reason: delivered ? undefined : "discord-send-failed" };
+  return { synced: true, notified: delivered, notionPageId, reason: delivered ? undefined : "queued-no-webhook" };
 }
 
 export async function deleteAndNotifyEntry(params: {

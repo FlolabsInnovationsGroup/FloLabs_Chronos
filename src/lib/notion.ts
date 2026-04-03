@@ -526,9 +526,14 @@ export function buildNotionEntryProperties(
   properties["User Key"] = userKeyType === "rich_text" ? buildRichTextValue(userKey) : buildTitleValue(userKey);
 
   const entryIdType = schema["Entry ID"]?.type;
-  properties["Entry ID"] = entryIdType === "number"
-    ? { number: Number.parseInt(entry.id.replace(/[^0-9]/g, "").slice(0, 15) || "0", 10) }
-    : buildRichTextValue(entry.id);
+  if (entryIdType === "number") {
+    const numericId = Number.parseInt(entry.id.replace(/[^0-9]/g, "").slice(0, 15) || "0", 10);
+    if (Number.isFinite(numericId) && numericId > 0) {
+      properties["Entry ID"] = { number: numericId };
+    }
+  } else if (entryIdType === "rich_text") {
+    properties["Entry ID"] = buildRichTextValue(entry.id);
+  }
 
   properties["Project"] = { select: { name: entry.project?.name ?? "Unknown" } };
   properties["Tags"] = { multi_select: tagNames.map((n) => ({ name: n })) };
@@ -674,14 +679,19 @@ export async function queryNotionEntriesWindow(
     const data = (await res.json()) as {
       results: Array<{
         id: string;
-        properties?: Record<string, { type: string; rich_text?: { plain_text: string }[] }>;
+        properties?: Record<string, { type: string; rich_text?: { plain_text: string }[]; number?: number | null }>;
       }>;
       has_more?: boolean;
       next_cursor?: string | null;
     };
 
     for (const page of data.results) {
-      const entryId = page.properties?.["Entry ID"]?.rich_text?.map((t) => t.plain_text ?? "").join("") || null;
+      const entryIdProp = page.properties?.["Entry ID"];
+      const entryId = entryIdProp?.type === "rich_text"
+        ? entryIdProp.rich_text?.map((t) => t.plain_text ?? "").join("") || null
+        : entryIdProp?.type === "number" && entryIdProp.number != null
+          ? String(entryIdProp.number)
+          : null;
       pages.push({ notionPageId: page.id, entryId });
     }
 

@@ -4,6 +4,9 @@ import { formatDurationHuman } from "@/lib/utils";
 const NOTION_API_BASE = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
 const webhookCache = new Map<string, string | null>();
+const BRAND_PRIMARY = 0x366769;
+const BRAND_DARK = 0x295a5d;
+const BRAND_WARM = 0x755a40;
 
 function notionHeaders() {
   return {
@@ -13,13 +16,7 @@ function notionHeaders() {
   };
 }
 
-/**
- * Send an embed payload to a Discord webhook URL.
- */
-export async function sendDiscordEmbed(
-  webhookUrl: string,
-  embed: object
-): Promise<void> {
+export async function sendDiscordEmbed(webhookUrl: string, embed: object): Promise<void> {
   const res = await fetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -32,10 +29,6 @@ export async function sendDiscordEmbed(
   }
 }
 
-/**
- * Send plain-text Markdown message to a Discord webhook (no embeds).
- * Respects 429 Retry-After when present.
- */
 export async function sendDiscordText(webhookUrl: string, content: string): Promise<void> {
   const res = await fetch(webhookUrl, {
     method: "POST",
@@ -46,7 +39,6 @@ export async function sendDiscordText(webhookUrl: string, content: string): Prom
   if (res.status === 429) {
     const retryAfter = Number(res.headers.get("Retry-After") ?? "1");
     await new Promise((r) => setTimeout(r, retryAfter * 1000));
-    // retry once
     const retry = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -118,7 +110,6 @@ export async function resolveDiscordWebhookForTeamMember(
   return null;
 }
 
-/** Format a date as `2 April 2026 15:00:00 UTC` */
 function fmtDatetime(d: Date): string {
   return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
@@ -137,10 +128,12 @@ function formatChangeValue(field: string, value: string): string {
     const parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) return fmtDatetime(parsed);
   }
+  if (field === "duration" && /^\d+$/.test(value)) {
+    return fmtDurationSecs(Number(value));
+  }
   return value;
 }
 
-/** Format durationMs as Xh Ym Zs */
 function fmtDurationSecs(ms: number): string {
   const totalSecs = Math.floor(ms / 1000);
   const h = Math.floor(totalSecs / 3600);
@@ -153,114 +146,133 @@ function fmtDurationSecs(ms: number): string {
   return parts.join(" ");
 }
 
-/**
- * Build plain-text notification for a new completed entry.
- */
-export function buildEntryAddedMessage(params: {
+function taskLabel(taskTitle?: string | null) {
+  return taskTitle?.trim() ? taskTitle.trim() : "No task linked";
+}
+
+function buildEntryEmbedBase(params: {
+  title: string;
+  color: number;
   userName: string;
   project: string;
   tags: string[];
   description: string;
+  taskTitle?: string | null;
+  durationMs: number;
+  startedAt: Date;
+  endedAt?: Date | null;
+  updatedAt?: Date;
+  deletedAt?: Date;
+  changes?: Array<{ field: string; oldValue: string; newValue: string }>;
+}) {
+  const fields = [
+    { name: "User", value: params.userName || "Unknown", inline: true },
+    { name: "Project", value: params.project || "Unknown", inline: true },
+    { name: "Task", value: taskLabel(params.taskTitle), inline: false },
+    { name: "Description", value: params.description?.trim() || "No description", inline: false },
+    { name: "Tags", value: params.tags.length > 0 ? params.tags.join(", ") : "No tags", inline: false },
+    { name: "Duration", value: fmtDurationSecs(params.durationMs), inline: true },
+    { name: "Start", value: fmtDatetime(params.startedAt), inline: true },
+  ];
+
+  if (params.endedAt) {
+    fields.push({ name: "End", value: fmtDatetime(params.endedAt), inline: true });
+  }
+
+  if (params.updatedAt) {
+    fields.push({ name: "Updated", value: fmtDatetime(params.updatedAt), inline: true });
+  }
+
+  if (params.deletedAt) {
+    fields.push({ name: "Deleted detected", value: fmtDatetime(params.deletedAt), inline: true });
+  }
+
+  if (params.changes && params.changes.length > 0) {
+    const rendered = params.changes
+      .map((c) => `• **${c.field}**: ${formatChangeValue(c.field, c.oldValue)} → ${formatChangeValue(c.field, c.newValue)}`)
+      .join("\n")
+      .slice(0, 1000);
+    fields.push({ name: "Changes", value: rendered, inline: false });
+  }
+
+  return {
+    title: params.title,
+    color: params.color,
+    fields,
+    footer: { text: "FloLabs Chronos" },
+    timestamp: new Date().toISOString(),
+  };
+}
+
+export function buildEntryAddedEmbed(params: {
+  userName: string;
+  project: string;
+  tags: string[];
+  description: string;
+  taskTitle?: string | null;
   durationMs: number;
   startedAt: Date;
   updatedAt: Date;
-}): string {
-  const { userName, project, tags, description, durationMs, startedAt, updatedAt } = params;
-  const tagsStr = tags.length > 0 ? tags.join(", ") : "No tags";
-  return [
-    "## 🆕 New Time Entry Added",
-    `👤 **User**: ${userName}`,
-    `📁 **Project:** ${project}`,
-    `🏷️ **Tags:** ${tagsStr}`,
-    `📝 **Task:** ${description}`,
-    `⏱️ **Time Tracked:** ${fmtDurationSecs(durationMs)}`,
-    `🗓️ **Start:** ${fmtDatetime(startedAt)}`,
-    `🕑 **Updated:** ${fmtDatetime(updatedAt)}`,
-    "—",
-  ].join("\n");
+}) {
+  return buildEntryEmbedBase({
+    title: "New Time Entry Added",
+    color: BRAND_PRIMARY,
+    ...params,
+  });
 }
 
-/**
- * Build plain-text notification for an edited entry.
- * Changed fields show ~~old~~ new inline.
- */
-export function buildEntryEditedMessage(params: {
+export function buildEntryEditedEmbed(params: {
   userName: string;
   project: string;
   tags: string[];
   description: string;
+  taskTitle?: string | null;
   durationMs: number;
   startedAt: Date;
   stoppedAt: Date | null;
   updatedAt: Date;
   changes: Array<{ field: string; oldValue: string; newValue: string }>;
-}): string {
-  const { userName, project, tags, description, durationMs, startedAt, stoppedAt, updatedAt, changes } = params;
-  const tagsStr = tags.length > 0 ? tags.join(", ") : "No tags";
-  const changedFields = new Map(changes.map((c) => [c.field, c]));
-
-  function maybeStrike(field: string, current: string): string {
-    const ch = changedFields.get(field);
-    if (!ch) return current;
-    return `~~${formatChangeValue(field, ch.oldValue)}~~ ${formatChangeValue(field, ch.newValue)}`;
-  }
-
-  const changesSummary = changes
-    .map((c) => `${c.field}: ~~${formatChangeValue(c.field, c.oldValue)}~~ → ${formatChangeValue(c.field, c.newValue)}`)
-    .join(", ");
-
-  const lines = [
-    "## ✍️ Time Entry Edited",
-    `👤 **User**: ${userName}`,
-    `📁 **Project:** ${maybeStrike("project", project)}`,
-    `🏷️ **Tags:** ${maybeStrike("tags", tagsStr)}`,
-    `📝 **Task:** ${maybeStrike("description", description)}`,
-    `⏱️ **Time Tracked:** ${maybeStrike("duration", fmtDurationSecs(durationMs))}`,
-    `🗓️ **Start:** ${maybeStrike("startedAt", fmtDatetime(startedAt))}`,
-  ];
-
-  if (stoppedAt) {
-    lines.push(`🕓 **End:** ${maybeStrike("stoppedAt", fmtDatetime(stoppedAt))}`);
-  }
-
-  lines.push(`🕑 **Updated:** ${fmtDatetime(updatedAt)}`);
-  if (changesSummary) lines.push(`**changes:** ${changesSummary}`);
-  lines.push("—");
-
-  return lines.join("\n");
+}) {
+  return buildEntryEmbedBase({
+    title: "Time Entry Edited",
+    color: BRAND_DARK,
+    userName: params.userName,
+    project: params.project,
+    tags: params.tags,
+    description: params.description,
+    taskTitle: params.taskTitle,
+    durationMs: params.durationMs,
+    startedAt: params.startedAt,
+    endedAt: params.stoppedAt,
+    updatedAt: params.updatedAt,
+    changes: params.changes,
+  });
 }
 
-/**
- * Build plain-text notification for a deleted entry.
- * All values wrapped in strikethrough.
- */
-export function buildEntryDeletedMessage(params: {
+export function buildEntryDeletedEmbed(params: {
   userName: string;
   project: string;
   tags: string[];
   description: string;
+  taskTitle?: string | null;
   durationMs: number;
   startedAt: Date;
   deletedAt: Date;
-}): string {
-  const { userName, project, tags, description, durationMs, startedAt, deletedAt } = params;
-  const tagsStr = tags.length > 0 ? tags.join(", ") : "No tags";
-  return [
-    "## 🗑️ Time Entry Deleted",
-    `👤 **User**: ~~${userName}~~`,
-    `📁 **Project:** ~~${project}~~`,
-    `🏷️ **Tags:** ~~${tagsStr}~~`,
-    `📝 **Task:** ~~${description}~~`,
-    `⏱️ **Time Tracked:** ~~${fmtDurationSecs(durationMs)}~~`,
-    `🗓️ **Start:** ~~${fmtDatetime(startedAt)}~~`,
-    `🕑 **Deleted detected:** ${fmtDatetime(deletedAt)}`,
-    "—",
-  ].join("\n");
+}) {
+  return buildEntryEmbedBase({
+    title: "Time Entry Deleted",
+    color: 0xa73b21,
+    userName: params.userName,
+    project: params.project,
+    tags: params.tags,
+    description: params.description,
+    taskTitle: params.taskTitle,
+    durationMs: params.durationMs,
+    startedAt: params.startedAt,
+    deletedAt: params.deletedAt,
+  });
 }
 
-/**
- * Build an embed for when a timer is started.
- */
 export function buildTimerStartEmbed(
   userName: string,
   projectName: string,
@@ -271,7 +283,7 @@ export function buildTimerStartEmbed(
     description: description
       ? `**${userName}** started working on: *${description}*`
       : `**${userName}** started a new session`,
-    color: 0x366769, // Primary teal in decimal
+    color: BRAND_PRIMARY,
     fields: [
       {
         name: "Project",
@@ -295,9 +307,6 @@ export function buildTimerStartEmbed(
   };
 }
 
-/**
- * Build an embed for when a timer is stopped.
- */
 export function buildTimerStopEmbed(
   userName: string,
   projectName: string,
@@ -309,7 +318,7 @@ export function buildTimerStopEmbed(
     description: description
       ? `**${userName}** finished: *${description}*`
       : `**${userName}** stopped their session`,
-    color: 0x295a5d, // Darker teal
+    color: BRAND_DARK,
     fields: [
       {
         name: "Project",
@@ -329,9 +338,6 @@ export function buildTimerStopEmbed(
   };
 }
 
-/**
- * Convenience: send timer start notification to a webhook.
- */
 export async function sendTimerStartNotification(
   webhookUrl: string,
   userName: string,
@@ -341,9 +347,6 @@ export async function sendTimerStartNotification(
   await sendDiscordEmbed(webhookUrl, buildTimerStartEmbed(userName, projectName, description));
 }
 
-/**
- * Convenience: send timer stop notification to a webhook.
- */
 export async function sendTimerStopNotification(
   webhookUrl: string,
   userName: string,
@@ -363,13 +366,14 @@ export async function notifyEntryAdded(params: {
   project: string;
   tags: string[];
   description: string;
+  taskTitle?: string | null;
   durationMs: number;
   startedAt: Date;
   updatedAt: Date;
 }) {
   const webhookUrl = await resolveDiscordWebhookForTeamMember(params.notionTeamMemberId);
   if (!webhookUrl) return false;
-  await sendDiscordText(webhookUrl, buildEntryAddedMessage(params));
+  await sendDiscordEmbed(webhookUrl, buildEntryAddedEmbed(params));
   return true;
 }
 
@@ -379,6 +383,7 @@ export async function notifyEntryEdited(params: {
   project: string;
   tags: string[];
   description: string;
+  taskTitle?: string | null;
   durationMs: number;
   startedAt: Date;
   stoppedAt: Date | null;
@@ -387,7 +392,7 @@ export async function notifyEntryEdited(params: {
 }) {
   const webhookUrl = await resolveDiscordWebhookForTeamMember(params.notionTeamMemberId);
   if (!webhookUrl) return false;
-  await sendDiscordText(webhookUrl, buildEntryEditedMessage(params));
+  await sendDiscordEmbed(webhookUrl, buildEntryEditedEmbed(params));
   return true;
 }
 
@@ -397,19 +402,17 @@ export async function notifyEntryDeleted(params: {
   project: string;
   tags: string[];
   description: string;
+  taskTitle?: string | null;
   durationMs: number;
   startedAt: Date;
   deletedAt: Date;
 }) {
   const webhookUrl = await resolveDiscordWebhookForTeamMember(params.notionTeamMemberId);
   if (!webhookUrl) return false;
-  await sendDiscordText(webhookUrl, buildEntryDeletedMessage(params));
+  await sendDiscordEmbed(webhookUrl, buildEntryDeletedEmbed(params));
   return true;
 }
 
-/**
- * Build a daily summary embed from a list of completed entries.
- */
 export function buildDailySummaryEmbed(
   userName: string,
   entries: TimeEntry[]
@@ -417,7 +420,6 @@ export function buildDailySummaryEmbed(
   const totalMs = entries.reduce((sum, e) => sum + (e.durationMs ?? 0), 0);
   const totalHours = (totalMs / 3_600_000).toFixed(1);
 
-  // Group by project
   const byProject = new Map<string, number>();
   for (const entry of entries) {
     const name = entry.project?.name ?? "Unknown";
@@ -436,7 +438,7 @@ export function buildDailySummaryEmbed(
   return {
     title: `Daily Summary — ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`,
     description: `**${userName}** logged **${totalHours} hours** across **${entries.length} session${entries.length !== 1 ? "s" : ""}** today.`,
-    color: 0x755a40, // Tertiary brown
+    color: BRAND_WARM,
     fields: projectFields.length > 0 ? projectFields : undefined,
     footer: {
       text: "FloLabs Chronos Daily Digest",
@@ -445,9 +447,6 @@ export function buildDailySummaryEmbed(
   };
 }
 
-/**
- * Convenience: send daily summary to a webhook.
- */
 export async function sendDailySummary(
   webhookUrl: string,
   userName: string,

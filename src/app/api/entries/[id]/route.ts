@@ -145,7 +145,7 @@ export async function PATCH(
   if ((previousProject?.name ?? "Unknown") !== (updatedProject?.name ?? "Unknown")) changes.push({ field: "project", oldValue: previousProject?.name ?? "Unknown", newValue: updatedProject?.name ?? "Unknown" });
   if (previousTagNames.join(", ") !== nextTagNames.join(", ")) changes.push({ field: "tags", oldValue: previousTagNames.join(", ") || "No tags", newValue: nextTagNames.join(", ") || "No tags" });
   if ((entry.notionTaskPageId ?? null) !== (updated.notionTaskPageId ?? null) || (entry.notionTaskTitle ?? "") !== (updated.notionTaskTitle ?? "")) {
-    changes.push({ field: "task", oldValue: entry.notionTaskTitle ?? "No task", newValue: updated.notionTaskTitle ?? "No task" });
+    changes.push({ field: "task", oldValue: entry.notionTaskTitle ?? "No task linked", newValue: updated.notionTaskTitle ?? "No task linked" });
   }
   if ((entry.durationMs ?? 0) !== (updated.durationMs ?? 0)) changes.push({ field: "duration", oldValue: String(entry.durationMs ?? 0), newValue: String(updated.durationMs ?? 0) });
   if (new Date(entry.startedAt).getTime() !== new Date(updated.startedAt).getTime()) changes.push({ field: "startedAt", oldValue: new Date(entry.startedAt).toISOString(), newValue: new Date(updated.startedAt).toISOString() });
@@ -190,6 +190,7 @@ export async function DELETE(
     project: projectRow?.name ?? "Unknown",
     tags: tagNames,
     description: entry.description ?? "",
+    taskTitle: entry.notionTaskTitle ?? null,
     durationMs: entry.durationMs ?? 0,
     startedAt: new Date(entry.startedAt),
   }).catch(() => {});

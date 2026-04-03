@@ -77,6 +77,7 @@ export async function syncAndNotifyEntry(
         project: entry.project?.name ?? "Unknown",
         tags: (entry.tags ?? []).map((tag) => tag.name),
         description: entry.description ?? "",
+        taskTitle: entry.notionTaskTitle ?? null,
         durationMs: entry.durationMs ?? 0,
         startedAt: new Date(entry.startedAt),
         updatedAt: new Date(entry.updatedAt ?? entry.startedAt),
@@ -87,6 +88,7 @@ export async function syncAndNotifyEntry(
         project: entry.project?.name ?? "Unknown",
         tags: (entry.tags ?? []).map((tag) => tag.name),
         description: entry.description ?? "",
+        taskTitle: entry.notionTaskTitle ?? null,
         durationMs: entry.durationMs ?? 0,
         startedAt: new Date(entry.startedAt),
         stoppedAt: entry.stoppedAt ? new Date(entry.stoppedAt) : null,
@@ -108,6 +110,7 @@ export async function deleteAndNotifyEntry(params: {
   project: string;
   tags: string[];
   description: string;
+  taskTitle?: string | null;
   durationMs: number;
   startedAt: Date;
 }) {
@@ -122,6 +125,7 @@ export async function deleteAndNotifyEntry(params: {
         project: params.project,
         tags: params.tags,
         description: params.description,
+        taskTitle: params.taskTitle ?? null,
         durationMs: params.durationMs,
         startedAt: params.startedAt,
         deletedAt: new Date(),

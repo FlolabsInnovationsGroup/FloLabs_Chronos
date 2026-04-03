@@ -19,7 +19,6 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function GET(req: Request) {
-  // Validate cron secret
   const authHeader = req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -39,9 +38,6 @@ export async function GET(req: Request) {
   let notified = 0;
   const errors: string[] = [];
 
-  // -------------------------------------------------------------------------
-  // Step 1: Upsert new / updated entries
-  // -------------------------------------------------------------------------
   const pendingRows = await db
     .select({
       entry: timeEntries,
@@ -68,7 +64,6 @@ export async function GET(req: Request) {
     )
     .limit(50);
 
-  // Fetch tags for these entries
   const entryIds = pendingRows.map((r) => r.entry.id);
   const tagRows =
     entryIds.length > 0
@@ -127,6 +122,7 @@ export async function GET(req: Request) {
               project: row.project?.name ?? "Unknown",
               tags: entryTags.map((t) => t.name),
               description: row.entry.description,
+              taskTitle: row.entry.notionTaskTitle ?? null,
               durationMs: row.entry.durationMs ?? 0,
               startedAt: new Date(row.entry.startedAt),
               updatedAt: new Date(row.entry.updatedAt ?? row.entry.startedAt),
@@ -137,6 +133,7 @@ export async function GET(req: Request) {
               project: row.project?.name ?? "Unknown",
               tags: entryTags.map((t) => t.name),
               description: row.entry.description,
+              taskTitle: row.entry.notionTaskTitle ?? null,
               durationMs: row.entry.durationMs ?? 0,
               startedAt: new Date(row.entry.startedAt),
               stoppedAt: row.entry.stoppedAt ? new Date(row.entry.stoppedAt) : null,
@@ -154,9 +151,6 @@ export async function GET(req: Request) {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Step 2: Detect deletes — cross-reference Notion window vs Chronos DB
-  // -------------------------------------------------------------------------
   if (process.env.NOTION_ONBOARDINGS_DB_ID) {
     try {
       const notionPages = await queryNotionEntriesWindow(360);
@@ -165,7 +159,6 @@ export async function GET(req: Request) {
         .filter((id): id is string => Boolean(id));
 
       if (notionEntryIds.length > 0) {
-        // Check which Chronos UUIDs no longer exist
         const existing = await db
           .select({ id: timeEntries.id })
           .from(timeEntries)
@@ -208,6 +201,7 @@ export async function GET(req: Request) {
                 const description = props["Description"]?.rich_text?.map((t) => t.plain_text).join("") ?? "";
                 const project = props["Project"]?.select?.name ?? "Unknown";
                 const tags = props["Tags"]?.multi_select?.map((tag) => tag.name) ?? [];
+                const taskTitle = props["Task"]?.relation?.length ? "Task linked in Notion" : "No task linked";
                 const durationMs = Math.round((props["Duration"]?.number ?? 0) * 1000);
                 const startedAt = new Date(props["Date"]?.date?.start ?? deletedNow.toISOString());
                 const userName = props["User Key"]?.title?.map((t) => t.plain_text).join("") ?? "Unknown";
@@ -218,6 +212,7 @@ export async function GET(req: Request) {
                   project,
                   tags,
                   description,
+                  taskTitle,
                   durationMs,
                   startedAt,
                   deletedAt: deletedNow,
@@ -234,7 +229,7 @@ export async function GET(req: Request) {
             );
           }
 
-          void deletedNow; // suppress unused warning
+          void deletedNow;
         }
       }
     } catch (err) {

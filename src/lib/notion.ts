@@ -1,4 +1,5 @@
 import type { TimeEntry } from "@/types";
+import { getNotionConfig } from "@/lib/app-config";
 
 const NOTION_API_BASE = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
@@ -177,9 +178,10 @@ function notionHeaders() {
 }
 
 async function getDatabaseSchema(databaseId: string) {
+  const headers = await notionHeaders();
   if (!databaseSchemaPromise) {
     databaseSchemaPromise = fetch(`${NOTION_API_BASE}/databases/${databaseId}`, {
-      headers: notionHeaders(),
+      headers,
     }).then(async (res) => {
       if (!res.ok) {
         const err = await res.text();
@@ -617,6 +619,23 @@ export async function updateTeamMemberName(notionPageId: string, name: string): 
       },
     }),
   });
+}
+
+export async function findTeamMemberPageIdByEmail(email: string): Promise<string | null> {
+  if (!process.env.NOTION_API_KEY || !process.env.NOTION_TEAM_MEMBERS_DB_ID) return null;
+
+  const res = await fetch(`${NOTION_API_BASE}/databases/${process.env.NOTION_TEAM_MEMBERS_DB_ID}/query`, {
+    method: "POST",
+    headers: notionHeaders(),
+    body: JSON.stringify({
+      filter: { property: "Email", email: { equals: email } },
+      page_size: 1,
+    }),
+  });
+
+  if (!res.ok) return null;
+  const data = (await res.json()) as { results?: Array<{ id: string }> };
+  return data.results?.[0]?.id ?? null;
 }
 
 export async function updateEntryStatus(notionPageId: string, status: string): Promise<void> {

@@ -63,6 +63,8 @@ Chronos should be treated as **read-only for team memberships** from a product p
 That means:
 - Notion Team Members data is the operational source of truth for membership intent.
 - If Chronos creates an invitation and no matching Notion Team Member page exists, Chronos should create that page so the invite flow does not break integrity.
+- When Chronos creates a missing Team Member page from an invitation, it must populate the invited teams into the `Team` relation at creation time.
+- When a Chronos user is renamed by an admin, Chronos should also update the Team Member page name in Notion, first via stored `notionTeamMemberId` and then via email-based fallback resolution if the stored ID is missing.
 - Chronos should not evolve into a freeform local membership editor that diverges from Notion.
 
 ### Invitations

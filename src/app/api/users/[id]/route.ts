@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { canManageTeams, getAccessibleTeamIds, getUserTeams, isAdmin, isTeamLead, replaceUserTeamMemberships } from "@/lib/permissions";
 import { broadcastDataChange } from "@/lib/realtime";
-import { updateTeamMemberName } from "@/lib/notion";
+import { findTeamMemberPageIdByEmail, updateTeamMemberName } from "@/lib/notion";
 
 const updateSchema = z.object({
   role: z.enum(["admin", "team_lead", "member"]).optional(),
@@ -115,8 +115,11 @@ export async function PATCH(
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (parsed.data.name !== undefined && parsed.data.name.trim() !== existingUser.name && existingUser.notionTeamMemberId) {
-    await updateTeamMemberName(existingUser.notionTeamMemberId, parsed.data.name.trim()).catch(() => {});
+  if (parsed.data.name !== undefined && parsed.data.name.trim() !== existingUser.name) {
+    const notionTeamMemberId = existingUser.notionTeamMemberId || await findTeamMemberPageIdByEmail(user.email).catch(() => null);
+    if (notionTeamMemberId) {
+      await updateTeamMemberName(notionTeamMemberId, parsed.data.name.trim()).catch(() => {});
+    }
   }
 
   if (requestedTeamIds !== undefined) {

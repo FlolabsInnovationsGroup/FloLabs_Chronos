@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import floLabsLogo from "../../../assets/logo/FLChron_logo_512px.png";
 
@@ -22,13 +23,15 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const isAdmin = session?.user.role === "admin";
+  const navItems = isAdmin ? [...NAV_ITEMS, { href: "/control", icon: "tune", label: "Control" }] : NAV_ITEMS;
 
   return (
     <aside
       className="fixed left-0 top-0 h-full w-20 bg-surface-container-lowest paper-shadow z-40 flex flex-col items-center py-5 gap-2"
       aria-label="Main navigation"
     >
-      {/* Logo */}
       <Link
         href="/timer"
         className="w-14 h-14 flex items-center justify-center rounded-xl mb-3 hover:bg-[#f5f4ef] transition-colors"
@@ -42,9 +45,8 @@ export function Sidebar() {
         />
       </Link>
 
-      {/* Nav items */}
       <nav className="flex flex-col items-center gap-1 flex-1 w-full px-2">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link
@@ -80,7 +82,6 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Settings at bottom */}
       <Link
         href="/settings"
         title="Settings"

@@ -205,6 +205,18 @@ export const timeEntryTags = pgTable(
   ]
 );
 
+export const appConfig = pgTable(
+  "app_config",
+  {
+    key: text("key").primaryKey(),
+    value: text("value").notNull(),
+    isSecret: boolean("is_secret").notNull().default(false),
+    updatedBy: uuid("updated_by").references(() => users.id),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [index("idx_app_config_updated_at").on(t.updatedAt)]
+);
+
 export type UserRecord = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type TeamRecord = typeof teams.$inferSelect;

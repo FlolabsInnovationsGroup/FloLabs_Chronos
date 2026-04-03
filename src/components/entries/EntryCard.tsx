@@ -147,15 +147,22 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      const raw = await res.text();
+      let data: { error?: string } = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = { error: raw || undefined };
+      }
+
       if (!res.ok) {
-        const data = await res.json();
-        setEditError(data.error ?? "Failed to save");
+        setEditError(data.error ?? `Failed to save (${res.status})`);
       } else {
         setEditOpen(false);
         router.refresh();
       }
-    } catch {
-      setEditError("Network error");
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Network error");
     } finally {
       setEditLoading(false);
     }

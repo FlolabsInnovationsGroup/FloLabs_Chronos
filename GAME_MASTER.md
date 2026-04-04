@@ -184,6 +184,12 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 
 ## Recent Updates
 
+- Timer UX updated end-to-end: timer suggestions now auto-start when idle and safely apply onto the running timer when one already exists.
+- Timer start no longer requires any prefilled fields; `time_entries.project_id` was migrated to optional so empty-start timers persist correctly.
+- Timer stop now requires both a description and a selected task in both UI and API, with disabled stop affordances and explicit mobile messaging when the requirements are missing.
+- Timer header now includes a round play/stop quick-action button beside the avatar; active timers show a disabled grey stop state until the stop requirements are satisfied.
+- Removed the duplicate active-description display beneath the timer clock so the Description field is the authoritative inline source.
+- Added migration script `scripts/migrate-timer-project-optional.ts` and ran it successfully.
 - Invitation onboarding now routes Team Member page creation through shared Notion helpers instead of duplicating raw fetch logic in `src/app/api/invitations/route.ts`.
 - Team Member creation now supports Notion's native page-template flow and falls back cleanly when templates are unavailable or misconfigured.
 - New Team Member pages now also create a linked Onboarding page in `NOTION_ONBOARDINGS_DB_ID`, attempt to use that database's default template, and then patch the Team Member page's `Onboarding` relation.
@@ -196,7 +202,7 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 ## Known State
 
 - Production deployed at https://athensgreecemarathon.com
-- Database schema migrated (per-user tags, time_entry_tags join table)
+- Database schema migrated (per-user tags, time_entry_tags join table, and optional `time_entries.project_id` for empty-start timers)
 - Build passes: `pnpm exec tsc --noEmit` and `pnpm build` both green
 - Admin account: `pm@flolabsinnovations.com`
 

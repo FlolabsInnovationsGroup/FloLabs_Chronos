@@ -7,7 +7,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 const updateTimerSchema = z.object({
-  projectId: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional().nullable(),
   tagIds: z.array(z.string().uuid()).default([]),
   description: z.string().optional(),
   notionTaskPageId: z.string().optional().nullable(),

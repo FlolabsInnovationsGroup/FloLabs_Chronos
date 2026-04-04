@@ -119,7 +119,7 @@ export async function GET(req: Request) {
           ? await notifyEntryAdded({
               notionTeamMemberId,
               userName: row.user?.name ?? "Unknown",
-              project: row.project?.name ?? "Unknown",
+              project: row.project?.name ?? "No project",
               tags: entryTags.map((t) => t.name),
               description: row.entry.description,
               taskTitle: row.entry.notionTaskTitle ?? null,
@@ -130,7 +130,7 @@ export async function GET(req: Request) {
           : await notifyEntryEdited({
               notionTeamMemberId,
               userName: row.user?.name ?? "Unknown",
-              project: row.project?.name ?? "Unknown",
+              project: row.project?.name ?? "No project",
               tags: entryTags.map((t) => t.name),
               description: row.entry.description,
               taskTitle: row.entry.notionTaskTitle ?? null,

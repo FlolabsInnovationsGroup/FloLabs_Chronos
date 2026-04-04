@@ -75,13 +75,15 @@ export async function POST(req: Request) {
       const tagNames = tagIds.length > 0
         ? (await db.select({ name: tags.name }).from(tags).where(inArray(tags.id, tagIds.map((row) => row.tagId)))).map((row) => row.name)
         : [];
-      const [projectRow] = await db.select({ name: projects.name }).from(projects).where(eq(projects.id, entry.projectId)).limit(1);
+      const [projectRow] = entry.projectId
+        ? await db.select({ name: projects.name }).from(projects).where(eq(projects.id, entry.projectId)).limit(1)
+        : [];
       const [userRow] = await db.select({ name: users.name, notionTeamMemberId: users.notionTeamMemberId }).from(users).where(eq(users.id, entry.userId)).limit(1);
       deletePayloads.push({
         notionPageId: entry.notionPageId,
         notionTeamMemberId: userRow?.notionTeamMemberId ?? null,
         userName: userRow?.name ?? "Unknown",
-        project: projectRow?.name ?? "Unknown",
+        project: projectRow?.name ?? "No project",
         tags: tagNames,
         description: entry.description ?? "",
         durationMs: entry.durationMs ?? 0,
@@ -102,7 +104,7 @@ export async function POST(req: Request) {
   const previousProjects = new Map<string, string>();
   for (const entry of found) {
     const [projectRow] = await db.select({ name: projects.name }).from(projects).innerJoin(timeEntries, eq(projects.id, timeEntries.projectId)).where(eq(timeEntries.id, entry.id)).limit(1);
-    previousProjects.set(entry.id, projectRow?.name ?? "Unknown");
+    previousProjects.set(entry.id, projectRow?.name ?? "No project");
   }
 
   const [newProject] = await db.select({ name: projects.name }).from(projects).where(eq(projects.id, parsed.data.projectId)).limit(1);
@@ -113,7 +115,7 @@ export async function POST(req: Request) {
     .where(inArray(timeEntries.id, entryIds));
 
   for (const entryId of entryIds) {
-    await syncAndNotifyEntry(entryId, [{ field: "project", oldValue: previousProjects.get(entryId) ?? "Unknown", newValue: newProject?.name ?? "Unknown" }]).catch(() => {});
+    await syncAndNotifyEntry(entryId, [{ field: "project", oldValue: previousProjects.get(entryId) ?? "No project", newValue: newProject?.name ?? "No project" }]).catch(() => {});
   }
 
   return NextResponse.json({ success: true, updated: entryIds.length });

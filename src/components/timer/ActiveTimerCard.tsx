@@ -29,7 +29,7 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
   const activeProjectName =
     activeTimer
       ? todayEntries.find((e) => e.projectId === activeTimer.projectId)?.project?.name ??
-        "Unknown Project"
+        "No project"
       : null;
   const sessionCount = todayEntries.length + (activeTimer ? 1 : 0);
 

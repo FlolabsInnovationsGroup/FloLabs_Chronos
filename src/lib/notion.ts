@@ -320,7 +320,7 @@ export async function syncEntryToNotion(entry: TimeEntry): Promise<string> {
   if (projectProperty) {
     properties[projectProperty] = buildSelectLikeValue(
       dbProperties[projectProperty].type,
-      entry.project?.name ?? entry.projectId
+      entry.project?.name ?? entry.projectId ?? "No project"
     );
   }
 

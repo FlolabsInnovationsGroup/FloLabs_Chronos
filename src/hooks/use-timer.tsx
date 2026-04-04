@@ -16,8 +16,8 @@ interface TimerContextValue {
   activeTimer: ActiveTimer | null;
   elapsed: number;
   loading: boolean;
-  start: (payload: { projectId: string; tagIds?: string[]; description: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => Promise<ActiveTimer>;
-  update: (payload: { projectId?: string; tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => Promise<ActiveTimer>;
+  start: (payload: { projectId?: string | null; tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => Promise<ActiveTimer>;
+  update: (payload: { projectId?: string | null; tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => Promise<ActiveTimer>;
   stop: (discard?: boolean) => Promise<void>;
 }
 
@@ -105,7 +105,7 @@ export function TimerProvider({ children, userId }: TimerProviderProps) {
   );
 
   const start = useCallback(
-    async (payload: { projectId: string; tagIds?: string[]; description: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => {
+    async (payload: { projectId?: string | null; tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => {
       const res = await fetch("/api/timer/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,7 +124,7 @@ export function TimerProvider({ children, userId }: TimerProviderProps) {
   );
 
   const update = useCallback(
-    async (payload: { projectId?: string; tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => {
+    async (payload: { projectId?: string | null; tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => {
       const res = await fetch("/api/timer", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

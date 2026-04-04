@@ -88,7 +88,7 @@ export async function syncAndNotifyEntry(
       ? await notifyEntryAdded({
           notionTeamMemberId,
           userName: entry.user?.name ?? "Unknown",
-          project: entry.project?.name ?? "Unknown",
+          project: entry.project?.name ?? "No project",
           tags: (entry.tags ?? []).map((tag) => tag.name),
           description: entry.description ?? "",
           taskTitle: entry.notionTaskTitle ?? null,
@@ -99,7 +99,7 @@ export async function syncAndNotifyEntry(
       : await notifyEntryEdited({
           notionTeamMemberId,
           userName: entry.user?.name ?? "Unknown",
-          project: entry.project?.name ?? "Unknown",
+          project: entry.project?.name ?? "No project",
           tags: (entry.tags ?? []).map((tag) => tag.name),
           description: entry.description ?? "",
           taskTitle: entry.notionTaskTitle ?? null,

@@ -7,6 +7,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { sendDiscordEmbed, buildTimerStopEmbed } from "@/lib/discord";
 import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
+import { getTimerStopValidation } from "@/lib/timer-rules";
 
 const stopSchema = z.object({ discard: z.boolean().optional() });
 
@@ -21,9 +22,11 @@ export async function POST(req: Request) {
   const timer = await getActiveTimer(userId);
   if (!timer) return NextResponse.json({ error: "No active timer" }, { status: 404 });
 
-  if (!discard && !timer.description.trim()) {
+  const stopValidation = getTimerStopValidation(timer);
+
+  if (!discard && !stopValidation.canStop) {
     return NextResponse.json(
-      { error: "Add a description before stopping the timer" },
+      { error: stopValidation.message, missing: stopValidation.missing },
       { status: 400 }
     );
   }
@@ -34,23 +37,29 @@ export async function POST(req: Request) {
   await deleteActiveTimer(userId);
 
   if (db && !discard) {
-    const updated = await db
-      .update(timeEntries)
-      .set({
-        stoppedAt: new Date(stoppedAt),
-        durationMs,
-        notionTaskPageId: timer.notionTaskPageId ?? null,
-        notionTaskTitle: timer.notionTaskTitle ?? null,
-        updatedAt: new Date(stoppedAt),
-      })
-      .where(
-        and(
-          eq(timeEntries.userId, userId),
-          eq(timeEntries.projectId, timer.projectId),
-          isNull(timeEntries.stoppedAt)
-        )
-      )
-      .returning({ id: timeEntries.id });
+    const runningEntries = await db
+      .select({ id: timeEntries.id })
+      .from(timeEntries)
+      .where(and(eq(timeEntries.userId, userId), isNull(timeEntries.stoppedAt)))
+      .orderBy(timeEntries.startedAt);
+
+    const activeEntry = runningEntries[runningEntries.length - 1];
+
+    const updated = activeEntry
+      ? await db
+          .update(timeEntries)
+          .set({
+            stoppedAt: new Date(stoppedAt),
+            durationMs,
+            projectId: timer.projectId ?? null,
+            description: timer.description,
+            notionTaskPageId: timer.notionTaskPageId ?? null,
+            notionTaskTitle: timer.notionTaskTitle ?? null,
+            updatedAt: new Date(stoppedAt),
+          })
+          .where(eq(timeEntries.id, activeEntry.id))
+          .returning({ id: timeEntries.id })
+      : [];
 
     const tagIds: string[] = Array.isArray(timer.tagIds) ? timer.tagIds : [];
     if (tagIds.length > 0 && updated.length > 0) {
@@ -82,16 +91,18 @@ export async function POST(req: Request) {
       if (!db) return;
       const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
       if (user[0]?.discordWebhookUrl && user[0]?.notifyOnStop) {
-        const project = await db
-          .select()
-          .from(projects)
-          .where(eq(projects.id, timer.projectId))
-          .limit(1);
+        const project = timer.projectId
+          ? await db
+              .select()
+              .from(projects)
+              .where(eq(projects.id, timer.projectId))
+              .limit(1)
+          : [];
         await sendDiscordEmbed(
           user[0].discordWebhookUrl,
           buildTimerStopEmbed(
             user[0].name,
-            project[0]?.name ?? "Unknown",
+            project[0]?.name ?? "No project",
             timer.description,
             durationMs
           )

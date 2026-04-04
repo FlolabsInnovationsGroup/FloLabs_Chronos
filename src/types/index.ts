@@ -63,7 +63,7 @@ export interface Tag {
 export interface TimeEntry {
   id: string;
   userId: string;
-  projectId: string;
+  projectId: string | null;
   description: string;
   notionTaskPageId?: string | null;
   notionTaskTitle?: string | null;
@@ -83,7 +83,7 @@ export interface TimeEntry {
 
 export interface ActiveTimer {
   userId: string;
-  projectId: string;
+  projectId: string | null;
   tagIds: string[];
   description: string;
   notionTaskPageId?: string | null;

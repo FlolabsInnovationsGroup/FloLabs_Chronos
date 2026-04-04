@@ -160,7 +160,7 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
 
   function applySuggestion(suggestion: TaskSuggestion) {
     setDescription(suggestion.description);
-    setProjectId(suggestion.projectId);
+    setProjectId(suggestion.projectId ?? "");
     setTagIds(suggestion.tagIds);
     setSelectedTask(
       suggestion.notionTaskPageId

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTimer } from "@/hooks/use-timer";
 import { Button } from "@/components/ui/Button";
 import { DropdownSelect } from "@/components/ui/DropdownSelect";
 import { TagMultiSelect, type TagOption } from "@/components/ui/TagMultiSelect";
 import { TaskSuggestions, type TaskSuggestion } from "@/components/entries/TaskSuggestions";
 import { TaskPicker } from "@/components/entries/TaskPicker";
+import { getTimerStopValidation } from "@/lib/timer-rules";
 import type { Project, Tag } from "@/types";
 
 interface TimerControlsProps {
@@ -30,6 +31,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
   const [taskSaving, setTaskSaving] = useState(false);
   const [projectSaving, setProjectSaving] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeTimer) {
@@ -47,11 +49,21 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
       return;
     }
 
+    setDescription("");
     setSelectedProjectId("");
+    setSelectedTagIds([]);
     setSelectedTask(null);
   }, [activeTimer]);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
+  const stopValidation = useMemo(
+    () =>
+      getTimerStopValidation({
+        description,
+        notionTaskPageId: selectedTask?.id ?? null,
+      }),
+    [description, selectedTask]
+  );
 
   async function createTag(name: string): Promise<TagOption | null> {
     try {
@@ -71,16 +83,18 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
   }
 
   async function handleStart() {
-    if (!selectedProjectId) return;
     setSubmitting(true);
+    setActionError(null);
     try {
       await start({
-        projectId: selectedProjectId,
+        projectId: selectedProjectId || null,
         tagIds: selectedTagIds,
         description,
         notionTaskPageId: selectedTask?.id ?? null,
         notionTaskTitle: selectedTask?.title ?? null,
       });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to start timer.");
     } finally {
       setSubmitting(false);
     }
@@ -91,13 +105,17 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     if (!activeTimer) return;
 
     setTagSaving(true);
+    setActionError(null);
     try {
       await update({
-        projectId: selectedProjectId,
+        projectId: selectedProjectId || null,
         tagIds: nextTagIds,
+        description,
         notionTaskPageId: selectedTask?.id ?? null,
         notionTaskTitle: selectedTask?.title ?? null,
       });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to update tags.");
     } finally {
       setTagSaving(false);
     }
@@ -108,14 +126,17 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     if (!activeTimer) return;
 
     setProjectSaving(true);
+    setActionError(null);
     try {
       await update({
-        projectId: nextProjectId,
+        projectId: nextProjectId || null,
         tagIds: selectedTagIds,
         description,
         notionTaskPageId: selectedTask?.id ?? null,
         notionTaskTitle: selectedTask?.title ?? null,
       });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to update project.");
     } finally {
       setProjectSaving(false);
     }
@@ -126,14 +147,17 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     if (!activeTimer) return;
 
     setTaskSaving(true);
+    setActionError(null);
     try {
       await update({
-        projectId: selectedProjectId,
+        projectId: selectedProjectId || null,
         tagIds: selectedTagIds,
         description,
         notionTaskPageId: task?.id ?? null,
         notionTaskTitle: task?.title ?? null,
       });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to update task.");
     } finally {
       setTaskSaving(false);
     }
@@ -151,8 +175,37 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     return created;
   }
 
+  async function handleDescriptionPersist(
+    nextDescription: string,
+    nextTask: { id: string; title: string } | null = selectedTask
+  ) {
+    if (!activeTimer) return;
+
+    setDescriptionSaving(true);
+    setActionError(null);
+    try {
+      await update({
+        projectId: selectedProjectId || null,
+        description: nextDescription,
+        tagIds: selectedTagIds,
+        notionTaskPageId: nextTask?.id ?? null,
+        notionTaskTitle: nextTask?.title ?? null,
+      });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to save timer details.");
+    } finally {
+      setDescriptionSaving(false);
+    }
+  }
+
   async function handleStop() {
+    if (!stopValidation.canStop) {
+      setActionError(stopValidation.message);
+      return;
+    }
+
     setSubmitting(true);
+    setActionError(null);
     try {
       if (
         activeTimer &&
@@ -163,65 +216,54 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
         await handleDescriptionPersist(description, selectedTask);
       }
       await stop(false);
-      setDescription("");
-      setSelectedProjectId("");
-      setSelectedTagIds([]);
-      setSelectedTask(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to stop timer.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleDescriptionPersist(
-    nextDescription: string,
-    nextTask: { id: string; title: string } | null = selectedTask
-  ) {
-    if (!activeTimer) return;
-
-    setDescriptionSaving(true);
-    try {
-      await update({
-        projectId: selectedProjectId,
-        description: nextDescription,
-        tagIds: selectedTagIds,
-        notionTaskPageId: nextTask?.id ?? null,
-        notionTaskTitle: nextTask?.title ?? null,
-      });
-    } finally {
-      setDescriptionSaving(false);
-    }
-  }
-
   async function applySuggestion(suggestion: TaskSuggestion) {
+    const nextTask = suggestion.notionTaskPageId
+      ? {
+          id: suggestion.notionTaskPageId,
+          title: suggestion.notionTaskTitle ?? "Untitled task",
+        }
+      : null;
+
     setDescription(suggestion.description);
-    setSelectedTask(
-      suggestion.notionTaskPageId
-        ? {
-            id: suggestion.notionTaskPageId,
-            title: suggestion.notionTaskTitle ?? "Untitled task",
-          }
-        : null
-    );
+    setSelectedTask(nextTask);
+    setSelectedProjectId(suggestion.projectId ?? "");
+    setSelectedTagIds(suggestion.tagIds);
     setShowSuggestions(false);
+    setActionError(null);
 
     if (activeTimer) {
-      setSelectedTagIds(suggestion.tagIds);
       try {
         await update({
-          projectId: activeTimer.projectId,
+          projectId: suggestion.projectId ?? activeTimer.projectId ?? null,
           description: suggestion.description,
           tagIds: suggestion.tagIds,
           notionTaskPageId: suggestion.notionTaskPageId ?? null,
           notionTaskTitle: suggestion.notionTaskTitle ?? null,
         });
       } catch {
-        // ignore suggestion apply failures on running timer
+        // keep local suggestion state even if persistence fails
       }
       return;
     }
 
-    setSelectedProjectId(suggestion.projectId);
-    setSelectedTagIds(suggestion.tagIds);
+    try {
+      await start({
+        projectId: suggestion.projectId ?? null,
+        tagIds: suggestion.tagIds,
+        description: suggestion.description,
+        notionTaskPageId: suggestion.notionTaskPageId ?? null,
+        notionTaskTitle: suggestion.notionTaskTitle ?? null,
+      });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to start timer from suggestion.");
+    }
   }
 
   if (loading) {
@@ -237,29 +279,6 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     );
   }
 
-  if (!activeTimer && projects.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-10 gap-3 rounded-xl bg-[#f5f4ef]">
-        <span className="material-symbols-outlined text-[#b2b2ad]" style={{ fontSize: "32px" }}>
-          folder_open
-        </span>
-        <p
-          className="text-sm text-[#5e605b] text-center"
-          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-        >
-          Create your first project to start tracking time.
-        </p>
-        <a
-          href="/projects"
-          className="text-sm font-medium text-[#366769] hover:underline"
-          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-        >
-          Go to Projects →
-        </a>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5 relative">
@@ -269,6 +288,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
           onChange={(e) => {
             setDescription(e.target.value);
             setShowSuggestions(true);
+            setActionError(null);
           }}
           onFocus={() => {
             setShowSuggestions(true);
@@ -280,7 +300,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
             }
           }}
           onKeyDown={(e) => {
-            if (!activeTimer && e.key === "Enter" && selectedProjectId) void handleStart();
+            if (!activeTimer && e.key === "Enter") void handleStart();
             if (activeTimer && e.key === "Enter") {
               e.currentTarget.blur();
             }
@@ -290,13 +310,19 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
           style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
         />
         <TaskSuggestions query={description} open={showSuggestions} onPick={applySuggestion} />
-        {activeTimer && !description.trim() && (
-          <p className="text-xs text-[#a73b21]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
-            Add a description to stop this timer.
+        {activeTimer && !stopValidation.canStop && (
+          <p
+            className="text-xs text-[#a73b21]"
+            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          >
+            {stopValidation.message}
           </p>
         )}
         {activeTimer && descriptionSaving && (
-          <p className="text-xs text-[#366769]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+          <p
+            className="text-xs text-[#366769]"
+            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          >
             Saving description…
           </p>
         )}
@@ -334,7 +360,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
           <DropdownSelect
             value={selectedProjectId}
             onChange={setSelectedProjectId}
-            placeholder="Select project"
+            placeholder="Select project (optional)"
             leadingIcon={selectedProject ? undefined : "folder_open"}
             leadingIconColor="#366769"
             options={projects.map((p) => ({
@@ -378,7 +404,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
             <DropdownSelect
               value={selectedProjectId}
               onChange={(value) => void handleProjectChange(value)}
-              placeholder="Select project"
+              placeholder="Select project (optional)"
               leadingIcon="folder_open"
               leadingIconColor="#366769"
               options={projects.map((p) => ({
@@ -421,22 +447,44 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
         </div>
       )}
 
+      {activeTimer && !stopValidation.canStop && (
+        <div className="md:hidden rounded-xl border border-[#f4d5cc] bg-[#fff7f6] px-4 py-3 text-sm text-[#791903]">
+          <div className="flex items-start gap-2">
+            <span className="material-symbols-outlined shrink-0" style={{ fontSize: "18px" }}>
+              info
+            </span>
+            <p style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+              You can&apos;t stop this timer yet. {stopValidation.message}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {actionError && (
+        <p
+          className="text-sm text-[#a73b21]"
+          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+        >
+          {actionError}
+        </p>
+      )}
+
       <div className="flex items-center gap-3 pt-2">
         {!activeTimer ? (
-          <Button
-            variant="primary"
-            size="lg"
-            onClick={handleStart}
-            loading={submitting}
-            disabled={!selectedProjectId}
-          >
+          <Button variant="primary" size="lg" onClick={handleStart} loading={submitting}>
             <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
               play_arrow
             </span>
             Start Session
           </Button>
         ) : (
-          <Button variant="primary" size="lg" onClick={handleStop} loading={submitting} disabled={!description.trim() || descriptionSaving}>
+          <Button
+            variant={stopValidation.canStop ? "primary" : "secondary"}
+            size="lg"
+            onClick={handleStop}
+            loading={submitting}
+            disabled={!stopValidation.canStop || descriptionSaving || taskSaving}
+          >
             <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
               stop
             </span>

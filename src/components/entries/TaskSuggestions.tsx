@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 export interface TaskSuggestion {
   entryId: string;
   description: string;
-  projectId: string;
+  projectId: string | null;
   projectName: string;
   tagIds: string[];
   tagNames: string[];

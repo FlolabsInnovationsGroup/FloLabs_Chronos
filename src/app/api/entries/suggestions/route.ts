@@ -67,7 +67,7 @@ export async function GET(req: Request) {
   const deduped = new Map<string, {
     entryId: string;
     description: string;
-    projectId: string;
+    projectId: string | null;
     projectName: string;
     tagIds: string[];
     tagNames: string[];
@@ -91,7 +91,7 @@ export async function GET(req: Request) {
       entryId: row.entry.id,
       description: row.entry.description ?? "",
       projectId: row.entry.projectId,
-      projectName: row.project?.name ?? "Unknown",
+      projectName: row.project?.name ?? "No project",
       tagIds: tagList.map((t) => t.id),
       tagNames: tagList.map((t) => t.name),
       notionTaskPageId: row.entry.notionTaskPageId ?? null,

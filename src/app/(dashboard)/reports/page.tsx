@@ -175,7 +175,7 @@ function groupEntries(entries: TimeEntry[], groupBy: string): ReportRow[] {
 
     switch (groupBy) {
       case "project":
-        key = entry.project?.name ?? "Unknown Project";
+        key = entry.project?.name ?? entry.projectId ?? "No project";
         break;
       case "user":
         key = entry.user?.name ?? "Unknown User";

@@ -101,6 +101,7 @@ Admins can disable or delete pending invitation links.
 
 Projects are global:
 - All authenticated users can read selectable projects for timers and time entry editing.
+- Timer start no longer requires a project; a running or completed timer may temporarily have `projectId = null`.
 - Users may reassign the project of their own currently running timer from the active timer UI.
 - Only admins can create, edit, archive, restore, or delete projects.
 - Deleting a project also deletes linked time entries, with a warning/confirmation flow.
@@ -119,7 +120,7 @@ Tags are **per-user**:
 
 A time entry stores:
 - user
-- project
+- optional project
 - description
 - start / stop timestamps
 - computed duration
@@ -191,9 +192,11 @@ The entry-list edit experience must be considered authoritative for user-facing 
 ### Start Timer
 1. User clicks Start.
 2. API writes the active timer to Redis: `timer:{userId}`.
-3. Stored timer payload includes `projectId`, `tagIds`, `description`, `startedAt`, and optional task metadata.
-4. API broadcasts a start event via Redis pub/sub.
-5. Connected SSE clients update local state.
+3. Stored timer payload includes optional `projectId`, `tagIds`, `description`, `startedAt`, and optional task metadata.
+4. The timer can start with nothing filled in.
+5. Clicking a recent suggestion while idle immediately starts a timer with that suggestion's values.
+6. API broadcasts a start event via Redis pub/sub.
+7. Connected SSE clients update local state.
 
 ### Display Timer
 - Client computes elapsed time locally from `startedAt`.
@@ -205,17 +208,19 @@ The entry-list edit experience must be considered authoritative for user-facing 
 3. Redis active-timer state is updated in place.
 4. The matching running PostgreSQL row is also updated so crash recovery and stop-time persistence stay aligned.
 5. Supported live edits include project reassignment, description updates, tag changes, and task reassignment.
-6. The updated timer state is rebroadcast over SSE so the active UI stays consistent.
+6. Clicking a recent suggestion while a timer is already running safely applies that suggestion onto the active timer instead of starting a second timer.
+7. The updated timer state is rebroadcast over SSE so the active UI stays consistent.
 
 ### Stop Timer
 1. API loads the active timer from Redis.
-2. API computes `durationMs`.
-3. API writes the completed entry to PostgreSQL.
-4. API writes tag associations to `time_entry_tags`.
-5. Task metadata is persisted on the entry row when present.
-6. API removes the active timer from Redis.
-7. API broadcasts a stop event.
-8. Completed entries can then be synced to Notion and notified to Discord.
+2. Chronos requires both a non-empty description and a selected task before a non-discard stop is allowed.
+3. API computes `durationMs`.
+4. API writes the completed entry to PostgreSQL.
+5. API writes tag associations to `time_entry_tags`.
+6. Task metadata is persisted on the entry row when present.
+7. API removes the active timer from Redis.
+8. API broadcasts a stop event.
+9. Completed entries can then be synced to Notion and notified to Discord.
 
 ### Visibility Rules
 - Admins can inspect all active timers.
@@ -318,7 +323,7 @@ CREATE INDEX idx_tags_user ON tags(user_id);
 CREATE TABLE time_entries (
   id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id              UUID NOT NULL REFERENCES users(id),
-  project_id           UUID NOT NULL REFERENCES projects(id),
+  project_id           UUID REFERENCES projects(id),
   description          TEXT NOT NULL,
   started_at           TIMESTAMPTZ NOT NULL,
   stopped_at           TIMESTAMPTZ,
@@ -347,7 +352,8 @@ CREATE TABLE time_entry_tags (
 - `invitation_team_memberships` stores full invited membership intent.
 - Tags are unique per `(name, user_id)`.
 - Time entries never store a direct single tag column.
-- Task linkage is optional and stored explicitly on the time entry.
+- Project linkage is optional for timer-created entries and may be filled in later.
+- Task linkage is optional while the timer is running, but stopping requires an explicit task selection.
 - Description may still temporarily contain a pasted Notion task URL for compatibility with the Python task linker.
 - Deleting a tag preserves the time entry.
 - Deleting a project deletes linked time entries.

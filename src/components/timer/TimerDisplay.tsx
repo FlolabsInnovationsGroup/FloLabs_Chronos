@@ -28,15 +28,6 @@ export function TimerDisplay() {
         </span>
       </div>
 
-      {/* Project/description hint when active */}
-      {activeTimer?.description && (
-        <p
-          className="text-base italic text-[#5e605b] mt-1 truncate max-w-sm"
-          style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
-        >
-          {activeTimer.description}
-        </p>
-      )}
     </div>
   );
 }

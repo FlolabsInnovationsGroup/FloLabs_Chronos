@@ -52,7 +52,9 @@ export async function PATCH(
   const previousTagNames = previousTagIds.length > 0
     ? (await db.select({ name: tags.name }).from(tags).where(inArray(tags.id, previousTagIds.map((row) => row.tagId)))).map((row) => row.name)
     : [];
-  const [previousProject] = await db.select({ name: projects.name }).from(projects).where(eq(projects.id, entry.projectId)).limit(1);
+  const [previousProject] = entry.projectId
+    ? await db.select({ name: projects.name }).from(projects).where(eq(projects.id, entry.projectId)).limit(1)
+    : [];
 
   if (startedAtStr !== undefined || stoppedAtStr !== undefined) {
     if (!entry.stoppedAt) {
@@ -138,11 +140,13 @@ export async function PATCH(
   const nextTagNames = nextTagIds.length > 0
     ? (await db.select({ name: tags.name }).from(tags).where(inArray(tags.id, nextTagIds))).map((row) => row.name)
     : [];
-  const [updatedProject] = await db.select({ name: projects.name }).from(projects).where(eq(projects.id, updated.projectId)).limit(1);
+  const [updatedProject] = updated.projectId
+    ? await db.select({ name: projects.name }).from(projects).where(eq(projects.id, updated.projectId)).limit(1)
+    : [];
 
   const changes: Array<{ field: string; oldValue: string; newValue: string }> = [];
   if ((entry.description ?? "") !== (updated.description ?? "")) changes.push({ field: "description", oldValue: entry.description ?? "No description", newValue: updated.description ?? "No description" });
-  if ((previousProject?.name ?? "Unknown") !== (updatedProject?.name ?? "Unknown")) changes.push({ field: "project", oldValue: previousProject?.name ?? "Unknown", newValue: updatedProject?.name ?? "Unknown" });
+  if ((previousProject?.name ?? "No project") !== (updatedProject?.name ?? "No project")) changes.push({ field: "project", oldValue: previousProject?.name ?? "No project", newValue: updatedProject?.name ?? "No project" });
   if (previousTagNames.join(", ") !== nextTagNames.join(", ")) changes.push({ field: "tags", oldValue: previousTagNames.join(", ") || "No tags", newValue: nextTagNames.join(", ") || "No tags" });
   const previousTaskLabel = entry.notionTaskTitle?.trim() || "No task linked";
   const nextTaskLabel = updated.notionTaskTitle?.trim() || "No task linked";
@@ -192,7 +196,9 @@ export async function DELETE(
   const tagNames = tagRows.length > 0
     ? (await db.select({ name: tags.name }).from(tags).where(inArray(tags.id, tagRows.map((row) => row.tagId)))).map((row) => row.name)
     : [];
-  const [projectRow] = await db.select({ name: projects.name }).from(projects).where(eq(projects.id, entry.projectId)).limit(1);
+  const [projectRow] = entry.projectId
+    ? await db.select({ name: projects.name }).from(projects).where(eq(projects.id, entry.projectId)).limit(1)
+    : [];
   const [userRow] = await db.select({ name: users.name, notionTeamMemberId: users.notionTeamMemberId }).from(users).where(eq(users.id, entry.userId)).limit(1);
 
   await db.delete(timeEntries).where(eq(timeEntries.id, id));
@@ -201,7 +207,7 @@ export async function DELETE(
     notionPageId: entry.notionPageId,
     notionTeamMemberId: userRow?.notionTeamMemberId ?? null,
     userName: userRow?.name ?? "Unknown",
-    project: projectRow?.name ?? "Unknown",
+    project: projectRow?.name ?? "No project",
     tags: tagNames,
     description: entry.description ?? "",
     taskTitle: entry.notionTaskTitle ?? null,

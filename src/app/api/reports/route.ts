@@ -165,8 +165,8 @@ export async function GET(req: Request) {
       key = entry.userId;
       label = user?.name ?? entry.userId;
     } else if (groupBy === "project") {
-      key = entry.projectId;
-      label = project?.name ?? entry.projectId;
+      key = entry.projectId ?? "no-project";
+      label = project?.name ?? entry.projectId ?? "No project";
     }
 
     if (!groups[key]) groups[key] = { label, totalMs: 0, entryCount: 0 };

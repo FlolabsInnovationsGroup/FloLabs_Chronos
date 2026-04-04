@@ -162,9 +162,7 @@ export const timeEntries = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id),
-    projectId: uuid("project_id")
-      .notNull()
-      .references(() => projects.id),
+    projectId: uuid("project_id").references(() => projects.id),
     description: text("description").notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     stoppedAt: timestamp("stopped_at", { withTimezone: true }),

@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { setActiveTimer, broadcastTimerEvent } from "@/lib/redis";
 import { db } from "@/lib/db";
-import { timeEntries, users, projects } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { timeEntries, users, projects, tags } from "@/lib/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { sendDiscordEmbed, buildTimerStartEmbed } from "@/lib/discord";
 
 const startSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.string().uuid().optional().nullable(),
   tagIds: z.array(z.string().uuid()).optional().default([]),
   description: z.string().default(""),
   notionTaskPageId: z.string().optional().nullable(),
@@ -27,10 +27,34 @@ export async function POST(req: Request) {
   const userId = session.user.id;
   const startedAt = Date.now();
 
+  if (db && projectId) {
+    const [project] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 400 });
+    }
+  }
+
+  const uniqueTagIds = [...new Set(tagIds)];
+  if (db && uniqueTagIds.length > 0) {
+    const ownedTags = await db
+      .select({ id: tags.id })
+      .from(tags)
+      .where(and(eq(tags.userId, userId), inArray(tags.id, uniqueTagIds)));
+
+    if (ownedTags.length !== uniqueTagIds.length) {
+      return NextResponse.json({ error: "One or more tags are invalid" }, { status: 400 });
+    }
+  }
+
   const timer = {
     userId,
-    projectId,
-    tagIds,
+    projectId: projectId ?? null,
+    tagIds: uniqueTagIds,
     description,
     notionTaskPageId: notionTaskPageId ?? null,
     notionTaskTitle: notionTaskTitle ?? null,
@@ -43,7 +67,7 @@ export async function POST(req: Request) {
   if (db) {
     await db.insert(timeEntries).values({
       userId,
-      projectId,
+      projectId: projectId ?? null,
       description,
       notionTaskPageId: notionTaskPageId ?? null,
       notionTaskTitle: notionTaskTitle ?? null,
@@ -58,10 +82,12 @@ export async function POST(req: Request) {
     if (!db) return;
     const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (user[0]?.discordWebhookUrl && user[0]?.notifyOnStart) {
-      const project = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+      const project = projectId
+        ? await db.select().from(projects).where(eq(projects.id, projectId)).limit(1)
+        : [];
       await sendDiscordEmbed(
         user[0].discordWebhookUrl,
-        buildTimerStartEmbed(user[0].name, project[0]?.name ?? "Unknown", description)
+        buildTimerStartEmbed(user[0].name, project[0]?.name ?? "No project", description)
       );
     }
   })().catch(() => {});

@@ -28,10 +28,12 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
   const [submitting, setSubmitting] = useState(false);
   const [tagSaving, setTagSaving] = useState(false);
   const [taskSaving, setTaskSaving] = useState(false);
+  const [projectSaving, setProjectSaving] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     if (activeTimer) {
+      setSelectedProjectId(activeTimer.projectId ?? "");
       setSelectedTagIds(Array.isArray(activeTimer.tagIds) ? activeTimer.tagIds : []);
       setDescription(activeTimer.description ?? "");
       setSelectedTask(
@@ -45,6 +47,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
       return;
     }
 
+    setSelectedProjectId("");
     setSelectedTask(null);
   }, [activeTimer]);
 
@@ -90,12 +93,31 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     setTagSaving(true);
     try {
       await update({
+        projectId: selectedProjectId,
         tagIds: nextTagIds,
         notionTaskPageId: selectedTask?.id ?? null,
         notionTaskTitle: selectedTask?.title ?? null,
       });
     } finally {
       setTagSaving(false);
+    }
+  }
+
+  async function handleProjectChange(nextProjectId: string) {
+    setSelectedProjectId(nextProjectId);
+    if (!activeTimer) return;
+
+    setProjectSaving(true);
+    try {
+      await update({
+        projectId: nextProjectId,
+        tagIds: selectedTagIds,
+        description,
+        notionTaskPageId: selectedTask?.id ?? null,
+        notionTaskTitle: selectedTask?.title ?? null,
+      });
+    } finally {
+      setProjectSaving(false);
     }
   }
 
@@ -106,6 +128,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     setTaskSaving(true);
     try {
       await update({
+        projectId: selectedProjectId,
         tagIds: selectedTagIds,
         description,
         notionTaskPageId: task?.id ?? null,
@@ -158,6 +181,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
     setDescriptionSaving(true);
     try {
       await update({
+        projectId: selectedProjectId,
         description: nextDescription,
         tagIds: selectedTagIds,
         notionTaskPageId: nextTask?.id ?? null,
@@ -184,6 +208,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
       setSelectedTagIds(suggestion.tagIds);
       try {
         await update({
+          projectId: activeTimer.projectId,
           description: suggestion.description,
           tagIds: suggestion.tagIds,
           notionTaskPageId: suggestion.notionTaskPageId ?? null,
@@ -333,26 +358,37 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
 
       {activeTimer && (
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-2">
-            {(() => {
-              const proj = projects.find((p) => p.id === activeTimer.projectId);
-              return (
-                <>
-                  {proj && (
-                    <span
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm bg-[#b9ecee] text-[#104648]"
-                      style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                    >
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: proj.color ?? "#366769" }}
-                      />
-                      {proj.name}
-                    </span>
-                  )}
-                </>
-              );
-            })()}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <p
+                className="text-xs uppercase tracking-wide text-[#5e605b] font-medium"
+                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+              >
+                Project for current session
+              </p>
+              {projectSaving && (
+                <span
+                  className="text-xs text-[#366769]"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  Saving…
+                </span>
+              )}
+            </div>
+            <DropdownSelect
+              value={selectedProjectId}
+              onChange={(value) => void handleProjectChange(value)}
+              placeholder="Select project"
+              leadingIcon="folder_open"
+              leadingIconColor="#366769"
+              options={projects.map((p) => ({
+                value: p.id,
+                label: p.name,
+                color: p.color ?? "#366769",
+              }))}
+              className="min-w-[160px]"
+              disabled={submitting || projectSaving}
+            />
           </div>
 
           <div className="flex flex-col gap-2">

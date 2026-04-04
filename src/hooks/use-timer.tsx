@@ -17,7 +17,7 @@ interface TimerContextValue {
   elapsed: number;
   loading: boolean;
   start: (payload: { projectId: string; tagIds?: string[]; description: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => Promise<ActiveTimer>;
-  update: (payload: { tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => Promise<ActiveTimer>;
+  update: (payload: { projectId?: string; tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => Promise<ActiveTimer>;
   stop: (discard?: boolean) => Promise<void>;
 }
 
@@ -124,7 +124,7 @@ export function TimerProvider({ children, userId }: TimerProviderProps) {
   );
 
   const update = useCallback(
-    async (payload: { tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => {
+    async (payload: { projectId?: string; tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => {
       const res = await fetch("/api/timer", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

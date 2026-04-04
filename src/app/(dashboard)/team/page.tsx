@@ -689,7 +689,7 @@ export default function TeamPage() {
                           <td className="px-5 py-4 align-top">
                             {liveDuration !== null ? (
                               <div className="flex flex-col gap-1">
-                                <Badge color="primary">Live · {formatDurationHuman(liveDuration)}</Badge>
+                                <Badge color="custom" className="bg-[#fde0d9] text-[#791903]">Live · {formatDurationHuman(liveDuration)}</Badge>
                                 {user.activeTimer?.description && (
                                   <p
                                     className="max-w-[16rem] text-xs text-[#5e605b] break-words"

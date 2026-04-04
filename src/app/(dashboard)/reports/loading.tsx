@@ -2,7 +2,7 @@ export default function ReportsLoading() {
   return (
     <div className="flex flex-col gap-6 max-w-6xl mx-auto animate-pulse">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-2">
           <div className="h-7 w-24 bg-[#efeee9] rounded" />
           <div className="h-4 w-32 bg-[#efeee9] rounded" />
@@ -29,7 +29,7 @@ export default function ReportsLoading() {
         </div>
       </div>
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {[...Array(3)].map((_, i) => (
           <div key={i} className="bg-surface-container-lowest rounded-xl paper-shadow p-5 flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-[#efeee9] shrink-0" />

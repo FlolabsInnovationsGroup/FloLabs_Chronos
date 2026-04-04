@@ -184,6 +184,8 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 
 ## Recent Updates
 
+- Reports page mobile layout was tightened so the main report content no longer depends on horizontal scrolling: summary stats now stack responsively, the breakdown table renders as stacked cards on small screens, the detailed-entry sort controls wrap cleanly, and report entry cards split their action/duration row for narrow widths while preserving all scoped report data.
+- Live-state indicators that were still using the old sky-blue treatment were updated to the warm red live treatment on the Users page live badge, the active-timer card, and the mobile bottom timer pill.
 - Users page now shows which visible users are currently live, along with the running duration of their active entry; the data comes from existing Redis-backed active timers and is refreshed from timer SSE events without expanding member visibility.
 - `/register` onboarding/reset UI now includes reveal-password controls plus password confirmation for both invite acceptance and reset-password completion, while `/register?forgot=1` remains the request-reset form.
 - Tooltip/info-dialog rendering was hardened so delayed tooltips stay within the visible viewport even inside overflow-constrained UI and mobile layouts.

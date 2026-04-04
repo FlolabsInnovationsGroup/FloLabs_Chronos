@@ -32,8 +32,8 @@ export function BottomNav() {
 
           <div className="flex items-center gap-3 bg-[#31332f] text-[#fbf9f5] rounded-full px-5 py-3 paper-shadow">
             <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#b9ecee] opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#b9ecee]" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#a73b21] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#a73b21]" />
             </span>
 
             <span

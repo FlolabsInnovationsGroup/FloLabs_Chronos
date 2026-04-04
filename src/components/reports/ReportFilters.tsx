@@ -58,9 +58,9 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 p-4 bg-surface-container-lowest rounded-xl paper-shadow">
+    <div className="flex flex-wrap items-start gap-3 p-4 bg-surface-container-lowest rounded-xl paper-shadow">
       {/* Date range */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span
           className="text-xs text-[#5e605b] font-medium whitespace-nowrap"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -90,7 +90,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
       </div>
 
       {/* Divider */}
-      <div className="w-px h-6 bg-[#efeee9]" />
+      <div className="hidden sm:block w-px h-6 bg-[#efeee9]" />
 
       {/* User select (admin / team lead) */}
       {users.length > 0 && (
@@ -102,7 +102,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
             ...users.map((u) => ({ value: u.id, label: u.name })),
           ]}
           placeholder="All members"
-          className="w-40"
+          className="w-full sm:w-40"
         />
       )}
 
@@ -115,7 +115,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
           ...projects.map((p) => ({ value: p.id, label: p.name, color: p.color ?? undefined })),
         ]}
         placeholder="All projects"
-        className="w-40"
+        className="w-full sm:w-40"
       />
 
       {/* Tag select */}
@@ -127,7 +127,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
           ...tags.map((t) => ({ value: t.id, label: t.name })),
         ]}
         placeholder="All tags"
-        className="w-36"
+        className="w-full sm:w-36"
       />
 
       {/* Group by */}
@@ -142,7 +142,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
           { value: "user", label: "By Member" },
         ]}
         placeholder="Group by"
-        className="w-36"
+        className="w-full sm:w-36"
       />
 
       {/* Page size */}
@@ -151,7 +151,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
         onChange={(v) => update("limit", v === "50" ? "" : v)}
         options={PAGE_SIZE_OPTIONS.map((o) => ({ value: o.value, label: `${o.label} / page` }))}
         placeholder="50 / page"
-        className="w-32"
+        className="w-full sm:w-32"
       />
 
       {/* Search (debounced 2s) */}

@@ -95,13 +95,23 @@ export function ReportEntries({ entries }: ReportEntriesProps) {
 
       {expanded && (
         <div className="px-2 py-2 flex flex-col gap-3">
-          <div className="grid grid-cols-6 gap-2 px-4 py-2 rounded-xl bg-[#f5f4ef]">
+          <div className="flex flex-col gap-2 px-4 py-3 rounded-xl bg-[#f5f4ef] sm:flex-row sm:flex-wrap sm:items-center">
+            <span
+              className="text-xs font-semibold uppercase tracking-wide text-[#5e605b]"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              Sort by
+            </span>
             {columns.map((column) => (
               <button
                 key={column.key}
                 type="button"
                 onClick={() => handleSort(column.key)}
-                className="flex items-center gap-1 text-left text-xs font-semibold text-[#5e605b] uppercase tracking-wide hover:text-[#31332f] transition-colors"
+                className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide transition-colors ${
+                  sortKey === column.key
+                    ? "border-[#d7d2c8] bg-white text-[#31332f]"
+                    : "border-transparent bg-transparent text-[#5e605b] hover:text-[#31332f]"
+                }`}
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 <span>{column.label}</span>

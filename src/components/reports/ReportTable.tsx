@@ -83,7 +83,122 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
         </h3>
       </div>
 
-      <table className="w-full">
+      <div className="md:hidden px-4 py-4 flex flex-col gap-3">
+        {sortedRows.map((row) => {
+          const pct = totalMs > 0 ? Math.round((row.totalMs / totalMs) * 100) : 0;
+
+          return (
+            <div key={`${row.label}-${row.sortDate ?? "na"}`} className="rounded-xl bg-[#fbf9f5] p-4 flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p
+                    className="text-xs uppercase tracking-wide text-[#5e605b]"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    Label
+                  </p>
+                  <p
+                    className="text-sm font-medium text-[#31332f] mt-1"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    {row.label}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p
+                    className="text-xs uppercase tracking-wide text-[#5e605b]"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    Share
+                  </p>
+                  <p
+                    className="text-sm font-medium text-[#31332f] mt-1 tabular-nums"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    {pct}%
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-white/70 px-3 py-2">
+                  <p
+                    className="text-xs uppercase tracking-wide text-[#5e605b]"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    Entries
+                  </p>
+                  <p
+                    className="text-sm text-[#31332f] mt-1 tabular-nums"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    {row.entryCount}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-white/70 px-3 py-2">
+                  <p
+                    className="text-xs uppercase tracking-wide text-[#5e605b]"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    Total Time
+                  </p>
+                  <p
+                    className="text-sm font-medium italic text-[#31332f] mt-1 tabular-nums"
+                    style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
+                  >
+                    {formatDurationHuman(row.totalMs)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-1.5 bg-[#efeee9] rounded-full overflow-hidden">
+                  <div className="h-full bg-[#366769] rounded-full transition-all" style={{ width: `${pct}%` }} />
+                </div>
+                <span
+                  className="text-xs text-[#5e605b] tabular-nums w-8 text-right"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  {pct}%
+                </span>
+              </div>
+            </div>
+          );
+        })}
+
+        <div className="rounded-xl bg-[#f5f4ef] p-4 grid grid-cols-2 gap-3">
+          <div>
+            <p
+              className="text-xs uppercase tracking-wide text-[#5e605b]"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              Total Entries
+            </p>
+            <p
+              className="text-sm font-semibold text-[#31332f] mt-1 tabular-nums"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              {rows.reduce((s, r) => s + r.entryCount, 0)}
+            </p>
+          </div>
+          <div>
+            <p
+              className="text-xs uppercase tracking-wide text-[#5e605b]"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              Total Time
+            </p>
+            <p
+              className="text-sm font-semibold italic text-[#31332f] mt-1 tabular-nums"
+              style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
+            >
+              {formatDurationHuman(totalMs)}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <table className="hidden md:table w-full">
         <thead>
           <tr className="bg-[#f5f4ef]">
             {columns.map((column) => (

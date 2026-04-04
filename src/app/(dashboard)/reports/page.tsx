@@ -260,7 +260,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   return (
     <div className="flex flex-col gap-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1
             className="text-2xl font-light italic text-[#31332f]"
@@ -291,7 +291,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       <ReportChart data={chartData} title="Daily Hours — Past 7 Days" />
 
       {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {[
           { label: "Total Hours", value: `${totalHours}h`, icon: "schedule" },
           { label: "Sessions", value: String(entries.length), icon: "timer" },

@@ -44,10 +44,10 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
           Daily Momentum
         </h2>
         {activeTimer && (
-          <span className="flex items-center gap-1.5 text-xs text-[#366769] bg-[#b9ecee] px-2.5 py-1 rounded-full font-medium">
+          <span className="flex items-center gap-1.5 rounded-full bg-[#fde0d9] px-2.5 py-1 text-xs font-medium text-[#791903]">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#366769] opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#366769]" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#a73b21] opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#a73b21]" />
             </span>
             Live
           </span>

@@ -64,9 +64,10 @@ That means:
 - Notion Team Members data is the operational source of truth for membership intent.
 - If Chronos creates an invitation and no matching Notion Team Member page exists, Chronos should create that page so the invite flow does not break integrity.
 - When Chronos creates a missing Team Member page from an invitation, it must populate the invited teams into the `Team` relation at creation time.
-- Chronos now attempts to apply a Notion template during that create call: it uses `NOTION_TEAM_MEMBER_TEMPLATE_ID` when configured, otherwise it asks Notion to use the Team Members data source's default template.
-- Notion applies template content asynchronously after page creation. Chronos relies on the API-supported template flow for page structure/content, while still sending the critical invitation properties (`Name`, `Email`, `Team`, `Status=Onboarding`) in the create request so onboarding integrity is preserved.
-- If template application is unavailable for that workspace/data source, or Notion rejects the template request, Chronos falls back to creating the Team Member page without a template rather than blocking the invite.
+- Chronos now attempts to apply a Notion template during that Team Member create call: it uses `NOTION_TEAM_MEMBER_TEMPLATE_ID` when configured, otherwise it asks Notion to use the Team Members data source's default template.
+- After creating a new Team Member page, Chronos also creates a related page in the separate Onboarding database (`NOTION_ONBOARDINGS_DB_ID`) and links it back through the Team Member page's `Onboarding` relation property.
+- For Onboarding pages, Chronos asks Notion to use the Onboarding data source's default template when the API/data source supports template creation; if Notion rejects that template flow, Chronos falls back to a plain page create instead of faking template content locally.
+- Notion applies template content asynchronously after page creation. Chronos relies on the API-supported template flow for page structure/content, while still sending the critical invitation properties (`Name`, `Email`, `Team`, `Status=Onboarding`) in the Team Member create request so onboarding integrity is preserved.
 - When a Chronos user is renamed by an admin, Chronos should also update the Team Member page name in Notion, first via stored `notionTeamMemberId` and then via email-based fallback resolution if the stored ID is missing.
 - Chronos should not evolve into a freeform local membership editor that diverges from Notion.
 
@@ -80,7 +81,7 @@ User onboarding is invite-based:
 5. Registration is only allowed when the token is valid, unexpired, and matches the invite email.
 6. On success, the user is created and assigned to all invited teams via `team_memberships`.
 7. The first team is still mirrored into `users.team_id` for compatibility.
-8. If needed for integrity, Chronos creates the missing Notion Team Member page during invitation flow, attempting to apply the configured/default Notion onboarding template first and falling back to a plain page create if template application is unavailable.
+8. If needed for integrity, Chronos creates the missing Notion Team Member page during invitation flow, attempts to apply the configured/default Team Member template, then creates and links a related Onboarding page using the Onboarding database's default template when the Notion API supports it.
 
 Legacy compatibility remains in place:
 - `invitations.team_id` is still present as a primary/default team pointer.
@@ -489,11 +490,11 @@ For completed entries edited through the API:
 ### Expected env vars
 - `NOTION_API_KEY`
 - `NOTION_DATABASE_ID` — Time Entries DB
-- `NOTION_ONBOARDINGS_DB_ID` — Team Members / onboarding DB
-- `NOTION_TEAM_MEMBERS_DB_ID` — legacy/alternate Team Members DB env name still supported
+- `NOTION_TEAM_MEMBERS_DB_ID` — Team Members DB used for Team Member page creation, membership sync, and Team Member relations on time entries
+- `NOTION_ONBOARDINGS_DB_ID` — Onboarding DB used to create linked onboarding pages for new invitees
 - `NOTION_TEAMS_DB_ID` — Teams DB
 - `NOTION_TASKS_DB_ID` — Tasks DB
-- `NOTION_TEAM_MEMBER_TEMPLATE_ID` — optional explicit Team Member template/page ID for invitation-created onboarding pages
+- `NOTION_TEAM_MEMBER_TEMPLATE_ID` — optional explicit Team Member template/page ID for invitation-created Team Member pages
 - `NOTION_TEAM_MEMBER_TEMPLATE_TIMEZONE` — optional timezone used when Notion resolves template variables like `@today` / `@now` (defaults to `UTC` for internal integrations)
 - `CRON_SECRET`
 
@@ -523,6 +524,10 @@ Depending on actual database schema detection, Chronos maps:
 - If a webhook cannot be resolved yet (for example the rollup/relation-backed webhook path is empty), the entry is still synced to Notion and its Notion status is left/set to **Processed** rather than **Notified**
 - That `Processed` state acts as a queue marker for later delivery attempts when a webhook becomes available
 - Notification failures are surfaced in lifecycle results instead of always failing silently
+
+### Notion guest invite limitation
+- Chronos does **not** programmatically invite Notion guests to a page/workspace page, because Notion's public API exposes users, content, and data-source operations but does not expose a documented endpoint for inviting a guest or sharing a page with a guest.
+- Guest access to the Floffice page must still be granted through Notion's UI/admin flows outside Chronos.
 
 ---
 

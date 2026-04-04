@@ -25,6 +25,7 @@ export function ControlForm() {
   const [notionApiKey, setNotionApiKey] = useState("");
   const [notionTasksDbId, setNotionTasksDbId] = useState("");
   const [notionTeamMembersDbId, setNotionTeamMembersDbId] = useState("");
+  const [notionOnboardingsDbId, setNotionOnboardingsDbId] = useState("");
   const [notionTeamsDbId, setNotionTeamsDbId] = useState("");
   const [discordBotToken, setDiscordBotToken] = useState("");
   const [discordGuildId, setDiscordGuildId] = useState("");
@@ -45,6 +46,7 @@ export function ControlForm() {
         setApiKeyMasked(data.config?.notionApiKeyMasked ?? "");
         setNotionTasksDbId(data.config?.notionTasksDbId ?? "");
         setNotionTeamMembersDbId(data.config?.notionTeamMembersDbId ?? "");
+        setNotionOnboardingsDbId(data.config?.notionOnboardingsDbId ?? "");
         setNotionTeamsDbId(data.config?.notionTeamsDbId ?? "");
         setDiscordBotTokenPresent(Boolean(data.config?.discordBotTokenPresent));
         setDiscordBotTokenMasked(data.config?.discordBotTokenMasked ?? "");
@@ -68,7 +70,7 @@ export function ControlForm() {
       await readJson(await fetch("/api/control", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notionApiKey, notionTasksDbId, notionTeamMembersDbId, notionTeamsDbId, discordBotToken, discordGuildId, discordCategoryId, discordChannelPrefix }),
+        body: JSON.stringify({ notionApiKey, notionTasksDbId, notionTeamMembersDbId, notionOnboardingsDbId, notionTeamsDbId, discordBotToken, discordGuildId, discordCategoryId, discordChannelPrefix }),
       }));
       setSuccess("Control settings saved.");
       setApiKeyPresent(true);
@@ -95,9 +97,10 @@ export function ControlForm() {
     }
   }
 
-  function applyDatabase(id: string, target: "tasks" | "teamMembers" | "teams") {
+  function applyDatabase(id: string, target: "tasks" | "teamMembers" | "onboardings" | "teams") {
     if (target === "tasks") setNotionTasksDbId(id);
     if (target === "teamMembers") setNotionTeamMembersDbId(id);
+    if (target === "onboardings") setNotionOnboardingsDbId(id);
     if (target === "teams") setNotionTeamsDbId(id);
   }
 
@@ -116,6 +119,7 @@ export function ControlForm() {
               <Input label="Notion Integration Secret Key" type="password" value={notionApiKey} onChange={(e) => setNotionApiKey(e.target.value)} placeholder={apiKeyPresent ? "Saved in app config — leave empty to keep current key" : "ntn_..."} hint={apiKeyPresent && apiKeyMasked ? `Current key: ${apiKeyMasked}. Enter a new one only if you want to rotate it.` : "Stored in the app config store. Deployment env vars still take precedence if present."} />
               <Input label="Tasks Database ID" value={notionTasksDbId} onChange={(e) => setNotionTasksDbId(e.target.value)} placeholder="b5a15559fffc4a4f97161bf12e6fb400" />
               <Input label="Team Members Database ID" value={notionTeamMembersDbId} onChange={(e) => setNotionTeamMembersDbId(e.target.value)} placeholder="..." />
+              <Input label="Onboarding Database ID" value={notionOnboardingsDbId} onChange={(e) => setNotionOnboardingsDbId(e.target.value)} placeholder="a1a106fab63548089279dc54d63eab89" />
               <Input label="Teams Database ID" value={notionTeamsDbId} onChange={(e) => setNotionTeamsDbId(e.target.value)} placeholder="..." />
             </div>
 
@@ -158,6 +162,7 @@ export function ControlForm() {
                     <div className="flex flex-wrap gap-2">
                       <Button variant="ghost" size="sm" type="button" onClick={() => applyDatabase(db.id, "tasks")}>Use for Tasks</Button>
                       <Button variant="ghost" size="sm" type="button" onClick={() => applyDatabase(db.id, "teamMembers")}>Use for Team Members</Button>
+                      <Button variant="ghost" size="sm" type="button" onClick={() => applyDatabase(db.id, "onboardings")}>Use for Onboarding</Button>
                       <Button variant="ghost" size="sm" type="button" onClick={() => applyDatabase(db.id, "teams")}>Use for Teams</Button>
                     </div>
                   </div>

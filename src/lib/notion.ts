@@ -21,6 +21,8 @@ interface NotionPagePropertyValue {
   type: string;
   title?: NotionTitleFragment[];
   rich_text?: NotionTitleFragment[];
+  email?: string | null;
+  relation?: Array<{ id: string }>;
 }
 
 interface NotionPageResult {
@@ -168,7 +170,7 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
   }
 }
 
-let databaseSchemaPromise: Promise<NotionDatabaseResponse> | null = null;
+const databaseSchemaPromises = new Map<string, Promise<NotionDatabaseResponse>>();
 
 function notionHeaders(version = NOTION_VERSION, apiKey = process.env.NOTION_API_KEY) {
   return {
@@ -178,22 +180,24 @@ function notionHeaders(version = NOTION_VERSION, apiKey = process.env.NOTION_API
   };
 }
 
-async function getDatabaseSchema(databaseId: string) {
-  const headers = await notionHeaders();
-  if (!databaseSchemaPromise) {
-    databaseSchemaPromise = fetch(`${NOTION_API_BASE}/databases/${databaseId}`, {
-      headers,
-    }).then(async (res) => {
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Notion schema lookup failed: ${err}`);
-      }
+async function getDatabaseSchema(databaseId: string, version = NOTION_VERSION) {
+  const cacheKey = `${version}:${databaseId}`;
+  const cached = databaseSchemaPromises.get(cacheKey);
+  if (cached) return cached;
 
-      return (await res.json()) as NotionDatabaseResponse;
-    });
-  }
+  const promise = fetch(`${NOTION_API_BASE}/databases/${databaseId}`, {
+    headers: notionHeaders(version),
+  }).then(async (res) => {
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Notion schema lookup failed: ${err}`);
+    }
 
-  return databaseSchemaPromise;
+    return (await res.json()) as NotionDatabaseResponse;
+  });
+
+  databaseSchemaPromises.set(cacheKey, promise);
+  return promise;
 }
 
 function findPropertyName(
@@ -230,6 +234,26 @@ function buildRichTextValue(content: string) {
         },
       },
     ],
+  };
+}
+
+function buildEmailValue(content: string) {
+  return {
+    email: content,
+  };
+}
+
+function buildRelationValue(ids: string[]) {
+  return {
+    relation: ids.map((id) => ({ id })),
+  };
+}
+
+function buildStatusValue(name: string) {
+  return {
+    status: {
+      name,
+    },
   };
 }
 
@@ -433,7 +457,8 @@ async function cacheSet(key: string, value: string, ttl: number): Promise<void> 
 }
 
 export async function buildTeamMemberIndex(): Promise<Map<string, string>> {
-  const dbId = process.env.NOTION_ONBOARDINGS_DB_ID;
+  const { notionTeamMembersDbId } = await getNotionConfig();
+  const dbId = notionTeamMembersDbId;
   if (!dbId) return new Map();
 
   const index = new Map<string, string>();
@@ -662,16 +687,22 @@ interface NotionDatabaseLookupResponse {
   data_sources?: Array<{ id: string }>;
 }
 
+interface GenericCreatePageResult {
+  pageId: string;
+  templateApplied: boolean;
+  templateMode: "default" | "template_id" | "none";
+}
+
 function buildTeamMemberProperties(params: CreateTeamMemberPageParams) {
   return {
-    Name: { title: [{ text: { content: params.name } }] },
-    Email: { email: params.email },
-    Team: { relation: params.notionTeamPageIds.map((id) => ({ id })) },
-    Status: { status: { name: "Onboarding" } },
+    Name: buildTitleValue(params.name),
+    Email: buildEmailValue(params.email),
+    Team: buildRelationValue(params.notionTeamPageIds),
+    Status: buildStatusValue("Onboarding"),
   };
 }
 
-async function getTeamMembersDataSourceId(databaseId: string, notionApiKey: string): Promise<string | null> {
+async function getDatabaseDataSourceId(databaseId: string, notionApiKey: string): Promise<string | null> {
   const res = await fetch(`${NOTION_API_BASE}/databases/${databaseId}`, {
     headers: notionHeaders(NOTION_TEMPLATE_VERSION, notionApiKey),
   });
@@ -693,19 +724,19 @@ function getTeamMemberTemplatePreference(): TeamMemberTemplatePreference {
   return { type: "default", timezone };
 }
 
-async function createTeamMemberPageWithTemplate(
-  dataSourceId: string,
-  params: CreateTeamMemberPageParams,
-  notionApiKey: string,
-  template: TeamMemberTemplatePreference
-): Promise<CreateTeamMemberPageResult | null> {
+async function createPageWithTemplate(params: {
+  dataSourceId: string;
+  notionApiKey: string;
+  properties: Record<string, unknown>;
+  template: TeamMemberTemplatePreference;
+}): Promise<GenericCreatePageResult | null> {
   const res = await fetch(`${NOTION_API_BASE}/pages`, {
     method: "POST",
-    headers: notionHeaders(NOTION_TEMPLATE_VERSION, notionApiKey),
+    headers: notionHeaders(NOTION_TEMPLATE_VERSION, params.notionApiKey),
     body: JSON.stringify({
-      parent: { data_source_id: dataSourceId },
-      properties: buildTeamMemberProperties(params),
-      template,
+      parent: { data_source_id: params.dataSourceId },
+      properties: params.properties,
+      template: params.template,
     }),
   });
 
@@ -729,21 +760,21 @@ async function createTeamMemberPageWithTemplate(
   return {
     pageId: page.id,
     templateApplied: true,
-    templateMode: template.type,
+    templateMode: params.template.type,
   };
 }
 
-async function createTeamMemberPageWithoutTemplate(
-  databaseId: string,
-  params: CreateTeamMemberPageParams,
-  notionApiKey: string
-): Promise<CreateTeamMemberPageResult> {
+async function createPageWithoutTemplate(params: {
+  databaseId: string;
+  notionApiKey: string;
+  properties: Record<string, unknown>;
+}): Promise<GenericCreatePageResult> {
   const res = await fetch(`${NOTION_API_BASE}/pages`, {
     method: "POST",
-    headers: notionHeaders(NOTION_VERSION, notionApiKey),
+    headers: notionHeaders(NOTION_VERSION, params.notionApiKey),
     body: JSON.stringify({
-      parent: { database_id: databaseId },
-      properties: buildTeamMemberProperties(params),
+      parent: { database_id: params.databaseId },
+      properties: params.properties,
     }),
   });
 
@@ -760,12 +791,117 @@ async function createTeamMemberPageWithoutTemplate(
   };
 }
 
+async function retrievePage(pageId: string, notionApiKey: string): Promise<NotionPageResult | null> {
+  const res = await fetch(`${NOTION_API_BASE}/pages/${pageId}`, {
+    headers: notionHeaders(NOTION_VERSION, notionApiKey),
+  });
+
+  if (!res.ok) return null;
+  return (await res.json()) as NotionPageResult;
+}
+
+async function appendPageRelation(params: {
+  pageId: string;
+  propertyName: string;
+  relatedPageId: string;
+  notionApiKey: string;
+}): Promise<void> {
+  const page = await retrievePage(params.pageId, params.notionApiKey);
+  const property = page?.properties?.[params.propertyName];
+
+  if (!property || property.type !== "relation") {
+    throw new Error(`Team Members database is missing the required relation property \"${params.propertyName}\".`);
+  }
+
+  const relationIds = new Set((property.relation ?? []).map((relation) => relation.id));
+  relationIds.add(params.relatedPageId);
+
+  const res = await fetch(`${NOTION_API_BASE}/pages/${params.pageId}`, {
+    method: "PATCH",
+    headers: notionHeaders(NOTION_VERSION, params.notionApiKey),
+    body: JSON.stringify({
+      properties: {
+        [params.propertyName]: buildRelationValue([...relationIds]),
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    throw new Error(`Notion relation update failed: ${err || res.statusText}`);
+  }
+}
+
+async function createOnboardingPage(params: {
+  databaseId: string;
+  notionApiKey: string;
+  name: string;
+  email: string;
+}): Promise<GenericCreatePageResult> {
+  const schema = await getDatabaseSchema(params.databaseId);
+  const titleProperty = findPropertyName(schema.properties, ["Name", "Title", "Onboarding", "Full Name"], ["title"]);
+
+  if (!titleProperty) {
+    throw new Error("Onboarding database has no writable title property.");
+  }
+
+  const properties: Record<string, unknown> = {
+    [titleProperty]: buildTitleValue(params.name),
+  };
+
+  const emailProperty = findPropertyName(schema.properties, ["Email", "Personal Email"], ["email"]);
+  if (emailProperty) {
+    properties[emailProperty] = buildEmailValue(params.email);
+  }
+
+  const dataSourceId = await getDatabaseDataSourceId(params.databaseId, params.notionApiKey).catch(() => null);
+  if (dataSourceId) {
+    const templated = await createPageWithTemplate({
+      dataSourceId,
+      notionApiKey: params.notionApiKey,
+      properties,
+      template: { type: "default" },
+    });
+    if (templated) return templated;
+  }
+
+  return createPageWithoutTemplate({
+    databaseId: params.databaseId,
+    notionApiKey: params.notionApiKey,
+    properties,
+  });
+}
+
+async function ensureOnboardingPageLinkedToTeamMember(params: {
+  teamMemberPageId: string;
+  name: string;
+  email: string;
+  notionApiKey: string;
+  notionOnboardingsDbId: string | null;
+}): Promise<void> {
+  if (!params.notionOnboardingsDbId) return;
+
+  const onboarding = await createOnboardingPage({
+    databaseId: params.notionOnboardingsDbId,
+    notionApiKey: params.notionApiKey,
+    name: params.name,
+    email: params.email,
+  });
+
+  await appendPageRelation({
+    pageId: params.teamMemberPageId,
+    propertyName: "Onboarding",
+    relatedPageId: onboarding.pageId,
+    notionApiKey: params.notionApiKey,
+  });
+}
+
 export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): Promise<CreateTeamMemberPageResult | null> {
   if (params.notionTeamPageIds.length === 0) {
     throw new Error("Cannot create Team Member page in Notion without Team relations.");
   }
 
-  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
+  const { notionApiKey, notionOnboardingsDbId, notionTeamMembersDbId } = await getNotionConfig();
   if (!notionApiKey || !notionTeamMembersDbId) return null;
 
   const existingPageId = await findTeamMemberPageIdByEmail(params.email);
@@ -777,18 +913,44 @@ export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): 
     };
   }
 
-  const dataSourceId = await getTeamMembersDataSourceId(notionTeamMembersDbId, notionApiKey).catch(() => null);
+  const teamMemberProperties = buildTeamMemberProperties(params);
+  const dataSourceId = await getDatabaseDataSourceId(notionTeamMembersDbId, notionApiKey).catch(() => null);
+
+  let result: CreateTeamMemberPageResult;
   if (dataSourceId) {
-    const templateResult = await createTeamMemberPageWithTemplate(
+    const templateResult = await createPageWithTemplate({
       dataSourceId,
-      params,
       notionApiKey,
-      getTeamMemberTemplatePreference()
-    );
-    if (templateResult) return templateResult;
+      properties: teamMemberProperties,
+      template: getTeamMemberTemplatePreference(),
+    });
+
+    if (templateResult) {
+      result = templateResult;
+    } else {
+      result = await createPageWithoutTemplate({
+        databaseId: notionTeamMembersDbId,
+        notionApiKey,
+        properties: teamMemberProperties,
+      });
+    }
+  } else {
+    result = await createPageWithoutTemplate({
+      databaseId: notionTeamMembersDbId,
+      notionApiKey,
+      properties: teamMemberProperties,
+    });
   }
 
-  return createTeamMemberPageWithoutTemplate(notionTeamMembersDbId, params, notionApiKey);
+  await ensureOnboardingPageLinkedToTeamMember({
+    teamMemberPageId: result.pageId,
+    name: params.name,
+    email: params.email,
+    notionApiKey,
+    notionOnboardingsDbId,
+  });
+
+  return result;
 }
 
 export async function updateEntryStatus(notionPageId: string, status: string): Promise<void> {

@@ -6,6 +6,7 @@ export const APP_CONFIG_KEYS = {
   notionApiKey: "notion.apiKey",
   notionTasksDbId: "notion.tasksDbId",
   notionTeamMembersDbId: "notion.teamMembersDbId",
+  notionOnboardingsDbId: "notion.onboardingsDbId",
   notionTeamsDbId: "notion.teamsDbId",
   discordBotToken: "discord.botToken",
   discordGuildId: "discord.guildId",
@@ -61,6 +62,7 @@ export async function getNotionConfig() {
     APP_CONFIG_KEYS.notionApiKey,
     APP_CONFIG_KEYS.notionTasksDbId,
     APP_CONFIG_KEYS.notionTeamMembersDbId,
+    APP_CONFIG_KEYS.notionOnboardingsDbId,
     APP_CONFIG_KEYS.notionTeamsDbId,
   ]);
 
@@ -69,8 +71,11 @@ export async function getNotionConfig() {
     notionTasksDbId: process.env.NOTION_TASKS_DB_ID || map.get(APP_CONFIG_KEYS.notionTasksDbId) || null,
     notionTeamMembersDbId:
       process.env.NOTION_TEAM_MEMBERS_DB_ID ||
-      process.env.NOTION_ONBOARDINGS_DB_ID ||
       map.get(APP_CONFIG_KEYS.notionTeamMembersDbId) ||
+      null,
+    notionOnboardingsDbId:
+      process.env.NOTION_ONBOARDINGS_DB_ID ||
+      map.get(APP_CONFIG_KEYS.notionOnboardingsDbId) ||
       null,
     notionTeamsDbId: process.env.NOTION_TEAMS_DB_ID || map.get(APP_CONFIG_KEYS.notionTeamsDbId) || null,
   };

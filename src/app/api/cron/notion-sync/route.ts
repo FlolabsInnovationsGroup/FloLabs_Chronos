@@ -155,7 +155,7 @@ export async function GET(req: Request) {
     }
   }
 
-  if (process.env.NOTION_ONBOARDINGS_DB_ID) {
+  if (process.env.NOTION_DATABASE_ID) {
     try {
       const notionPages = await queryNotionEntriesWindow(360);
       const notionEntryIds = notionPages

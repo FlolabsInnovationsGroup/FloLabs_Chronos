@@ -8,6 +8,7 @@ const controlSchema = z.object({
   notionApiKey: z.string().optional().default(""),
   notionTasksDbId: z.string().min(1),
   notionTeamMembersDbId: z.string().min(1),
+  notionOnboardingsDbId: z.string().min(1),
   notionTeamsDbId: z.string().min(1),
   discordBotToken: z.string().optional().default(""),
   discordGuildId: z.string().optional().default(""),
@@ -33,6 +34,7 @@ export async function GET() {
       notionApiKeyMasked: config.notionApiKey ? `${config.notionApiKey.slice(0, 6)}••••••${config.notionApiKey.slice(-4)}` : "",
       notionTasksDbId: config.notionTasksDbId ?? "",
       notionTeamMembersDbId: config.notionTeamMembersDbId ?? "",
+      notionOnboardingsDbId: config.notionOnboardingsDbId ?? "",
       notionTeamsDbId: config.notionTeamsDbId ?? "",
       discordBotTokenPresent: Boolean(discordBotToken),
       discordBotTokenMasked: discordBotToken ? `${discordBotToken.slice(0, 6)}••••••${discordBotToken.slice(-4)}` : "",
@@ -58,6 +60,7 @@ export async function POST(req: Request) {
   const values: Array<{ key: (typeof APP_CONFIG_KEYS)[keyof typeof APP_CONFIG_KEYS]; value: string; isSecret?: boolean; updatedBy?: string }> = [
     { key: APP_CONFIG_KEYS.notionTasksDbId, value: parsed.data.notionTasksDbId, updatedBy: session.user.id },
     { key: APP_CONFIG_KEYS.notionTeamMembersDbId, value: parsed.data.notionTeamMembersDbId, updatedBy: session.user.id },
+    { key: APP_CONFIG_KEYS.notionOnboardingsDbId, value: parsed.data.notionOnboardingsDbId, updatedBy: session.user.id },
     { key: APP_CONFIG_KEYS.notionTeamsDbId, value: parsed.data.notionTeamsDbId, updatedBy: session.user.id },
   ];
   if (parsed.data.notionApiKey.trim()) {

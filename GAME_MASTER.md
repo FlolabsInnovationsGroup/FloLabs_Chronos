@@ -184,6 +184,9 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 
 ## Recent Updates
 
+- Users page now shows which visible users are currently live, along with the running duration of their active entry; the data comes from existing Redis-backed active timers and is refreshed from timer SSE events without expanding member visibility.
+- `/register` onboarding/reset UI now includes reveal-password controls plus password confirmation for both invite acceptance and reset-password completion, while `/register?forgot=1` remains the request-reset form.
+- Tooltip/info-dialog rendering was hardened so delayed tooltips stay within the visible viewport even inside overflow-constrained UI and mobile layouts.
 - Timer UX updated end-to-end: timer suggestions now auto-start when idle and safely apply onto the running timer when one already exists.
 - Timer start no longer requires any prefilled fields; `time_entries.project_id` was migrated to optional so empty-start timers persist correctly.
 - Timer stop now requires both a description and a selected task in both UI and API, with disabled stop affordances and explicit mobile messaging when the requirements are missing.
@@ -213,7 +216,7 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 - [ ] Email delivery for invitations (Resend integration)
 - [ ] Password change in settings
 - [ ] Team lead ability to invite members to their own team
-- [ ] Active timer visibility for team leads/admins (SSE broadcast)
+- [x] Active timer visibility for team leads/admins on the Users page (Redis-backed state + SSE refresh)
 - [ ] Mobile-optimized bottom nav improvements
 - [ ] Audit log for admin actions
 

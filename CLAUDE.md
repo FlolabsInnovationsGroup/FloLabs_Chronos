@@ -48,8 +48,9 @@ This is not an open signup SaaS. Treat it as an internal operations tool with st
 - **All users** can create, view, and delete their own tags.
 
 ### Team Rules
-- V1 uses **one primary team per user**
-- non-admin users should always have a `teamId`
+- Chronos supports **multiple teams per user** via `team_memberships`
+- `users.teamId` remains the primary/default compatibility pointer
+- non-admin users should always have at least one team membership
 - admins may be global and have `teamId = null`
 
 ### Tag Rules
@@ -62,9 +63,12 @@ This is not an open signup SaaS. Treat it as an internal operations tool with st
 - Deleting a user cascades to their tags.
 
 ### Registration Rules
-- registration is **invite-only**
-- `/register` must require a valid invite token
-- invited users are assigned to the invite's team automatically
+- registration is **invite-only** for first-time account creation
+- `/register?invite=<token>` must require a valid invite token
+- `/register?reset=<token>` is the password reset / first-time password reset surface
+- forgot-password request mode lives at `/register?forgot=1`
+- first-time password set and reset-password flows both support reveal-password UX and password confirmation
+- invited users are assigned to all invited teams automatically, with the first mirrored into `users.teamId`
 - if an email already exists in `users`, registration must fail
 
 ### Project Rules
@@ -112,6 +116,7 @@ A no-expiration Vercel personal access token is stored as `VERCEL_TOKEN` in both
 - active timers live in Redis
 - completed entries live in Postgres
 - clients compute elapsed time locally from `startedAt`
+- active timer visibility on the Users page reuses the Redis-backed timer state plus SSE refreshes; admins see all live users and team leads see only users within their accessible scope
 
 ### Authorization
 - never trust `proxy.ts` alone

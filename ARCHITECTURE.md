@@ -84,12 +84,14 @@ User onboarding is invite-based:
 3. The system generates a registration token.
 4. The invite link points to `/register?invite=<token>`.
 5. Registration is only allowed when the token is valid, unexpired, and matches the invite email.
-6. On success, the user is created and assigned to all invited teams via `team_memberships`.
-7. The first team is still mirrored into `users.team_id` for compatibility.
-8. During invitation flow, Chronos first tries to resolve an existing Notion Team Member page by exact normalized email, then by exact normalized name.
-9. If exactly one existing Team Member page matches, Chronos reuses it and applies only minimal safe updates (missing email, missing invited-team relation entries, missing onboarding relation) instead of creating a duplicate.
-10. If multiple existing Team Member pages plausibly match, Chronos blocks invitation creation with a clear ambiguity error so the team can fix Notion manually first.
-11. If no match exists, Chronos creates the missing Notion Team Member page, attempts to apply the configured/default Team Member template, then creates and links a related Onboarding page using the Onboarding database's default template when the Notion API supports it.
+6. The `/register` screen is also reused for password recovery: `/register?forgot=1` requests a reset email and `/register?reset=<token>` lets an existing user choose a new password.
+7. First-time invite acceptance and reset-password completion both use reveal-password controls and a required password confirmation field before submit.
+8. On success, the user is created and assigned to all invited teams via `team_memberships`.
+9. The first team is still mirrored into `users.team_id` for compatibility.
+10. During invitation flow, Chronos first tries to resolve an existing Notion Team Member page by exact normalized email, then by exact normalized name.
+11. If exactly one existing Team Member page matches, Chronos reuses it and applies only minimal safe updates (missing email, missing invited-team relation entries, missing onboarding relation) instead of creating a duplicate.
+12. If multiple existing Team Member pages plausibly match, Chronos blocks invitation creation with a clear ambiguity error so the team can fix Notion manually first.
+13. If no match exists, Chronos creates the missing Notion Team Member page, attempts to apply the configured/default Team Member template, then creates and links a related Onboarding page using the Onboarding database's default template when the Notion API supports it.
 
 Legacy compatibility remains in place:
 - `invitations.team_id` is still present as a primary/default team pointer.
@@ -226,6 +228,8 @@ The entry-list edit experience must be considered authoritative for user-facing 
 - Admins can inspect all active timers.
 - Team leads can inspect active timers for accessible users.
 - Members can inspect only their own active timer.
+- The Users page now surfaces live timer state for visible users only, including an updating duration for the current running entry.
+- That Users-page live state is sourced from Redis active timers and refreshed from existing SSE timer events rather than a separate polling-only subsystem.
 
 Authorization must be enforced in route handlers and server-side data access, not only in `proxy.ts`.
 
@@ -561,6 +565,7 @@ Depending on actual database schema detection, Chronos maps:
 - Use task picker UI for explicit task selection instead of requiring a pasted link.
 - Entry list cards surface linked task titles inline as badges when present.
 - Icon-only buttons use delayed tooltips.
+- Tooltip/info-dialog surfaces must render within the visible viewport, including inside overflow-constrained cards/modals and on mobile layouts.
 - Destructive actions use confirmation modals where **Cancel is visually primary** and the destructive action is danger-styled.
 - Modals must fit viewport height and scroll internally.
 

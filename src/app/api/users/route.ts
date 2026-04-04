@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getAccessibleUsers } from "@/lib/permissions";
+import { getAllActiveTimers } from "@/lib/redis";
+import type { ActiveTimer } from "@/types";
 
 export async function GET() {
   const session = await auth();
@@ -9,7 +11,25 @@ export async function GET() {
   }
 
   const rows = await getAccessibleUsers(session.user);
-  return NextResponse.json({ users: rows });
+  const activeTimers: Record<string, ActiveTimer> = await getAllActiveTimers().catch(() => ({}));
+
+  const users = rows.map((user) => {
+    const activeTimer = activeTimers[user.id];
+
+    return {
+      ...user,
+      activeTimer: activeTimer
+        ? {
+            startedAt: activeTimer.startedAt,
+            description: activeTimer.description,
+            projectId: activeTimer.projectId,
+            notionTaskTitle: activeTimer.notionTaskTitle ?? null,
+          }
+        : null,
+    };
+  });
+
+  return NextResponse.json({ users });
 }
 
 export async function POST() {

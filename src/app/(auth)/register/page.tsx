@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { useEffect, useState, Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 interface InvitationPayload {
   id: string;
@@ -24,6 +24,64 @@ interface ResetPayload {
   name: string;
 }
 
+function PasswordField({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+  required = true,
+  minLength,
+  autoFocus,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  required?: boolean;
+  minLength?: number;
+  autoFocus?: boolean;
+}) {
+  const [revealed, setRevealed] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label
+        htmlFor={id}
+        className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+        style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+      >
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={id}
+          type={revealed ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          required={required}
+          minLength={minLength}
+          autoFocus={autoFocus}
+          className="w-full px-3 py-2.5 pr-20 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
+          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+        />
+        <button
+          type="button"
+          onClick={() => setRevealed((current) => !current)}
+          className="absolute inset-y-1.5 right-1.5 inline-flex items-center rounded-md px-3 text-xs font-medium text-[#366769] hover:bg-[#efeee9]"
+          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          aria-label={revealed ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+          aria-pressed={revealed}
+        >
+          {revealed ? "Hide" : "Show"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -37,13 +95,21 @@ function RegisterForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const needsPasswordSetup = !forgotMode;
+  const isResetFlow = Boolean(resetToken);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadInvitation() {
+      setError("");
+      setStatusMessage("");
+
       if (forgotMode) {
         setLoadingInvite(false);
         return;
@@ -108,26 +174,39 @@ function RegisterForm() {
     return () => {
       cancelled = true;
     };
-  }, [inviteToken]);
+  }, [forgotMode, inviteToken, resetToken]);
+
+  const invitationRequired = !forgotMode && !resetToken && !loadingInvite && !invitation;
+  const passwordsReady = !needsPasswordSetup || (password.length >= 8 && password === confirmPassword);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setStatusMessage("");
 
     if (!forgotMode && !resetToken && (!invitation || !inviteToken)) {
       setError("A valid invitation is required.");
       return;
     }
 
-    if (!forgotMode && password.length < 8) {
+    if (needsPasswordSetup && password.length < 8) {
       setError("Password must be at least 8 characters.");
+      return;
+    }
+
+    if (needsPasswordSetup && password !== confirmPassword) {
+      setError("Passwords do not match.");
       return;
     }
 
     setLoading(true);
 
     try {
-      const endpoint = forgotMode ? "/api/auth/forgot-password" : resetToken ? "/api/auth/reset-password" : "/api/auth/register";
+      const endpoint = forgotMode
+        ? "/api/auth/forgot-password"
+        : resetToken
+          ? "/api/auth/reset-password"
+          : "/api/auth/register";
       const payload = forgotMode
         ? { email: email.toLowerCase().trim() }
         : resetToken
@@ -147,7 +226,7 @@ function RegisterForm() {
       }
 
       if (forgotMode) {
-        setError("Reset email sent. Check your inbox.");
+        setStatusMessage("Reset email sent. Check your inbox.");
         return;
       }
 
@@ -158,7 +237,11 @@ function RegisterForm() {
       });
 
       if (result?.error) {
-        setError("Account created, but login failed. Please sign in manually.");
+        setError(
+          isResetFlow
+            ? "Password updated, but login failed. Please sign in manually."
+            : "Account created, but login failed. Please sign in manually."
+        );
         return;
       }
 
@@ -171,8 +254,6 @@ function RegisterForm() {
     }
   }
 
-  const invitationRequired = !forgotMode && !resetToken && !loadingInvite && !invitation;
-
   return (
     <div className="min-h-screen bg-[#fbf9f5] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
@@ -184,7 +265,13 @@ function RegisterForm() {
             className="text-sm text-[#5e605b] mt-2"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
-            {forgotMode ? "Reset your password" : resetToken ? "Choose a new password" : invitation ? "Accept your invitation" : "Invitation required"}
+            {forgotMode
+              ? "Reset your password"
+              : resetToken
+                ? "Choose a new password"
+                : invitation
+                  ? "Accept your invitation"
+                  : "Invitation required"}
           </p>
         </div>
 
@@ -221,20 +308,22 @@ function RegisterForm() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-              {!forgotMode && !resetToken && <div className="rounded-xl bg-[#f5f4ef] p-4">
-                <p
-                  className="text-xs font-medium uppercase tracking-wide text-[#5e605b]"
-                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                >
-                  Invitation
-                </p>
-                <p
-                  className="text-sm text-[#31332f] mt-1"
-                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                >
-                  {invitation?.team?.name ?? "Assigned team"} · {invitation?.role === "team_lead" ? "Team Lead" : "Member"}
-                </p>
-              </div>}
+              {!forgotMode && !resetToken && (
+                <div className="rounded-xl bg-[#f5f4ef] p-4">
+                  <p
+                    className="text-xs font-medium uppercase tracking-wide text-[#5e605b]"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    Invitation
+                  </p>
+                  <p
+                    className="text-sm text-[#31332f] mt-1"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    {invitation?.team?.name ?? "Assigned team"} · {invitation?.role === "team_lead" ? "Team Lead" : "Member"}
+                  </p>
+                </div>
+              )}
 
               {!forgotMode && (
                 <div className="flex flex-col gap-1.5">
@@ -253,7 +342,8 @@ function RegisterForm() {
                     placeholder="Jane Smith"
                     required
                     autoFocus
-                    className="w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
+                    readOnly={Boolean(resetToken)}
+                    className={`w-full px-3 py-2.5 text-sm rounded-lg outline-none placeholder:text-[#b2b2ad] transition-all ${resetToken ? "text-[#5e605b] bg-[#efeee9]" : "text-[#31332f] bg-[#f5f4ef] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20"}`}
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   />
                 </div>
@@ -280,27 +370,26 @@ function RegisterForm() {
                 />
               </div>
 
-              {!forgotMode && (
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="password"
-                    className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
-                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                  >
-                    Password
-                  </label>
-                  <input
+              {needsPasswordSetup && (
+                <>
+                  <PasswordField
                     id="password"
-                    type="password"
+                    label="Password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={setPassword}
                     placeholder="At least 8 characters"
-                    required
                     minLength={8}
-                    className="w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
-                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                    autoFocus={false}
                   />
-                </div>
+                  <PasswordField
+                    id="confirm-password"
+                    label="Confirm Password"
+                    value={confirmPassword}
+                    onChange={setConfirmPassword}
+                    placeholder="Repeat your password"
+                    minLength={8}
+                  />
+                </>
               )}
 
               {error && (
@@ -312,13 +401,32 @@ function RegisterForm() {
                 </p>
               )}
 
+              {statusMessage && (
+                <p
+                  className="text-sm text-[#366769] bg-[#eef9f9] px-3 py-2 rounded-lg"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  {statusMessage}
+                </p>
+              )}
+
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || (needsPasswordSetup && !passwordsReady && password.length > 0 && confirmPassword.length > 0)}
                 className="w-full py-2.5 px-4 text-sm font-medium rounded-md bg-[#366769] text-[#e3feff] hover:bg-[#295a5d] active:bg-[#104648] disabled:opacity-50 transition-colors cursor-pointer"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
-                {loading ? (forgotMode ? "Sending reset link..." : resetToken ? "Resetting password..." : "Creating account...") : forgotMode ? "Send reset link" : resetToken ? "Reset password" : "Create account"}
+                {loading
+                  ? forgotMode
+                    ? "Sending reset link..."
+                    : resetToken
+                      ? "Resetting password..."
+                      : "Creating account..."
+                  : forgotMode
+                    ? "Send reset link"
+                    : resetToken
+                      ? "Reset password"
+                      : "Create account"}
               </button>
             </form>
           )}
@@ -340,14 +448,16 @@ function RegisterForm() {
 
 export default function RegisterPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-[#fbf9f5] flex items-center justify-center px-4">
-        <div className="w-full max-w-sm flex flex-col gap-3">
-          <div className="h-4 rounded bg-[#f5f4ef] animate-pulse" />
-          <div className="h-4 rounded bg-[#f5f4ef] animate-pulse w-4/5" />
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#fbf9f5] flex items-center justify-center px-4">
+          <div className="w-full max-w-sm flex flex-col gap-3">
+            <div className="h-4 rounded bg-[#f5f4ef] animate-pulse" />
+            <div className="h-4 rounded bg-[#f5f4ef] animate-pulse w-4/5" />
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <RegisterForm />
     </Suspense>
   );

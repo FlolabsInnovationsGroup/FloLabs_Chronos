@@ -12,6 +12,12 @@ export interface User {
   updatedAt: Date;
   team?: Pick<Team, "id" | "name" | "slug"> | null;
   teams?: Pick<Team, "id" | "name" | "slug" | "isActive">[];
+  activeTimer?: {
+    startedAt: number;
+    description: string;
+    projectId: string | null;
+    notionTaskTitle?: string | null;
+  } | null;
 }
 
 export interface Team {

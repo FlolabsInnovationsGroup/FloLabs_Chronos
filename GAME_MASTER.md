@@ -1,7 +1,7 @@
 # GAME_MASTER.md — FloLabs Chronos Development Tracker
 
 ## Project Status
-**Date:** 2026-04-01
+**Date:** 2026-04-04
 **Phase:** V1 feature-complete → V1.1 active development
 **Stack:** Next.js 16 + Drizzle + Neon Postgres + Redis + NextAuth v5
 **URL:** https://athensgreecemarathon.com
@@ -33,6 +33,7 @@
 - [x] Invitation creation endpoint (`POST /api/invitations`)
 - [x] Shareable invite URLs even without email delivery
 - [x] Duplicate email prevention
+- [x] Invitation-created Notion Team Member pages now attempt to apply a Notion template (`NOTION_TEAM_MEMBER_TEMPLATE_ID` when set, otherwise the data source default template) with safe fallback to plain page creation
 
 ### Team Visibility ✅
 - [x] Admins see all teams and members
@@ -175,6 +176,12 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 **Status:** 🔲 Not started
 
 ---
+
+## Recent Updates
+
+- Invitation onboarding now routes Team Member page creation through shared Notion helpers instead of duplicating raw fetch logic in `src/app/api/invitations/route.ts`.
+- Team Member creation now supports Notion's native page-template flow and falls back cleanly when templates are unavailable or misconfigured.
+- Legacy loose scripts `scripts/tmp-app-config-init.js` and `scripts/tmp-app-config-seed.js` were checked for removal; they are not present in the current repo state.
 
 ## Known State
 

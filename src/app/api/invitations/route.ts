@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { invitationTeamMemberships, invitations, teams, users } from "@/lib/db/schema";
 import { buildInviteUrl, createInvitationToken, normalizeEmail } from "@/lib/invitations";
+import { ensureTeamMemberPage } from "@/lib/notion";
 import { canManageInvitations } from "@/lib/permissions";
 import { broadcastDataChange } from "@/lib/realtime";
 
@@ -17,16 +18,6 @@ const createInvitationSchema = z.object({
   expiresAt: z.string().datetime().optional(),
 });
 
-const NOTION_API_BASE = "https://api.notion.com/v1";
-const NOTION_VERSION = "2022-06-28";
-
-function notionHeaders() {
-  return {
-    Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
-    "Content-Type": "application/json",
-    "Notion-Version": NOTION_VERSION,
-  };
-}
 
 async function getInvitationTeams(invitationIds: string[]) {
   if (!db || invitationIds.length === 0) return new Map<string, { id: string; name: string; slug: string }[]>();
@@ -44,38 +35,6 @@ async function getInvitationTeams(invitationIds: string[]) {
   return map;
 }
 
-async function ensureNotionTeamMemberPage(email: string, name: string, notionTeamPageIds: string[]) {
-  if (!process.env.NOTION_API_KEY || !process.env.NOTION_TEAM_MEMBERS_DB_ID) return;
-  if (notionTeamPageIds.length === 0) {
-    throw new Error("Cannot create Team Member page in Notion without Team relations.");
-  }
-
-  const queryRes = await fetch(`${NOTION_API_BASE}/databases/${process.env.NOTION_TEAM_MEMBERS_DB_ID}/query`, {
-    method: "POST",
-    headers: notionHeaders(),
-    body: JSON.stringify({
-      filter: { property: "Email", email: { equals: email } },
-      page_size: 1,
-    }),
-  });
-  if (!queryRes.ok) return;
-  const queryData = await queryRes.json() as { results: { id: string }[] };
-  if (queryData.results.length > 0) return;
-
-  await fetch(`${NOTION_API_BASE}/pages`, {
-    method: "POST",
-    headers: notionHeaders(),
-    body: JSON.stringify({
-      parent: { database_id: process.env.NOTION_TEAM_MEMBERS_DB_ID },
-      properties: {
-        Name: { title: [{ text: { content: name } }] },
-        Email: { email },
-        Team: { relation: notionTeamPageIds.map((id) => ({ id })) },
-        Status: { status: { name: "Onboarding" } },
-      },
-    }),
-  });
-}
 
 export async function GET() {
   const session = await auth();
@@ -133,7 +92,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "One or more selected teams are not linked to a Notion team page yet." }, { status: 409 });
   }
 
-  await ensureNotionTeamMemberPage(normalizedEmail, parsed.data.name.trim(), notionTeamPageIds);
+  await ensureTeamMemberPage({
+    email: normalizedEmail,
+    name: parsed.data.name.trim(),
+    notionTeamPageIds,
+  });
 
   broadcastDataChange("team");
   return NextResponse.json({ invitation: { ...invite, teams: teamRows, teamIds }, inviteUrl: buildInviteUrl(token, req.url), delivery: "manual" }, { status: 201 });

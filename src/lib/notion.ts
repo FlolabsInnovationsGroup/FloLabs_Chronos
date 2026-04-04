@@ -3,6 +3,7 @@ import { getNotionConfig } from "@/lib/app-config";
 
 const NOTION_API_BASE = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
+const NOTION_TEMPLATE_VERSION = "2026-03-11";
 
 interface NotionDatabaseProperty {
   type: string;
@@ -169,11 +170,11 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
 
 let databaseSchemaPromise: Promise<NotionDatabaseResponse> | null = null;
 
-function notionHeaders() {
+function notionHeaders(version = NOTION_VERSION, apiKey = process.env.NOTION_API_KEY) {
   return {
-    Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
+    Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
-    "Notion-Version": NOTION_VERSION,
+    "Notion-Version": version,
   };
 }
 
@@ -622,11 +623,12 @@ export async function updateTeamMemberName(notionPageId: string, name: string): 
 }
 
 export async function findTeamMemberPageIdByEmail(email: string): Promise<string | null> {
-  if (!process.env.NOTION_API_KEY || !process.env.NOTION_TEAM_MEMBERS_DB_ID) return null;
+  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
+  if (!notionApiKey || !notionTeamMembersDbId) return null;
 
-  const res = await fetch(`${NOTION_API_BASE}/databases/${process.env.NOTION_TEAM_MEMBERS_DB_ID}/query`, {
+  const res = await fetch(`${NOTION_API_BASE}/databases/${notionTeamMembersDbId}/query`, {
     method: "POST",
-    headers: notionHeaders(),
+    headers: notionHeaders(NOTION_VERSION, notionApiKey),
     body: JSON.stringify({
       filter: { property: "Email", email: { equals: email } },
       page_size: 1,
@@ -636,6 +638,157 @@ export async function findTeamMemberPageIdByEmail(email: string): Promise<string
   if (!res.ok) return null;
   const data = (await res.json()) as { results?: Array<{ id: string }> };
   return data.results?.[0]?.id ?? null;
+}
+
+interface TeamMemberTemplatePreference {
+  type: "default" | "template_id";
+  template_id?: string;
+  timezone?: string;
+}
+
+interface CreateTeamMemberPageParams {
+  email: string;
+  name: string;
+  notionTeamPageIds: string[];
+}
+
+interface CreateTeamMemberPageResult {
+  pageId: string;
+  templateApplied: boolean;
+  templateMode: "default" | "template_id" | "none";
+}
+
+interface NotionDatabaseLookupResponse {
+  data_sources?: Array<{ id: string }>;
+}
+
+function buildTeamMemberProperties(params: CreateTeamMemberPageParams) {
+  return {
+    Name: { title: [{ text: { content: params.name } }] },
+    Email: { email: params.email },
+    Team: { relation: params.notionTeamPageIds.map((id) => ({ id })) },
+    Status: { status: { name: "Onboarding" } },
+  };
+}
+
+async function getTeamMembersDataSourceId(databaseId: string, notionApiKey: string): Promise<string | null> {
+  const res = await fetch(`${NOTION_API_BASE}/databases/${databaseId}`, {
+    headers: notionHeaders(NOTION_TEMPLATE_VERSION, notionApiKey),
+  });
+
+  if (!res.ok) return null;
+
+  const data = (await res.json()) as NotionDatabaseLookupResponse;
+  return data.data_sources?.[0]?.id ?? null;
+}
+
+function getTeamMemberTemplatePreference(): TeamMemberTemplatePreference {
+  const templateId = process.env.NOTION_TEAM_MEMBER_TEMPLATE_ID?.trim();
+  const timezone = process.env.NOTION_TEAM_MEMBER_TEMPLATE_TIMEZONE?.trim() || "UTC";
+
+  if (templateId) {
+    return { type: "template_id", template_id: templateId, timezone };
+  }
+
+  return { type: "default", timezone };
+}
+
+async function createTeamMemberPageWithTemplate(
+  dataSourceId: string,
+  params: CreateTeamMemberPageParams,
+  notionApiKey: string,
+  template: TeamMemberTemplatePreference
+): Promise<CreateTeamMemberPageResult | null> {
+  const res = await fetch(`${NOTION_API_BASE}/pages`, {
+    method: "POST",
+    headers: notionHeaders(NOTION_TEMPLATE_VERSION, notionApiKey),
+    body: JSON.stringify({
+      parent: { data_source_id: dataSourceId },
+      properties: buildTeamMemberProperties(params),
+      template,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    const normalized = text.toLowerCase();
+    const recoverable =
+      res.status === 400 ||
+      res.status === 404 ||
+      res.status === 409 ||
+      normalized.includes("template") ||
+      normalized.includes("data_source_id") ||
+      normalized.includes("validation_error");
+
+    if (recoverable) return null;
+
+    throw new Error(`Notion template create failed: ${text || res.statusText}`);
+  }
+
+  const page = (await res.json()) as { id: string };
+  return {
+    pageId: page.id,
+    templateApplied: true,
+    templateMode: template.type,
+  };
+}
+
+async function createTeamMemberPageWithoutTemplate(
+  databaseId: string,
+  params: CreateTeamMemberPageParams,
+  notionApiKey: string
+): Promise<CreateTeamMemberPageResult> {
+  const res = await fetch(`${NOTION_API_BASE}/pages`, {
+    method: "POST",
+    headers: notionHeaders(NOTION_VERSION, notionApiKey),
+    body: JSON.stringify({
+      parent: { database_id: databaseId },
+      properties: buildTeamMemberProperties(params),
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    throw new Error(`Notion create failed: ${err || res.statusText}`);
+  }
+
+  const page = (await res.json()) as { id: string };
+  return {
+    pageId: page.id,
+    templateApplied: false,
+    templateMode: "none",
+  };
+}
+
+export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): Promise<CreateTeamMemberPageResult | null> {
+  if (params.notionTeamPageIds.length === 0) {
+    throw new Error("Cannot create Team Member page in Notion without Team relations.");
+  }
+
+  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
+  if (!notionApiKey || !notionTeamMembersDbId) return null;
+
+  const existingPageId = await findTeamMemberPageIdByEmail(params.email);
+  if (existingPageId) {
+    return {
+      pageId: existingPageId,
+      templateApplied: false,
+      templateMode: "none",
+    };
+  }
+
+  const dataSourceId = await getTeamMembersDataSourceId(notionTeamMembersDbId, notionApiKey).catch(() => null);
+  if (dataSourceId) {
+    const templateResult = await createTeamMemberPageWithTemplate(
+      dataSourceId,
+      params,
+      notionApiKey,
+      getTeamMemberTemplatePreference()
+    );
+    if (templateResult) return templateResult;
+  }
+
+  return createTeamMemberPageWithoutTemplate(notionTeamMembersDbId, params, notionApiKey);
 }
 
 export async function updateEntryStatus(notionPageId: string, status: string): Promise<void> {

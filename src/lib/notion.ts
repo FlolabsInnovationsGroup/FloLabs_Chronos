@@ -23,6 +23,7 @@ interface NotionPagePropertyValue {
   rich_text?: NotionTitleFragment[];
   email?: string | null;
   relation?: Array<{ id: string }>;
+  status?: { name?: string | null };
 }
 
 interface NotionPageResult {
@@ -421,21 +422,44 @@ type FullEntry = TimeEntry & {
 };
 
 function normalizeName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+  return name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
-function tokenize(name: string): Set<string> {
-  return new Set(name.split(/\s+/).filter(Boolean));
+function normalizeEmailValue(email: string): string {
+  return email.trim().toLowerCase();
 }
 
-function jaccard(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 && b.size === 0) return 1;
-  const intersection = [...a].filter((x) => b.has(x)).length;
-  const union = new Set([...a, ...b]).size;
-  return intersection / union;
+interface TeamMemberDirectoryEntry {
+  id: string;
+  name: string;
+  normalizedName: string;
+  email: string | null;
+  normalizedEmail: string | null;
+  teamRelationIds: string[];
+  onboardingRelationIds: string[];
 }
 
-const TEAM_INDEX_KEY = "notion:team-index";
+interface TeamMemberDirectory {
+  entries: TeamMemberDirectoryEntry[];
+}
+
+export class TeamMemberLookupConflictError extends Error {
+  readonly matches: Array<{ id: string; name: string; email: string | null }>;
+
+  constructor(message: string, matches: Array<{ id: string; name: string; email: string | null }>) {
+    super(message);
+    this.name = "TeamMemberLookupConflictError";
+    this.matches = matches;
+  }
+}
+
+const TEAM_MEMBER_DIRECTORY_KEY = "notion:team-member-directory";
 const TEAM_INDEX_TTL = 7200;
 
 async function cacheGet(key: string): Promise<string | null> {
@@ -456,12 +480,42 @@ async function cacheSet(key: string, value: string, ttl: number): Promise<void> 
   }
 }
 
-export async function buildTeamMemberIndex(): Promise<Map<string, string>> {
-  const { notionTeamMembersDbId } = await getNotionConfig();
-  const dbId = notionTeamMembersDbId;
-  if (!dbId) return new Map();
+function getTitleFromProperty(prop: NotionPagePropertyValue | undefined): string {
+  if (!prop) return "";
+  if (prop.type === "title") {
+    return prop.title?.map((t) => t.plain_text ?? "").join("").trim() ?? "";
+  }
+  if (prop.type === "rich_text") {
+    return prop.rich_text?.map((t) => t.plain_text ?? "").join("").trim() ?? "";
+  }
+  return "";
+}
 
-  const index = new Map<string, string>();
+function getPageName(page: NotionPageResult): string {
+  const titleProp = Object.values(page.properties ?? {}).find((prop) => prop.type === "title");
+  return getTitleFromProperty(titleProp) || "Untitled";
+}
+
+function serializeTeamMemberDirectory(directory: TeamMemberDirectory) {
+  return JSON.stringify(directory);
+}
+
+function deserializeTeamMemberDirectory(raw: string): TeamMemberDirectory | null {
+  try {
+    const parsed = JSON.parse(raw) as TeamMemberDirectory;
+    if (!parsed || !Array.isArray(parsed.entries)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function buildTeamMemberDirectory(): Promise<TeamMemberDirectory> {
+  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
+  const dbId = notionTeamMembersDbId;
+  if (!notionApiKey || !dbId) return { entries: [] };
+
+  const entries: TeamMemberDirectoryEntry[] = [];
   let cursor: string | undefined;
 
   do {
@@ -470,69 +524,90 @@ export async function buildTeamMemberIndex(): Promise<Map<string, string>> {
 
     const res = await fetch(`${NOTION_API_BASE}/databases/${dbId}/query`, {
       method: "POST",
-      headers: notionHeaders(),
+      headers: notionHeaders(NOTION_VERSION, notionApiKey),
       body: JSON.stringify(body),
     });
 
     if (!res.ok) break;
 
     const data = (await res.json()) as {
-      results: { id: string; properties: Record<string, { type: string; title?: { plain_text: string }[] }> }[];
+      results: NotionPageResult[];
       has_more: boolean;
       next_cursor: string | null;
     };
 
     for (const page of data.results) {
-      for (const prop of Object.values(page.properties)) {
-        if (prop.type === "title" && prop.title?.length) {
-          const rawName = prop.title.map((t) => t.plain_text).join("");
-          if (rawName) {
-            index.set(normalizeName(rawName), page.id);
-          }
-          break;
-        }
-      }
+      const name = getPageName(page);
+      const email = page.properties?.Email?.type === "email"
+        ? page.properties.Email.email?.trim() ?? null
+        : null;
+      const teamRelationIds = page.properties?.Team?.type === "relation"
+        ? (page.properties.Team.relation ?? []).map((relation) => relation.id)
+        : [];
+      const onboardingRelationIds = page.properties?.Onboarding?.type === "relation"
+        ? (page.properties.Onboarding.relation ?? []).map((relation) => relation.id)
+        : [];
+
+      entries.push({
+        id: page.id,
+        name,
+        normalizedName: normalizeName(name),
+        email,
+        normalizedEmail: email ? normalizeEmailValue(email) : null,
+        teamRelationIds,
+        onboardingRelationIds,
+      });
     }
 
     cursor = data.has_more && data.next_cursor ? data.next_cursor : undefined;
   } while (cursor);
 
-  const serialized = JSON.stringify([...index.entries()]);
-  await cacheSet(TEAM_INDEX_KEY, serialized, TEAM_INDEX_TTL);
+  const directory = { entries };
+  await cacheSet(TEAM_MEMBER_DIRECTORY_KEY, serializeTeamMemberDirectory(directory), TEAM_INDEX_TTL);
+
+  return directory;
+}
+
+async function getTeamMemberDirectory(): Promise<TeamMemberDirectory> {
+  const cached = await cacheGet(TEAM_MEMBER_DIRECTORY_KEY);
+  if (cached) {
+    const directory = deserializeTeamMemberDirectory(cached);
+    if (directory) return directory;
+  }
+
+  return buildTeamMemberDirectory();
+}
+
+
+export async function buildTeamMemberIndex(): Promise<Map<string, string>> {
+  const directory = await buildTeamMemberDirectory();
+  const grouped = new Map<string, TeamMemberDirectoryEntry[]>();
+
+  for (const entry of directory.entries) {
+    if (!entry.normalizedName) continue;
+    const list = grouped.get(entry.normalizedName) ?? [];
+    list.push(entry);
+    grouped.set(entry.normalizedName, list);
+  }
+
+  const index = new Map<string, string>();
+  for (const [name, matches] of grouped.entries()) {
+    if (matches.length === 1) {
+      index.set(name, matches[0].id);
+    }
+  }
 
   return index;
 }
 
 export async function resolveTeamMemberPageId(userName: string): Promise<string | null> {
-  let index: Map<string, string> | null = null;
-  const cached = await cacheGet(TEAM_INDEX_KEY);
-  if (cached) {
-    try {
-      index = new Map(JSON.parse(cached) as [string, string][]);
-    } catch {
-      index = null;
-    }
-  }
+  const normalizedUserName = normalizeName(userName);
+  if (!normalizedUserName) return null;
 
-  if (!index || index.size === 0) {
-    index = await buildTeamMemberIndex();
-  }
+  const directory = await getTeamMemberDirectory();
+  const matches = directory.entries.filter((entry) => entry.normalizedName === normalizedUserName);
 
-  if (index.size === 0) return null;
-
-  const queryTokens = tokenize(normalizeName(userName));
-  let bestId: string | null = null;
-  let bestScore = 0;
-
-  for (const [indexedName, pageId] of index.entries()) {
-    const score = jaccard(queryTokens, tokenize(indexedName));
-    if (score > bestScore) {
-      bestScore = score;
-      bestId = pageId;
-    }
-  }
-
-  return bestScore >= 0.4 ? bestId : null;
+  return matches.length === 1 ? matches[0].id : null;
 }
 
 export function buildNotionEntryProperties(
@@ -647,22 +722,60 @@ export async function updateTeamMemberName(notionPageId: string, name: string): 
   });
 }
 
+function buildTeamMemberConflictMessage(matchType: "email" | "name", value: string, matches: TeamMemberDirectoryEntry[]) {
+  const label = matchType === "email" ? "email" : "normalized name";
+  const formattedMatches = matches
+    .map((match) => `${match.name}${match.email ? ` <${match.email}>` : ""}`)
+    .join(", ");
+
+  return `Cannot safely reuse a Notion Team Member page: multiple existing pages matched the ${label} "${value}" (${formattedMatches}). Resolve the duplicate/ambiguous Team Member pages in Notion first, then retry the invitation.`;
+}
+
+async function resolveExistingTeamMemberPage(params: CreateTeamMemberPageParams): Promise<{ entry: TeamMemberDirectoryEntry; matchedBy: "email" | "name" } | null> {
+  const directory = await getTeamMemberDirectory();
+  const normalizedEmail = normalizeEmailValue(params.email);
+  const normalizedName = normalizeName(params.name);
+
+  const emailMatches = normalizedEmail
+    ? directory.entries.filter((entry) => entry.normalizedEmail === normalizedEmail)
+    : [];
+
+  if (emailMatches.length > 1) {
+    throw new TeamMemberLookupConflictError(
+      buildTeamMemberConflictMessage("email", params.email, emailMatches),
+      emailMatches.map((match) => ({ id: match.id, name: match.name, email: match.email }))
+    );
+  }
+
+  if (emailMatches.length === 1) {
+    return { entry: emailMatches[0], matchedBy: "email" };
+  }
+
+  const nameMatches = normalizedName
+    ? directory.entries.filter((entry) => entry.normalizedName === normalizedName)
+    : [];
+
+  if (nameMatches.length > 1) {
+    throw new TeamMemberLookupConflictError(
+      buildTeamMemberConflictMessage("name", params.name, nameMatches),
+      nameMatches.map((match) => ({ id: match.id, name: match.name, email: match.email }))
+    );
+  }
+
+  if (nameMatches.length === 1) {
+    return { entry: nameMatches[0], matchedBy: "name" };
+  }
+
+  return null;
+}
+
 export async function findTeamMemberPageIdByEmail(email: string): Promise<string | null> {
-  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
-  if (!notionApiKey || !notionTeamMembersDbId) return null;
+  const normalizedEmail = normalizeEmailValue(email);
+  if (!normalizedEmail) return null;
 
-  const res = await fetch(`${NOTION_API_BASE}/databases/${notionTeamMembersDbId}/query`, {
-    method: "POST",
-    headers: notionHeaders(NOTION_VERSION, notionApiKey),
-    body: JSON.stringify({
-      filter: { property: "Email", email: { equals: email } },
-      page_size: 1,
-    }),
-  });
-
-  if (!res.ok) return null;
-  const data = (await res.json()) as { results?: Array<{ id: string }> };
-  return data.results?.[0]?.id ?? null;
+  const directory = await getTeamMemberDirectory();
+  const matches = directory.entries.filter((entry) => entry.normalizedEmail === normalizedEmail);
+  return matches.length === 1 ? matches[0].id : null;
 }
 
 interface TeamMemberTemplatePreference {
@@ -681,6 +794,8 @@ interface CreateTeamMemberPageResult {
   pageId: string;
   templateApplied: boolean;
   templateMode: "default" | "template_id" | "none";
+  reusedExisting?: boolean;
+  matchedBy?: "email" | "name";
 }
 
 interface NotionDatabaseLookupResponse {
@@ -700,6 +815,86 @@ function buildTeamMemberProperties(params: CreateTeamMemberPageParams) {
     Team: buildRelationValue(params.notionTeamPageIds),
     Status: buildStatusValue("Onboarding"),
   };
+}
+
+async function patchPageProperties(params: {
+  pageId: string;
+  notionApiKey: string;
+  properties: Record<string, unknown>;
+}): Promise<void> {
+  if (Object.keys(params.properties).length === 0) return;
+
+  const res = await fetch(`${NOTION_API_BASE}/pages/${params.pageId}`, {
+    method: "PATCH",
+    headers: notionHeaders(NOTION_VERSION, params.notionApiKey),
+    body: JSON.stringify({ properties: params.properties }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    throw new Error(`Notion update failed: ${err || res.statusText}`);
+  }
+}
+
+async function updateExistingTeamMemberPage(params: {
+  pageId: string;
+  notionApiKey: string;
+  notionOnboardingsDbId: string | null;
+  email: string;
+  name: string;
+  notionTeamPageIds: string[];
+}): Promise<void> {
+  const page = await retrievePage(params.pageId, params.notionApiKey);
+  if (!page) {
+    throw new Error("Failed to load the existing Notion Team Member page before updating it.");
+  }
+
+  const patch: Record<string, unknown> = {};
+  const emailProperty = page.properties?.Email;
+  const existingEmail = emailProperty?.type === "email" ? emailProperty.email?.trim() ?? "" : "";
+  if (emailProperty?.type === "email" && !existingEmail) {
+    patch.Email = buildEmailValue(params.email);
+  }
+
+  const teamProperty = page.properties?.Team;
+  if (teamProperty?.type === "relation") {
+    const relationIds = new Set((teamProperty.relation ?? []).map((relation) => relation.id));
+    let changed = false;
+    for (const teamPageId of params.notionTeamPageIds) {
+      if (!relationIds.has(teamPageId)) {
+        relationIds.add(teamPageId);
+        changed = true;
+      }
+    }
+    if (changed) {
+      patch.Team = buildRelationValue([...relationIds]);
+    }
+  }
+
+  const statusProperty = page.properties?.Status;
+  if (statusProperty?.type === "status" && !statusProperty.status?.name) {
+    patch.Status = buildStatusValue("Onboarding");
+  }
+
+  await patchPageProperties({
+    pageId: params.pageId,
+    notionApiKey: params.notionApiKey,
+    properties: patch,
+  });
+
+  const onboardingProperty = page.properties?.Onboarding;
+  const hasOnboardingRelation = onboardingProperty?.type === "relation" && (onboardingProperty.relation ?? []).length > 0;
+  if (!hasOnboardingRelation) {
+    await ensureOnboardingPageLinkedToTeamMember({
+      teamMemberPageId: params.pageId,
+      name: params.name,
+      email: params.email,
+      notionApiKey: params.notionApiKey,
+      notionOnboardingsDbId: params.notionOnboardingsDbId,
+    });
+  }
+
+  await buildTeamMemberDirectory().catch(() => {});
 }
 
 async function getDatabaseDataSourceId(databaseId: string, notionApiKey: string): Promise<string | null> {
@@ -904,12 +1099,23 @@ export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): 
   const { notionApiKey, notionOnboardingsDbId, notionTeamMembersDbId } = await getNotionConfig();
   if (!notionApiKey || !notionTeamMembersDbId) return null;
 
-  const existingPageId = await findTeamMemberPageIdByEmail(params.email);
-  if (existingPageId) {
+  const existingMatch = await resolveExistingTeamMemberPage(params);
+  if (existingMatch) {
+    await updateExistingTeamMemberPage({
+      pageId: existingMatch.entry.id,
+      notionApiKey,
+      notionOnboardingsDbId,
+      email: params.email,
+      name: params.name,
+      notionTeamPageIds: params.notionTeamPageIds,
+    });
+
     return {
-      pageId: existingPageId,
+      pageId: existingMatch.entry.id,
       templateApplied: false,
       templateMode: "none",
+      reusedExisting: true,
+      matchedBy: existingMatch.matchedBy,
     };
   }
 
@@ -949,6 +1155,7 @@ export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): 
     notionApiKey,
     notionOnboardingsDbId,
   });
+  await buildTeamMemberDirectory().catch(() => {});
 
   return result;
 }

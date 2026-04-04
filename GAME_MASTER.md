@@ -35,6 +35,9 @@
 - [x] Duplicate email prevention
 - [x] Invitation-created Notion Team Member pages now attempt to apply a Notion template (`NOTION_TEAM_MEMBER_TEMPLATE_ID` when set, otherwise the data source default template) with safe fallback to plain page creation
 - [x] New invitation-created Team Member pages now also create a linked Onboarding database page and attach it through the Team Member page's `Onboarding` relation
+- [x] Invitation flow now reuses existing Team Member pages by exact normalized email first, then exact normalized name, instead of blindly creating duplicates when older Notion records are missing email
+- [x] Invitation flow now blocks ambiguous Team Member matches with a clear 409 error so the team can resolve Notion manually before retrying
+- [x] Reused Team Member pages now receive minimal safe repairs (missing email, missing invited-team relations, missing onboarding relation) instead of creating a duplicate page
 - [x] Confirmed limitation: Notion's public API does not expose a documented guest-invite/share-page endpoint, so Chronos cannot automate Floffice guest invites
 
 ### Team Visibility ✅
@@ -184,6 +187,8 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 - Invitation onboarding now routes Team Member page creation through shared Notion helpers instead of duplicating raw fetch logic in `src/app/api/invitations/route.ts`.
 - Team Member creation now supports Notion's native page-template flow and falls back cleanly when templates are unavailable or misconfigured.
 - New Team Member pages now also create a linked Onboarding page in `NOTION_ONBOARDINGS_DB_ID`, attempt to use that database's default template, and then patch the Team Member page's `Onboarding` relation.
+- Invitation-created Team Member resolution is now duplicate-safe: exact normalized email match first, exact normalized name fallback second, and ambiguous matches stop the invitation before a duplicate page is created.
+- Reused Team Member pages are now patched minimally for invite integrity instead of being replaced with fresh duplicates.
 - Notion DB configuration in the control panel now distinguishes Team Members DB vs Onboarding DB instead of overloading `NOTION_ONBOARDINGS_DB_ID` for both.
 - Confirmed from current Notion developer docs: there is no documented API endpoint for inviting a guest to a page/workspace page, so Floffice guest access remains a manual Notion-admin step.
 - Legacy loose scripts `scripts/tmp-app-config-init.js` and `scripts/tmp-app-config-seed.js` were checked for removal; they are not present in the current repo state.

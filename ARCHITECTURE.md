@@ -62,10 +62,15 @@ Chronos should be treated as **read-only for team memberships** from a product p
 
 That means:
 - Notion Team Members data is the operational source of truth for membership intent.
+- Before creating a Notion Team Member page from an invitation, Chronos must first try to reuse an existing page by exact normalized email.
+- If no email match exists, Chronos must try a careful exact normalized-name lookup in the Team Members database.
+- If exactly one normalized-name match exists, Chronos should reuse that page instead of creating a duplicate.
+- If multiple plausible Team Member pages match the same email or normalized name, Chronos must fail the invitation flow with a clear ambiguity error instead of blindly creating another page.
 - If Chronos creates an invitation and no matching Notion Team Member page exists, Chronos should create that page so the invite flow does not break integrity.
 - When Chronos creates a missing Team Member page from an invitation, it must populate the invited teams into the `Team` relation at creation time.
 - Chronos now attempts to apply a Notion template during that Team Member create call: it uses `NOTION_TEAM_MEMBER_TEMPLATE_ID` when configured, otherwise it asks Notion to use the Team Members data source's default template.
 - After creating a new Team Member page, Chronos also creates a related page in the separate Onboarding database (`NOTION_ONBOARDINGS_DB_ID`) and links it back through the Team Member page's `Onboarding` relation property.
+- When Chronos reuses an existing Team Member page, it should make only the minimal safe repairs needed for invite integrity: fill in a missing email, merge in any missing invited-team relations, and create/link an Onboarding page when that relation is still empty.
 - For Onboarding pages, Chronos asks Notion to use the Onboarding data source's default template when the API/data source supports template creation; if Notion rejects that template flow, Chronos falls back to a plain page create instead of faking template content locally.
 - Notion applies template content asynchronously after page creation. Chronos relies on the API-supported template flow for page structure/content, while still sending the critical invitation properties (`Name`, `Email`, `Team`, `Status=Onboarding`) in the Team Member create request so onboarding integrity is preserved.
 - When a Chronos user is renamed by an admin, Chronos should also update the Team Member page name in Notion, first via stored `notionTeamMemberId` and then via email-based fallback resolution if the stored ID is missing.
@@ -81,7 +86,10 @@ User onboarding is invite-based:
 5. Registration is only allowed when the token is valid, unexpired, and matches the invite email.
 6. On success, the user is created and assigned to all invited teams via `team_memberships`.
 7. The first team is still mirrored into `users.team_id` for compatibility.
-8. If needed for integrity, Chronos creates the missing Notion Team Member page during invitation flow, attempts to apply the configured/default Team Member template, then creates and links a related Onboarding page using the Onboarding database's default template when the Notion API supports it.
+8. During invitation flow, Chronos first tries to resolve an existing Notion Team Member page by exact normalized email, then by exact normalized name.
+9. If exactly one existing Team Member page matches, Chronos reuses it and applies only minimal safe updates (missing email, missing invited-team relation entries, missing onboarding relation) instead of creating a duplicate.
+10. If multiple existing Team Member pages plausibly match, Chronos blocks invitation creation with a clear ambiguity error so the team can fix Notion manually first.
+11. If no match exists, Chronos creates the missing Notion Team Member page, attempts to apply the configured/default Team Member template, then creates and links a related Onboarding page using the Onboarding database's default template when the Notion API supports it.
 
 Legacy compatibility remains in place:
 - `invitations.team_id` is still present as a primary/default team pointer.

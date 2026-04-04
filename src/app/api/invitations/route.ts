@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { invitationTeamMemberships, invitations, teams, users } from "@/lib/db/schema";
 import { buildInviteUrl, createInvitationToken, normalizeEmail } from "@/lib/invitations";
-import { ensureTeamMemberPage } from "@/lib/notion";
+import { ensureTeamMemberPage, TeamMemberLookupConflictError } from "@/lib/notion";
 import { canManageInvitations } from "@/lib/permissions";
 import { broadcastDataChange } from "@/lib/realtime";
 
@@ -84,19 +84,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Expiration must be a valid future date." }, { status: 400 });
   }
 
-  const [invite] = await db.insert(invitations).values({ email: normalizedEmail, name: parsed.data.name.trim(), role: parsed.data.role, teamId: teamIds[0], token, invitedById: session.user.id, expiresAt }).returning();
-  await db.insert(invitationTeamMemberships).values(teamIds.map((teamId) => ({ invitationId: invite.id, teamId }))).onConflictDoNothing();
-
   const notionTeamPageIds = teamRows.map((team) => team.notionPageId).filter((id): id is string => Boolean(id));
   if (notionTeamPageIds.length !== teamRows.length) {
     return NextResponse.json({ error: "One or more selected teams are not linked to a Notion team page yet." }, { status: 409 });
   }
 
-  await ensureTeamMemberPage({
-    email: normalizedEmail,
-    name: parsed.data.name.trim(),
-    notionTeamPageIds,
-  });
+  try {
+    await ensureTeamMemberPage({
+      email: normalizedEmail,
+      name: parsed.data.name.trim(),
+      notionTeamPageIds,
+    });
+  } catch (error) {
+    if (error instanceof TeamMemberLookupConflictError) {
+      return NextResponse.json({ error: error.message, matches: error.matches }, { status: 409 });
+    }
+    throw error;
+  }
+
+  const [invite] = await db.insert(invitations).values({ email: normalizedEmail, name: parsed.data.name.trim(), role: parsed.data.role, teamId: teamIds[0], token, invitedById: session.user.id, expiresAt }).returning();
+  await db.insert(invitationTeamMemberships).values(teamIds.map((teamId) => ({ invitationId: invite.id, teamId }))).onConflictDoNothing();
 
   broadcastDataChange("team");
   return NextResponse.json({ invitation: { ...invite, teams: teamRows, teamIds }, inviteUrl: buildInviteUrl(token, req.url), delivery: "manual" }, { status: 201 });

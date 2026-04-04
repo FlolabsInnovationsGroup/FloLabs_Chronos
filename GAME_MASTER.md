@@ -70,6 +70,7 @@
 - [x] Multi-select entries with checkboxes and floating action bar
 - [x] Select-all checkbox at top of entry list
 - [x] Individual entry edit (description, project, tags)
+- [x] Running timer project can be reassigned from the active timer UI and persists through stop/sync flow
 - [x] Detailed entry list on reports page with full management controls
 
 ### Reports Search and Filtering ✅

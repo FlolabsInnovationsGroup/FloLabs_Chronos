@@ -89,6 +89,7 @@ Admins can disable or delete pending invitation links.
 
 Projects are global:
 - All authenticated users can read selectable projects for timers and time entry editing.
+- Users may reassign the project of their own currently running timer from the active timer UI.
 - Only admins can create, edit, archive, restore, or delete projects.
 - Deleting a project also deletes linked time entries, with a warning/confirmation flow.
 
@@ -185,6 +186,14 @@ The entry-list edit experience must be considered authoritative for user-facing 
 ### Display Timer
 - Client computes elapsed time locally from `startedAt`.
 - No server-side per-second ticking is required.
+
+### Update Running Timer
+1. Client PATCHes `/api/timer` while a session is active.
+2. Chronos validates the payload against the authenticated user context.
+3. Redis active-timer state is updated in place.
+4. The matching running PostgreSQL row is also updated so crash recovery and stop-time persistence stay aligned.
+5. Supported live edits include project reassignment, description updates, tag changes, and task reassignment.
+6. The updated timer state is rebroadcast over SSE so the active UI stays consistent.
 
 ### Stop Timer
 1. API loads the active timer from Redis.

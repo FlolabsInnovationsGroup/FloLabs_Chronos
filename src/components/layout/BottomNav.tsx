@@ -50,7 +50,7 @@ export function BottomNav() {
               disabled={!canStop}
               className={`flex items-center justify-center w-7 h-7 rounded-full transition-colors ${
                 canStop
-                  ? "bg-error text-on-chrome hover:bg-error-dim"
+                  ? "bg-error text-on-background hover:bg-error-dim dark:text-on-error"
                   : "bg-disabled-fill text-disabled-on cursor-not-allowed"
               }`}
               aria-label={canStop ? "Stop timer" : stopValidation.message}

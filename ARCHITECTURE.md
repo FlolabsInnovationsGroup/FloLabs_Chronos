@@ -387,11 +387,9 @@ Synced fields:
 - `/api/cron/teams-sync`
 - Intended schedule: every 15 minutes
 
-### Weekly Team Member time-commitment sync
-- `/api/cron/weekly-time-commitment-sync`
-- Intended schedule: weekly (currently Monday 06:00 UTC in `vercel.json`)
-- Mirrors `users.weekly_target_hours` into the Notion Team Members database property named `Time Commitment`
-- Resolves Team Member pages by stored `notionTeamMemberId` first, then exact email, then exact normalized name when unique
+### Team Member time-commitment updates
+- Updating a user's `weekly_target_hours` in Chronos immediately updates the Notion Team Members database property named `Time Commitment`
+- Resolution uses stored `notionTeamMemberId` first, then exact email as fallback when the stored ID is missing
 
 ### Sync rules
 - Upsert by Notion page ID.

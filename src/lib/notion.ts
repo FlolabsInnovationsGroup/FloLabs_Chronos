@@ -791,6 +791,45 @@ export async function updateTeamMemberName(notionPageId: string, name: string): 
   });
 }
 
+export async function updateTeamMemberTimeCommitment(notionPageId: string, weeklyHours: number): Promise<void> {
+  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
+  if (!notionApiKey || !notionTeamMembersDbId) return;
+
+  const schema = await getDatabaseSchema(notionTeamMembersDbId, NOTION_VERSION, notionApiKey);
+  const timeCommitmentType = schema.properties?.["Time Commitment"]?.type;
+  if (!timeCommitmentType || !["number", "rich_text"].includes(timeCommitmentType)) {
+    throw new Error('Team Members database is missing a writable "Time Commitment" property.');
+  }
+
+  const propertyValue =
+    timeCommitmentType === "number"
+      ? { number: weeklyHours }
+      : {
+          rich_text: [
+            {
+              text: {
+                content: String(weeklyHours),
+              },
+            },
+          ],
+        };
+
+  const res = await fetch(`${NOTION_API_BASE}/pages/${notionPageId}`, {
+    method: "PATCH",
+    headers: notionHeaders(NOTION_VERSION, notionApiKey),
+    body: JSON.stringify({
+      properties: {
+        "Time Commitment": propertyValue,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    throw new Error(`Notion update failed: ${err || res.statusText}`);
+  }
+}
+
 function buildTeamMemberConflictMessage(matchType: "email" | "name", value: string, matches: TeamMemberDirectoryEntry[]) {
   const label = matchType === "email" ? "email" : "normalized name";
   const formattedMatches = matches

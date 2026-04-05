@@ -204,7 +204,7 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 - Invitation-created Team Member resolution is now duplicate-safe: exact normalized email match first, exact normalized name fallback second, and ambiguous matches stop the invitation before a duplicate page is created.
 - Reused Team Member pages are now patched minimally for invite integrity instead of being replaced with fresh duplicates.
 - Invitation-created/repaired Team Member flows now also create MasterClass pages in every relevant MasterClass database derived from the MasterClasses index, deduplicated per target database and using each target database's default template when possible.
-- Added weekly cron route `/api/cron/weekly-time-commitment-sync` to mirror Chronos `weekly_target_hours` into the Notion Team Members `Time Commitment` property.
+- User weekly target-hour edits now update the linked Notion Team Member page's `Time Commitment` property immediately instead of waiting for a scheduled sync.
 - Notion DB configuration in the control panel now distinguishes Team Members DB vs Onboarding DB vs MasterClasses index DB instead of overloading a single Notion DB setting.
 - Confirmed from current Notion developer docs: there is no documented API endpoint for inviting a guest to a page/workspace page, so Floffice guest access remains a manual Notion-admin step.
 - Legacy loose scripts `scripts/tmp-app-config-init.js` and `scripts/tmp-app-config-seed.js` were checked for removal; they are not present in the current repo state.

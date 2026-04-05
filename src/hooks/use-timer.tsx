@@ -16,6 +16,7 @@ interface TimerContextValue {
   activeTimer: ActiveTimer | null;
   elapsed: number;
   loading: boolean;
+  actionInProgress: boolean;
   start: (payload: { projectId?: string | null; tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => Promise<ActiveTimer>;
   update: (payload: { projectId?: string | null; tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => Promise<ActiveTimer>;
   stop: (discard?: boolean) => Promise<void>;
@@ -32,6 +33,7 @@ export function TimerProvider({ children, userId }: TimerProviderProps) {
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [actionInProgress, setActionInProgress] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const tick = useCallback((startedAt: number) => {
@@ -106,69 +108,84 @@ export function TimerProvider({ children, userId }: TimerProviderProps) {
 
   const start = useCallback(
     async (payload: { projectId?: string | null; tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => {
-      const res = await fetch("/api/timer/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      setActionInProgress(true);
+      try {
+        const res = await fetch("/api/timer/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
-      const data = (await res.json()) as { error?: string; timer?: ActiveTimer };
-      if (!res.ok || !data.timer) {
-        throw new Error(data.error ?? "Failed to start timer");
+        const data = (await res.json()) as { error?: string; timer?: ActiveTimer };
+        if (!res.ok || !data.timer) {
+          throw new Error(data.error ?? "Failed to start timer");
+        }
+
+        applyTimerState(data.timer);
+        return data.timer;
+      } finally {
+        setActionInProgress(false);
       }
-
-      applyTimerState(data.timer);
-      return data.timer;
     },
     [applyTimerState]
   );
 
   const update = useCallback(
     async (payload: { projectId?: string | null; tagIds?: string[]; description?: string; notionTaskPageId?: string | null; notionTaskTitle?: string | null }) => {
-      const res = await fetch("/api/timer", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      setActionInProgress(true);
+      try {
+        const res = await fetch("/api/timer", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
-      const data = (await res.json().catch(() => ({ error: "Failed to update timer" }))) as {
-        error?: string;
-        timer?: ActiveTimer;
-      };
+        const data = (await res.json().catch(() => ({ error: "Failed to update timer" }))) as {
+          error?: string;
+          timer?: ActiveTimer;
+        };
 
-      if (!res.ok || !data.timer) {
-        throw new Error(data.error ?? "Failed to update timer");
+        if (!res.ok || !data.timer) {
+          throw new Error(data.error ?? "Failed to update timer");
+        }
+
+        applyTimerState(data.timer);
+        return data.timer;
+      } finally {
+        setActionInProgress(false);
       }
-
-      applyTimerState(data.timer);
-      return data.timer;
     },
     [applyTimerState]
   );
 
   const stop = useCallback(
     async (discard = false) => {
-      const res = await fetch("/api/timer/stop", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ discard }),
-      });
+      setActionInProgress(true);
+      try {
+        const res = await fetch("/api/timer/stop", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ discard }),
+        });
 
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({ error: "Failed to stop timer" }))) as {
-          error?: string;
-        };
-        throw new Error(data.error ?? "Failed to stop timer");
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({ error: "Failed to stop timer" }))) as {
+            error?: string;
+          };
+          throw new Error(data.error ?? "Failed to stop timer");
+        }
+
+        clearTimerState();
+      } finally {
+        setActionInProgress(false);
       }
-
-      clearTimerState();
     },
     [clearTimerState]
   );
 
   const value = useMemo(
-    () => ({ activeTimer, elapsed, loading, start, update, stop }),
-    [activeTimer, elapsed, loading, start, update, stop]
+    () => ({ activeTimer, elapsed, loading, actionInProgress, start, update, stop }),
+    [activeTimer, elapsed, loading, actionInProgress, start, update, stop]
   );
 
   return <TimerContext.Provider value={value}>{children}</TimerContext.Provider>;

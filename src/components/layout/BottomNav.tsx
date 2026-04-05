@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useTimer } from "@/hooks/use-timer";
+import { TimerActionIndicator } from "@/components/timer/TimerActionIndicator";
 import { formatDuration } from "@/lib/utils";
 import { getTimerStopValidation } from "@/lib/timer-rules";
 
@@ -17,6 +18,7 @@ export function BottomNav() {
     <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 w-[calc(100%-2rem)] max-w-sm">
       {activeTimer ? (
         <>
+          <TimerActionIndicator compact />
           {!canStop && (
             <div className="w-full rounded-2xl border border-[#f4d5cc] bg-[#fff7f6] px-4 py-3 text-sm text-[#791903] shadow-sm">
               <div className="flex items-start gap-2">

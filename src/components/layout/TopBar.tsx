@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { useTimer } from "@/hooks/use-timer";
+import { TimerActionIndicator } from "@/components/timer/TimerActionIndicator";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { getTimerStopValidation } from "@/lib/timer-rules";
 import floLabsLogo from "../../../assets/logo/FLChron_logo_512px.png";
@@ -120,6 +121,10 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
               );
             })}
           </nav>
+
+          <div className="hidden md:flex items-center">
+            <TimerActionIndicator compact />
+          </div>
 
           <Tooltip label={timerActionLabel} delayMs={300}>
             {actionButton}

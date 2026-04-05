@@ -44,7 +44,7 @@
 - [x] Admins see all teams and members
 - [x] Team leads see members and data for every team they belong to (union of `team_memberships`)
 - [x] Members see only their team assignment(s)
-- [x] Team page renders different data by role
+- [x] Team page renders different data by role; on md+ screens the Users/Invitations **Actions** column stays sticky on the right when the table scrolls horizontally
 
 ### Project Permissions ✅
 - [x] All users can read projects
@@ -54,7 +54,7 @@
 
 ### Report Permissions ✅
 - [x] Admin sees all report data
-- [x] Team lead sees team data only
+- [x] Team lead sees team-scoped report data, tag filters for all members in scope, and can edit/delete/bulk-manage teammates’ entries like admins (within that scope)
 - [x] Member sees own data only
 - [x] Filter dropdowns respect scope
 

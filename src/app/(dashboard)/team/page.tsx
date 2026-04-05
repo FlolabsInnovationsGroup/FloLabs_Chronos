@@ -487,6 +487,11 @@ export default function TeamPage() {
     "px-3 sm:px-4 lg:px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-on-surface-variant";
   const compactBodyCellClass = "px-3 sm:px-4 lg:px-5 py-4 align-top";
   const compactEmptyCellClass = "px-3 sm:px-4 lg:px-5 py-10 text-center text-sm text-outline-variant";
+  /** Keeps action controls visible while scrolling wide tables on tablet/desktop (md+). */
+  const tableActionsHeadClass =
+    "md:sticky md:right-0 md:z-[2] md:border-l md:border-outline-variant/25 md:bg-surface-container-low md:whitespace-nowrap md:shadow-[-8px_0_16px_-10px_rgba(0,0,0,0.18)]";
+  const tableActionsCellClass = (stripedRow: boolean) =>
+    `md:sticky md:right-0 md:z-[1] md:border-l md:border-outline-variant/25 md:whitespace-nowrap md:shadow-[-8px_0_16px_-10px_rgba(0,0,0,0.12)] ${stripedRow ? "md:bg-background" : "md:bg-surface-container-lowest"}`;
 
   return (
     <div className="flex flex-col gap-8 max-w-[90rem] mx-auto">
@@ -657,7 +662,7 @@ export default function TeamPage() {
                       <th
                         key={column.label}
                         onClick={column.key ? () => handleSort(column.key as SortKey) : undefined}
-                        className={`${compactHeadCellClass} select-none ${column.key ? "cursor-pointer hover:text-on-background" : ""}`}
+                        className={`${compactHeadCellClass} select-none ${column.key ? "cursor-pointer hover:text-on-background" : ""} ${column.label === "Actions" ? tableActionsHeadClass : ""}`}
                         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                       >
                         <span className="inline-flex items-center gap-1">
@@ -818,8 +823,10 @@ export default function TeamPage() {
                             </span>
                           </td>
                           {(role === "admin" || role === "team_lead" || role === "member") && (
-                            <td className={compactBodyCellClass}>
-                              <div className="flex gap-0.5 sm:gap-1">
+                            <td
+                              className={`${compactBodyCellClass} ${tableActionsCellClass(index % 2 !== 0)}`}
+                            >
+                              <div className="flex gap-0.5 sm:gap-1 md:flex-nowrap md:justify-end">
                                 {(role === "admin" || role === "team_lead") && (
                                   <>
                                     <Tooltip label="Edit member">
@@ -880,7 +887,7 @@ export default function TeamPage() {
                       {["Invitee", "Role", "Teams", "Expires", "Actions"].map((heading) => (
                         <th
                           key={heading}
-                          className={compactHeadCellClass}
+                          className={`${compactHeadCellClass} ${heading === "Actions" ? tableActionsHeadClass : ""}`}
                           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                         >
                           {heading}
@@ -941,8 +948,8 @@ export default function TeamPage() {
                               })}
                             </span>
                           </td>
-                          <td className={compactBodyCellClass}>
-                            <div className="flex gap-2 flex-wrap">
+                          <td className={`${compactBodyCellClass} ${tableActionsCellClass(index % 2 !== 0)}`}>
+                            <div className="flex gap-2 flex-wrap md:flex-nowrap md:justify-end">
                               <Button variant="ghost" size="sm" onClick={() => void handleCopyInvite(invite.inviteUrl)}>
                                 Copy Link
                               </Button>

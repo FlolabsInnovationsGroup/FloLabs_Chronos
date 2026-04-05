@@ -21,7 +21,12 @@ import { ReportEntries } from "@/components/reports/ReportEntries";
 import { ExportCSVButton } from "@/components/reports/ExportCSVButton";
 import { Suspense } from "react";
 import type { Project, Tag, ReportRow, TimeEntry } from "@/types";
-import { getAccessibleUserIds, getAccessibleUsers, isAdmin as userIsAdmin } from "@/lib/permissions";
+import {
+  getAccessibleUserIds,
+  getAccessibleUsers,
+  isAdmin as userIsAdmin,
+  isTeamLead as userIsTeamLead,
+} from "@/lib/permissions";
 
 export const metadata: Metadata = { title: "Reports | FloLabs Chronos" };
 
@@ -45,20 +50,26 @@ async function getFilterData(sessionUser: {
   if (!db) return { projects: [], tags: [], users: [] };
 
   const isAdmin = userIsAdmin(sessionUser);
+  const isTeamLead = userIsTeamLead(sessionUser);
+  const accessibleUserIds = await getAccessibleUserIds(sessionUser);
+
+  const tagQuery =
+    isAdmin
+      ? db.select().from(tags).orderBy(tags.name)
+      : isTeamLead && accessibleUserIds !== null && accessibleUserIds.length > 0
+        ? db.select().from(tags).where(inArray(tags.userId, accessibleUserIds)).orderBy(tags.name)
+        : db.select().from(tags).where(eq(tags.userId, sessionUser.id)).orderBy(tags.name);
 
   const [projectRows, tagRows, userRows] = await Promise.all([
     db.select().from(projects).where(eq(projects.archived, false)).orderBy(projects.name),
-    // Tags for filter: admin sees all; others see their own
-    isAdmin
-      ? db.select().from(tags).orderBy(tags.name)
-      : db.select().from(tags).where(eq(tags.userId, sessionUser.id)).orderBy(tags.name),
+    tagQuery,
     getAccessibleUsers(sessionUser),
   ]);
 
   return {
     projects: projectRows as Project[],
     tags: tagRows as Tag[],
-    users: (isAdmin || sessionUser.role === "team_lead" ? userRows : []) as import("@/types").User[],
+    users: (isAdmin || isTeamLead ? userRows : []) as import("@/types").User[],
   };
 }
 

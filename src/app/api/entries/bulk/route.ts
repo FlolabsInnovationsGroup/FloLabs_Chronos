@@ -5,6 +5,7 @@ import { timeEntries, timeEntryTags, projects, tags, users } from "@/lib/db/sche
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { deleteAndNotifyEntry, syncAndNotifyEntry } from "@/lib/entry-lifecycle";
+import { getAccessibleUserIds, isAdmin, isTeamLead } from "@/lib/permissions";
 
 const bulkSchema = z.discriminatedUnion("action", [
   z.object({
@@ -28,9 +29,10 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
   const { action, entryIds } = parsed.data;
-  const isAdmin = session.user.role === "admin";
+  const userIsAdmin = isAdmin(session.user);
+  const userIsTeamLead = isTeamLead(session.user);
 
-  // Fetch entries and verify ownership
+  // Fetch entries and verify ownership / team scope
   const found = await db
     .select({ id: timeEntries.id, userId: timeEntries.userId })
     .from(timeEntries)
@@ -40,9 +42,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Some entries not found" }, { status: 404 });
   }
 
-  if (!isAdmin) {
-    const forbidden = found.some((e) => e.userId !== session.user.id);
-    if (forbidden) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!userIsAdmin) {
+    if (userIsTeamLead) {
+      const accessible = await getAccessibleUserIds(session.user);
+      if (accessible === null) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      const forbidden = found.some((e) => !accessible.includes(e.userId));
+      if (forbidden) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    } else {
+      const forbidden = found.some((e) => e.userId !== session.user.id);
+      if (forbidden) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   if (action === "delete") {

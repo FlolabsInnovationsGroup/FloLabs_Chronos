@@ -462,7 +462,7 @@ Use centralized helpers in `src/lib/permissions.ts`.
 | Team page (Users tab) | All users + full edit | All users in shared teams; may edit weekly target hours for those users | Only own row; may edit own weekly target hours |
 | Create invites | Yes | No | No |
 | Disable/delete invites | Yes | No | No |
-| Reports | All users | Accessible users only | Own only |
+| Reports | All users | Same scoped data as query (all teammates’ entries); may edit/delete/bulk-manage those entries | Own only |
 | User management | Yes | No | No |
 | Task search API | Authenticated users | Authenticated users | Authenticated users |
 
@@ -490,7 +490,7 @@ Reports are server-side PostgreSQL queries scoped by viewer permissions.
 - Detailed entry list with bulk operations
 
 ### Scope Rule
-Filter dropdowns must never expose users outside the same queryable scope.
+User and tag filter options must match the same scope as the underlying entry query (admins: all users and all tags; team leads: accessible users and tags owned by any of those users; members: self only).
 
 ---
 

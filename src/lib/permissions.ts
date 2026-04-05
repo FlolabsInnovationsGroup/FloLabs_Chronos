@@ -76,6 +76,14 @@ export async function canAccessUser(user: SessionUserLike, targetUserId: string)
   return accessibleIds === null ? true : accessibleIds.includes(targetUserId);
 }
 
+/** Admins, entry owners, and team leads (for teammates in scope) may edit/delete time entries. */
+export async function canManageTimeEntry(user: SessionUserLike, entryOwnerUserId: string): Promise<boolean> {
+  if (isAdmin(user)) return true;
+  if (user.id === entryOwnerUserId) return true;
+  if (isTeamLead(user)) return canAccessUser(user, entryOwnerUserId);
+  return false;
+}
+
 export async function getAccessibleUsers(user: SessionUserLike) {
   if (!db) return [];
 

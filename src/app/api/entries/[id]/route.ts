@@ -5,6 +5,7 @@ import { timeEntries, timeEntryTags, projects, tags, users } from "@/lib/db/sche
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { deleteAndNotifyEntry, syncAndNotifyEntry } from "@/lib/entry-lifecycle";
+import { canManageTimeEntry } from "@/lib/permissions";
 
 const patchSchema = z.object({
   description: z.string().optional(),
@@ -28,7 +29,7 @@ export async function PATCH(
   const [entry] = await db.select().from(timeEntries).where(eq(timeEntries.id, id)).limit(1);
   if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (entry.userId !== session.user.id && session.user.role !== "admin") {
+  if (!(await canManageTimeEntry(session.user, entry.userId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -188,7 +189,7 @@ export async function DELETE(
   const [entry] = await db.select().from(timeEntries).where(eq(timeEntries.id, id)).limit(1);
   if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (entry.userId !== session.user.id && session.user.role !== "admin") {
+  if (!(await canManageTimeEntry(session.user, entry.userId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

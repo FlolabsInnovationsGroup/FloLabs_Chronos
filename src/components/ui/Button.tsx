@@ -23,7 +23,7 @@ const variantStyles: Record<ButtonVariant, string> = {
   danger:
     "bg-transparent text-error hover:bg-warm-surface active:bg-warm-muted disabled:opacity-50",
   stop:
-    "bg-error text-on-background hover:bg-error-dim active:brightness-95 disabled:opacity-50 dark:text-on-error",
+    "bg-error text-on-error hover:bg-error-dim active:brightness-95 disabled:opacity-50",
 };
 
 const sizeStyles: Record<ButtonSize, string> = {

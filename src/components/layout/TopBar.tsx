@@ -58,7 +58,7 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
       className={cn(
         "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
         !activeTimer && "bg-primary text-on-primary hover:bg-primary-dim",
-        canStop && "bg-error text-on-background hover:bg-error-dim dark:text-on-error",
+        canStop && "bg-error text-on-error hover:bg-error-dim",
         activeTimer && !canStop && "bg-surface-container-high text-disabled-on cursor-not-allowed"
       )}
     >

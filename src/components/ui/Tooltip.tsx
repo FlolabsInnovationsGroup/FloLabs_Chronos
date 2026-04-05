@@ -220,7 +220,7 @@ export function Tooltip({
             id={tooltipId}
             ref={tooltipRef}
             role="tooltip"
-            className="pointer-events-none fixed z-[80] max-w-[min(calc(100vw-1.5rem),20rem)] rounded-md bg-chrome px-2.5 py-1.5 text-xs text-background shadow-md whitespace-normal break-words animate-[tooltipFadeIn_150ms_ease-out]"
+            className="pointer-events-none fixed z-[80] max-w-[min(calc(100vw-1.5rem),20rem)] rounded-md bg-chrome px-2.5 py-1.5 text-xs text-on-chrome shadow-md whitespace-normal break-words animate-[tooltipFadeIn_150ms_ease-out]"
             style={{
               top: coords?.top ?? -9999,
               left: coords?.left ?? -9999,

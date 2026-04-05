@@ -26,7 +26,8 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
   const { data: session } = useSession();
   const { activeTimer, start, stop, loading } = useTimer();
 
-  const initial = session?.user?.name ? session.user.name.charAt(0).toUpperCase() : "?";
+  const displayName = session?.user?.name?.trim() ?? "";
+  const initial = displayName ? displayName.charAt(0).toUpperCase() : "?";
   const stopValidation = getTimerStopValidation(activeTimer);
   const canStop = !!activeTimer && stopValidation.canStop;
   const timerActionLabel = !activeTimer
@@ -135,13 +136,16 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
             {actionButton}
           </Tooltip>
 
-          <div
-            className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center text-sm font-semibold cursor-pointer select-none"
-            title={session?.user?.name ?? "User"}
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
-            {initial}
-          </div>
+          <Tooltip label={displayName || "Settings"} delayMs={400} position="bottom">
+            <Link
+              href="/settings"
+              className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center text-sm font-semibold select-none transition-colors hover:bg-primary-dim focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+              aria-label={displayName ? `Settings (${displayName})` : "Settings"}
+            >
+              {initial}
+            </Link>
+          </Tooltip>
         </div>
       </div>
     </header>

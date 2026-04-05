@@ -82,106 +82,126 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user || !canManageInvitations(session.user)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
-
-  let body: unknown;
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-  const parsed = createInvitationSchema.safeParse(body);
-  if (!parsed.success) {
-    const first = parsed.error.issues[0];
-    return NextResponse.json({ error: first?.message ?? "Invalid input" }, { status: 400 });
-  }
+    const session = await auth();
+    if (!session?.user || !canManageInvitations(session.user)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!db) {
+      return NextResponse.json({ error: "DB not available" }, { status: 503 });
+    }
+    if (!z.string().uuid().safeParse(session.user.id).success) {
+      return NextResponse.json({ error: "Your session is invalid. Please sign in again." }, { status: 401 });
+    }
 
-  const useNotionMemberSource =
-    Boolean(parsed.data.notionTeamMemberPageId) && parsed.data.createNewNotionTeamMember !== true;
-
-  let normalizedEmail: string;
-  let teamIds: string[];
-  let inviteName = parsed.data.name.trim();
-  let notionTeamPageIdsForEnsure: string[];
-
-  if (useNotionMemberSource) {
-    let notionSource: Awaited<ReturnType<typeof getInviteSourceFromNotionTeamMemberPage>>;
+    let body: unknown;
     try {
-      notionSource = await getInviteSourceFromNotionTeamMemberPage(parsed.data.notionTeamMemberPageId!);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Could not read Team Member from Notion.";
-      return NextResponse.json({ error: message }, { status: 400 });
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
     }
-    inviteName = notionSource.name.trim() || inviteName;
-    normalizedEmail = normalizeEmail(notionSource.email);
+    const parsed = createInvitationSchema.safeParse(body);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      return NextResponse.json({ error: first?.message ?? "Invalid input" }, { status: 400 });
+    }
 
-    const teamLinkRows = await db
-      .select({ id: teams.id, notionPageId: teams.notionPageId })
+    const useNotionMemberSource =
+      Boolean(parsed.data.notionTeamMemberPageId) && parsed.data.createNewNotionTeamMember !== true;
+
+    let normalizedEmail: string;
+    let teamIds: string[];
+    let inviteName = parsed.data.name.trim();
+    let notionTeamPageIdsForEnsure: string[];
+
+    if (useNotionMemberSource) {
+      let notionSource: Awaited<ReturnType<typeof getInviteSourceFromNotionTeamMemberPage>>;
+      try {
+        notionSource = await getInviteSourceFromNotionTeamMemberPage(parsed.data.notionTeamMemberPageId!);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Could not read Team Member from Notion.";
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+      inviteName = notionSource.name.trim() || inviteName;
+      normalizedEmail = normalizeEmail(notionSource.email);
+
+      const teamLinkRows = await db
+        .select({ id: teams.id, notionPageId: teams.notionPageId })
+        .from(teams)
+        .where(isNotNull(teams.notionPageId));
+      const chronosIdByNotionNorm = new Map<string, string>();
+      for (const row of teamLinkRows) {
+        if (row.notionPageId) chronosIdByNotionNorm.set(normalizeNotionId(row.notionPageId), row.id);
+      }
+      teamIds = [];
+      for (const nid of notionSource.notionTeamPageIds) {
+        const chronosId = chronosIdByNotionNorm.get(normalizeNotionId(nid));
+        if (chronosId && !teamIds.includes(chronosId)) teamIds.push(chronosId);
+      }
+      if (teamIds.length === 0) {
+        return NextResponse.json(
+          {
+            error:
+              "None of the teams linked on this Notion page are synced to Chronos yet. Check team sync or link teams that exist in Chronos.",
+          },
+          { status: 400 }
+        );
+      }
+      notionTeamPageIdsForEnsure = notionSource.notionTeamPageIds;
+    } else {
+      normalizedEmail = normalizeEmail(parsed.data.email!.trim());
+      teamIds = parsed.data.teamIds ?? (parsed.data.teamId ? [parsed.data.teamId] : []);
+      if (teamIds.length === 0) return NextResponse.json({ error: "At least one team is required." }, { status: 400 });
+      notionTeamPageIdsForEnsure = [];
+    }
+
+    const teamRows = await db
+      .select({ id: teams.id, name: teams.name, slug: teams.slug, notionPageId: teams.notionPageId })
       .from(teams)
-      .where(isNotNull(teams.notionPageId));
-    const chronosIdByNotionNorm = new Map<string, string>();
-    for (const row of teamLinkRows) {
-      if (row.notionPageId) chronosIdByNotionNorm.set(normalizeNotionId(row.notionPageId), row.id);
+      .where(inArray(teams.id, teamIds));
+    if (teamRows.length !== teamIds.length) {
+      return NextResponse.json({ error: "One or more selected teams do not exist." }, { status: 404 });
     }
-    teamIds = [];
-    for (const nid of notionSource.notionTeamPageIds) {
-      const chronosId = chronosIdByNotionNorm.get(normalizeNotionId(nid));
-      if (chronosId && !teamIds.includes(chronosId)) teamIds.push(chronosId);
-    }
-    if (teamIds.length === 0) {
+
+    const [existingUser] = await db.select({ id: users.id }).from(users).where(eq(users.email, normalizedEmail)).limit(1);
+    if (existingUser) return NextResponse.json({ error: "This email already has an account." }, { status: 409 });
+
+    const [existingInvite] = await db
+      .select({ id: invitations.id, token: invitations.token, expiresAt: invitations.expiresAt })
+      .from(invitations)
+      .where(and(eq(invitations.email, normalizedEmail), isNull(invitations.acceptedAt)))
+      .orderBy(desc(invitations.createdAt))
+      .limit(1);
+    if (existingInvite && new Date(existingInvite.expiresAt).getTime() > Date.now()) {
       return NextResponse.json(
-        {
-          error:
-            "None of the teams linked on this Notion page are synced to Chronos yet. Check team sync or link teams that exist in Chronos.",
-        },
-        { status: 400 }
+        { error: "A pending invitation already exists for this email.", inviteUrl: buildInviteUrl(existingInvite.token, req.url) },
+        { status: 409 }
       );
     }
-    notionTeamPageIdsForEnsure = notionSource.notionTeamPageIds;
-  } else {
-    normalizedEmail = normalizeEmail(parsed.data.email!.trim());
-    teamIds = parsed.data.teamIds ?? (parsed.data.teamId ? [parsed.data.teamId] : []);
-    if (teamIds.length === 0) return NextResponse.json({ error: "At least one team is required." }, { status: 400 });
-    notionTeamPageIdsForEnsure = [];
-  }
 
-  const teamRows = await db.select({ id: teams.id, name: teams.name, slug: teams.slug, notionPageId: teams.notionPageId }).from(teams).where(inArray(teams.id, teamIds));
-  if (teamRows.length !== teamIds.length) return NextResponse.json({ error: "One or more selected teams do not exist." }, { status: 404 });
+    const token = createInvitationToken();
+    let expiresAt: Date;
+    if (parsed.data.expiresAt != null) {
+      expiresAt = parsed.data.expiresAt;
+    } else {
+      expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+    }
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+      return NextResponse.json({ error: "Expiration must be a valid future date." }, { status: 400 });
+    }
 
-  const [existingUser] = await db.select({ id: users.id }).from(users).where(eq(users.email, normalizedEmail)).limit(1);
-  if (existingUser) return NextResponse.json({ error: "This email already has an account." }, { status: 409 });
+    const notionTeamPageIds = useNotionMemberSource
+      ? notionTeamPageIdsForEnsure
+      : teamRows.map((team) => team.notionPageId).filter((id): id is string => Boolean(id));
+    if (!useNotionMemberSource && notionTeamPageIds.length !== teamRows.length) {
+      return NextResponse.json({ error: "One or more selected teams are not linked to a Notion team page yet." }, { status: 409 });
+    }
+    if (teamRows.some((t) => !t.notionPageId)) {
+      return NextResponse.json({ error: "One or more selected teams are not linked to a Notion team page yet." }, { status: 409 });
+    }
 
-  const [existingInvite] = await db.select({ id: invitations.id, token: invitations.token, expiresAt: invitations.expiresAt }).from(invitations).where(and(eq(invitations.email, normalizedEmail), isNull(invitations.acceptedAt))).orderBy(desc(invitations.createdAt)).limit(1);
-  if (existingInvite && new Date(existingInvite.expiresAt).getTime() > Date.now()) {
-    return NextResponse.json({ error: "A pending invitation already exists for this email.", inviteUrl: buildInviteUrl(existingInvite.token, req.url) }, { status: 409 });
-  }
-
-  const token = createInvitationToken();
-  let expiresAt: Date;
-  if (parsed.data.expiresAt != null) {
-    expiresAt = parsed.data.expiresAt;
-  } else {
-    expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-  }
-  if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
-    return NextResponse.json({ error: "Expiration must be a valid future date." }, { status: 400 });
-  }
-
-  const notionTeamPageIds = useNotionMemberSource
-    ? notionTeamPageIdsForEnsure
-    : teamRows.map((team) => team.notionPageId).filter((id): id is string => Boolean(id));
-  if (!useNotionMemberSource && notionTeamPageIds.length !== teamRows.length) {
-    return NextResponse.json({ error: "One or more selected teams are not linked to a Notion team page yet." }, { status: 409 });
-  }
-  if (teamRows.some((t) => !t.notionPageId)) {
-    return NextResponse.json({ error: "One or more selected teams are not linked to a Notion team page yet." }, { status: 409 });
-  }
-
-  let notionPageId: string | null = null;
-  try {
+    let notionPageId: string | null = null;
     const notionResult = await ensureTeamMemberPage({
       email: normalizedEmail,
       name: inviteName,
@@ -190,28 +210,37 @@ export async function POST(req: Request) {
       forceCreateNew: parsed.data.createNewNotionTeamMember === true,
     });
     notionPageId = notionResult?.pageId ?? null;
-  } catch (error) {
-    if (error instanceof TeamMemberLookupConflictError) {
-      return NextResponse.json({ error: error.message, matches: error.matches }, { status: 409 });
+
+    const [invite] = await db
+      .insert(invitations)
+      .values({
+        email: normalizedEmail,
+        name: inviteName,
+        role: parsed.data.role,
+        teamId: teamIds[0],
+        token,
+        invitedById: session.user.id,
+        expiresAt,
+        notionTeamMemberId: notionPageId,
+      })
+      .returning();
+    await db.insert(invitationTeamMemberships).values(teamIds.map((teamId) => ({ invitationId: invite.id, teamId }))).onConflictDoNothing();
+
+    broadcastDataChange("team");
+    return NextResponse.json(
+      { invitation: { ...invite, teams: teamRows, teamIds }, inviteUrl: buildInviteUrl(token, req.url), delivery: "manual" },
+      { status: 201 }
+    );
+  } catch (err) {
+    if (err instanceof TeamMemberLookupConflictError) {
+      return NextResponse.json({ error: err.message, matches: err.matches }, { status: 409 });
     }
-    throw error;
+    console.error("[api/invitations POST]", err);
+    const message = err instanceof Error ? err.message : "Invitation could not be created.";
+    const notionOrUpstream =
+      /notion/i.test(message) ||
+      message.includes("Team Members database") ||
+      message.includes("Onboarding database");
+    return NextResponse.json({ error: message }, { status: notionOrUpstream ? 502 : 500 });
   }
-
-  const [invite] = await db
-    .insert(invitations)
-    .values({
-      email: normalizedEmail,
-      name: inviteName,
-      role: parsed.data.role,
-      teamId: teamIds[0],
-      token,
-      invitedById: session.user.id,
-      expiresAt,
-      notionTeamMemberId: notionPageId,
-    })
-    .returning();
-  await db.insert(invitationTeamMemberships).values(teamIds.map((teamId) => ({ invitationId: invite.id, teamId }))).onConflictDoNothing();
-
-  broadcastDataChange("team");
-  return NextResponse.json({ invitation: { ...invite, teams: teamRows, teamIds }, inviteUrl: buildInviteUrl(token, req.url), delivery: "manual" }, { status: 201 });
 }

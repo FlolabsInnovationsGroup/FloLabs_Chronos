@@ -1074,16 +1074,22 @@ async function updateExistingTeamMemberPage(params: {
 
   const teamProperty = page.properties?.Team;
   if (teamProperty?.type === "relation") {
-    const relationIds = new Set((teamProperty.relation ?? []).map((relation) => relation.id));
-    let changed = false;
+    const prevIds = (teamProperty.relation ?? []).map((relation) => relation.id).filter(Boolean);
+    const byNorm = new Map<string, string>();
+    for (const id of prevIds) {
+      byNorm.set(normalizeNotionId(id), id);
+    }
     for (const teamPageId of params.notionTeamPageIds) {
-      if (!relationIds.has(teamPageId)) {
-        relationIds.add(teamPageId);
-        changed = true;
+      const norm = normalizeNotionId(teamPageId);
+      if (!byNorm.has(norm)) {
+        byNorm.set(norm, teamPageId);
       }
     }
-    if (changed) {
-      patch.Team = buildRelationValue([...relationIds]);
+    const merged = [...byNorm.values()];
+    const prevNormKey = [...new Set(prevIds.map(normalizeNotionId))].sort().join(",");
+    const mergedNormKey = [...new Set(merged.map(normalizeNotionId))].sort().join(",");
+    if (prevNormKey !== mergedNormKey) {
+      patch.Team = buildRelationValue(merged);
     }
   }
 

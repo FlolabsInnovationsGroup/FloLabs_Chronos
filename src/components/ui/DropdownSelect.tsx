@@ -85,7 +85,7 @@ export function DropdownSelect({
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
           "w-full min-h-9 appearance-none rounded-xl border-0 bg-surface-container-low px-3 py-1.5 text-sm text-on-background shadow-none outline-none transition-all duration-150",
-          "focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed",
+          "focus:ring-2 focus:ring-inset focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed",
           "inline-flex items-center gap-2 cursor-pointer",
           buttonClassName
         )}

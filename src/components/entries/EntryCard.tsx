@@ -210,8 +210,8 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
           <div className="flex flex-col gap-1.5"><label className="text-xs font-medium text-on-surface-variant uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>Tags</label><TagMultiSelect value={editTagIds} onChange={setEditTagIds} options={tagOptions} onCreate={createTag} placeholder="Add tags…" /></div>
           {!!entry.stoppedAt && (
             <div className="flex flex-col gap-2">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
+              <div className="grid grid-cols-2 gap-4 sm:gap-5">
+                <div className="flex min-w-0 flex-col gap-1.5">
                   <div className="flex items-center gap-1.5">
                     <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
                       Start Time
@@ -235,7 +235,7 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
                   />
                 </div>
 
-                <div className="flex flex-col gap-1.5">
+                <div className="flex min-w-0 flex-col gap-1.5">
                   <div className="flex items-center gap-1.5">
                     <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
                       End Time

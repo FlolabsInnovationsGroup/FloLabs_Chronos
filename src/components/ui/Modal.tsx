@@ -65,7 +65,7 @@ export function Modal({ open, onClose, title, children, className, size = "md" }
           aria-labelledby={title ? "modal-title" : undefined}
         >
           {title && (
-            <div className="flex items-center justify-between px-6 py-5 bg-surface-container-low shrink-0">
+            <div className="flex items-center justify-between px-7 py-5 sm:px-8 bg-surface-container-low shrink-0">
               <h2
                 id="modal-title"
                 className="text-lg font-medium text-on-background"
@@ -85,7 +85,7 @@ export function Modal({ open, onClose, title, children, className, size = "md" }
             </div>
           )}
 
-          <div className="px-6 py-5">{children}</div>
+          <div className="px-7 py-5 sm:px-8">{children}</div>
         </div>
       </div>
     </div>

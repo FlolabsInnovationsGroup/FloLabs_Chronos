@@ -34,9 +34,9 @@ export function Input({ label, error, hint, className, id, ...props }: InputProp
         className={cn(
           "w-full px-3 py-2.5 text-sm text-on-background bg-surface-container-low rounded-lg outline-none",
           "placeholder:text-outline-variant",
-          "focus:bg-background focus:ring-2 focus:ring-primary/20",
+          "focus:bg-background focus:ring-2 focus:ring-inset focus:ring-primary/20",
           "transition-all duration-150",
-          error && "ring-2 ring-error/30 bg-warm-surface",
+          error && "ring-2 ring-inset ring-error/30 bg-warm-surface",
           "disabled:opacity-50 disabled:cursor-not-allowed",
           className
         )}
@@ -82,9 +82,9 @@ export function Textarea({ label, error, hint, className, id, ...props }: Textar
         className={cn(
           "w-full px-3 py-2.5 text-sm text-on-background bg-surface-container-low rounded-lg outline-none resize-none",
           "placeholder:text-outline-variant",
-          "focus:bg-background focus:ring-2 focus:ring-primary/20",
+          "focus:bg-background focus:ring-2 focus:ring-inset focus:ring-primary/20",
           "transition-all duration-150",
-          error && "ring-2 ring-error/30 bg-warm-surface",
+          error && "ring-2 ring-inset ring-error/30 bg-warm-surface",
           "disabled:opacity-50 disabled:cursor-not-allowed",
           className
         )}

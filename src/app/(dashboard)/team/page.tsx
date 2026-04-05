@@ -35,6 +35,9 @@ const EDIT_ROLES = [
   { value: "admin", label: "Admin" },
 ];
 
+/** Re-fetch users/teams (and invites for admins) without blocking the UI — SSE, polling, tab focus. */
+const USERS_TEAMS_POLL_MS = 20_000;
+
 type SortKey = "name" | "team" | "weekly" | "live" | "joined";
 type SortDir = "asc" | "desc";
 
@@ -114,10 +117,13 @@ export default function TeamPage() {
     setSortDir("asc");
   }
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
     if (!userId) return;
-    setError("");
-    setLoading(true);
+    const silent = Boolean(opts?.silent);
+    if (!silent) {
+      setError("");
+      setLoading(true);
+    }
 
     try {
       const requests: Promise<Response>[] = [
@@ -133,9 +139,11 @@ export default function TeamPage() {
       setTeams(payloads[1].teams ?? []);
       setInvitations(role === "admin" ? (payloads[2]?.invitations ?? []) : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load team data.");
+      if (!silent) {
+        setError(err instanceof Error ? err.message : "Failed to load team data.");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [role, userId]);
 
@@ -157,12 +165,27 @@ export default function TeamPage() {
           event.type === "timer:start" ||
           event.type === "timer:stop"
         ) {
-          void refresh();
+          void refresh({ silent: true });
         }
       },
       [refresh]
     )
   );
+
+  useEffect(() => {
+    if (!userId) return;
+    const id = setInterval(() => void refresh({ silent: true }), USERS_TEAMS_POLL_MS);
+    return () => clearInterval(id);
+  }, [userId, refresh]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh({ silent: true });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [userId, refresh]);
 
   useEffect(() => {
     if (inviteTeamIds.length === 0 && teams[0]?.id) {
@@ -297,7 +320,7 @@ export default function TeamPage() {
       setInviteTeamIds([]);
       setInviteExpiresAt(defaultInviteExpiry());
       setShowInvite(false);
-      await refresh();
+      await refresh({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create invitation.");
     } finally {
@@ -329,7 +352,7 @@ export default function TeamPage() {
         })
       );
       setEditingUser(null);
-      await refresh();
+      await refresh({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update user.");
     } finally {
@@ -351,7 +374,7 @@ export default function TeamPage() {
         })
       );
       setEditingInvite(null);
-      await refresh();
+      await refresh({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update invitation expiration.");
     } finally {
@@ -365,7 +388,7 @@ export default function TeamPage() {
     try {
       await readJson(await fetch(`/api/users/${confirmDeleteUser.id}`, { method: "DELETE" }));
       setConfirmDeleteUser(null);
-      await refresh();
+      await refresh({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete user.");
     } finally {
@@ -385,7 +408,7 @@ export default function TeamPage() {
         })
       );
       setConfirmDisableInvite(null);
-      await refresh();
+      await refresh({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to disable invitation.");
     } finally {
@@ -399,7 +422,7 @@ export default function TeamPage() {
     try {
       await readJson(await fetch(`/api/invitations/${confirmDeleteInvite.id}`, { method: "DELETE" }));
       setConfirmDeleteInvite(null);
-      await refresh();
+      await refresh({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete invitation.");
     } finally {

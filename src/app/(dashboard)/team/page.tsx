@@ -80,7 +80,7 @@ function ActionsColumnScrollVeil() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute top-0 bottom-0 right-full z-[3] hidden w-14 bg-gradient-to-l from-black/30 via-black/12 to-transparent md:block dark:from-white/20 dark:via-white/10 dark:to-transparent"
+      className="pointer-events-none absolute top-0 bottom-0 right-full z-[3] hidden w-14 bg-gradient-to-l from-black/[0.15] via-black/[0.06] to-transparent md:block dark:from-white/10 dark:via-white/5 dark:to-transparent"
     />
   );
 }

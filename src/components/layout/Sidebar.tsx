@@ -1,11 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { FlolabsMark } from "@/components/brand/FlolabsMark";
 import { cn } from "@/lib/utils";
-import floLabsLogo from "../../../assets/logo/FLChron_logo_512px.png";
 
 interface NavItem {
   href: string;
@@ -166,12 +165,7 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
         className="w-14 h-14 flex items-center justify-center rounded-xl mb-3 hover:bg-surface-container-low transition-colors"
         aria-label="FloLabs Chronos home"
       >
-        <Image
-          src={floLabsLogo}
-          alt="FloLabs Chronos"
-          priority
-          className="h-11 w-11 object-contain"
-        />
+        <FlolabsMark className="h-11 w-11" />
       </Link>
 
       <nav className="flex flex-col items-center gap-1 flex-1 w-full px-2">

@@ -42,8 +42,8 @@
 
 ### Team Visibility ✅
 - [x] Admins see all teams and members
-- [x] Team leads see only their own team
-- [x] Members see only their team assignment
+- [x] Team leads see members and data for every team they belong to (union of `team_memberships`)
+- [x] Members see only their team assignment(s)
 - [x] Team page renders different data by role
 
 ### Project Permissions ✅
@@ -178,11 +178,24 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 - `ARCHITECTURE.md` — document Notion-driven team sync
 - `CLAUDE.md` — note NOTION_TEAMS_DB_ID
 
-**Status:** 🔲 Not started
+**Status:** ✅ Completed (cron, schema, team page UI, invite active-team filter, docs)
+
+---
+
+### Feature 4: Light / dark theme ✅
+
+- `src/app/globals.css` — full light (`:root`) and dark (`html.dark`) palettes as `--c-*`; `@theme inline` exposes them to Tailwind; `@custom-variant dark` scopes `dark:` to `html.dark`
+- `src/components/theme/ThemeScript.tsx` — `beforeInteractive` script: `localStorage` key `chronos-theme`, fallback `prefers-color-scheme`, toggles `html.dark` to avoid flash
+- `src/components/theme/ThemeToggle.tsx` — persists choice, used in `TopBar` and Settings → Appearance
+- `src/app/layout.tsx` — injects `ThemeScript`
+- Semantic utilities app-wide (`bg-background`, `text-on-background`, `bg-surface-container-*`, `text-primary`, …); optional `scripts/apply-semantic-theme-classes.mjs` for migrating legacy hex classes
+- `src/components/brand/FlolabsMark.tsx` — sidebar / mobile header mark uses `fill="var(--c-primary)"` so the logo matches theme primary (e.g. `#8ecbce` in dark)
 
 ---
 
 ## Recent Updates
+
+- Documentation: `ARCHITECTURE.md` design-system section now covers dual-theme tokens, modal overlay scrolling, `FlolabsMark`, and correct task-on-stop data rules; `CLAUDE.md` and this file document theme implementation details.
 
 - Mobile dashboard navigation now exposes the FloLabs logo in the phone header and uses it to toggle a sidebar-style navigation panel, while keeping the desktop sidebar behavior intact.
 - Users page tables now use tighter horizontal spacing and slightly smaller minimum widths so more columns stay visible on smaller screens without dropping content.
@@ -194,7 +207,7 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 - Tooltip/info-dialog rendering was hardened so delayed tooltips stay within the visible viewport even inside overflow-constrained UI and mobile layouts.
 - Timer UX updated end-to-end: timer suggestions now auto-start when idle and safely apply onto the running timer when one already exists.
 - Timer start no longer requires any prefilled fields; `time_entries.project_id` was migrated to optional so empty-start timers persist correctly.
-- Timer stop now requires both a description and a selected task in both UI and API, with disabled stop affordances and explicit mobile messaging when the requirements are missing.
+- Timer stop requires a selected project and non-empty description in UI and API; a task is required only when the project has `requiresTaskOnStop`, with matching disabled stop affordances and mobile messaging.
 - Timer header now includes a round play/stop quick-action button beside the avatar; active timers show a disabled grey stop state until the stop requirements are satisfied.
 - Removed the duplicate active-description display beneath the timer clock so the Description field is the authoritative inline source.
 - Added migration script `scripts/migrate-timer-project-optional.ts` and ran it successfully.

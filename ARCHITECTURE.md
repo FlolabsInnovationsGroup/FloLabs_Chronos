@@ -16,6 +16,7 @@ The current product model is:
 - Time entries can optionally link to a Notion Task page explicitly via stored task relation metadata.
 - PostgreSQL is the application source of truth for Chronos data; Notion is the external operations mirror / integration layer.
 - Discord webhooks are used for branded notifications about time-entry lifecycle events.
+- The dashboard supports **light and dark** appearance from the same components, driven by shared **`--c-*`** CSS variables on `:root` and `html.dark`.
 
 ---
 
@@ -181,7 +182,7 @@ The entry-list edit experience must be considered authoritative for user-facing 
 | Database | **PostgreSQL** (Neon / Vercel-managed Neon) | Durable relational source of truth |
 | ORM | **Drizzle ORM** | Type-safe schema and query layer |
 | Real-time | **Redis** + **SSE** | Active timer state + fan-out |
-| Styling | **Tailwind CSS** with Vellum Ink tokens | Editorial UI language |
+| Styling | **Tailwind CSS** with Vellum Ink tokens + CSS variables | Editorial UI; light/dark palettes via `--c-*` on `:root` and `html.dark` |
 | Validation | **Zod** | Shared request validation |
 | External ops integration | **Notion API** | Teams, Team Members, Tasks, and time-entry mirror |
 | Optional delivery | **Email provider** (future / optional) | Invitation delivery |
@@ -361,7 +362,7 @@ CREATE TABLE time_entry_tags (
 - Tags are unique per `(name, user_id)`.
 - Time entries never store a direct single tag column.
 - Project linkage is optional for timer-created entries and may be filled in later.
-- Task linkage is optional while the timer is running, but stopping requires an explicit task selection.
+- Task linkage is optional while the timer is running; stopping requires an explicit task selection only when the entry’s project has `requires_task_on_stop = true`.
 - Description may still temporarily contain a pasted Notion task URL for compatibility with the Python task linker.
 - Deleting a tag preserves the time entry.
 - Deleting a project deletes linked time entries.
@@ -576,12 +577,28 @@ Depending on actual database schema detection, Chronos maps:
 - Icon-only buttons use delayed tooltips.
 - Tooltip/info-dialog surfaces must render within the visible viewport, including inside overflow-constrained cards/modals and on mobile layouts.
 - Destructive actions use confirmation modals where **Cancel is visually primary** and the destructive action is danger-styled.
-- Modals must fit viewport height and scroll internally.
+- Modals are fixed full-viewport overlays: the **outer layer** scrolls (`overflow-y-auto` on the overlay) so tall content is not trapped in a short inner body; the dialog panel stays centered and grows with content.
+
+### Light and dark theme
+
+Chronos ships a **dual palette** driven by CSS custom properties, not duplicate component trees.
+
+- **Class hook:** `html.dark` toggles dark appearance. Tailwind’s `dark:` variant is wired with `@custom-variant dark (&:where(html.dark, html.dark *));` so utilities like `dark:bg-surface` resolve against the dark tree.
+- **Token source:** `src/app/globals.css` defines every semantic color twice: under `:root` (light) and `html.dark` (dark). Examples: light primary `#366769`, dark primary `#8ecbce`; backgrounds move from cream paper (`#fbf9f5`) to near-black (`#121211`) with elevated surfaces on `surface-container-*` steps.
+- **Tailwind bridge:** `@theme inline` maps `--color-*` entries to `var(--c-*)`, so classes such as `bg-background`, `text-on-background`, `bg-primary`, and `border-surface-container-highest` follow the active theme automatically.
+- **Persistence and FOUC avoidance:** `ThemeScript` (`next/script`, `strategy="beforeInteractive"`) reads `localStorage` key `chronos-theme` (`"dark"` | `"light"`). If unset, it follows `prefers-color-scheme: dark`. It adds or removes `dark` on `<html>` before paint. `ThemeToggle` updates the class and writes the same key.
+- **Surfaces:** `body` uses `var(--c-background)` and `var(--c-on-background)`. Shared extras include `--c-overlay-scrim`, `--c-paper-shadow`, and focus rings (`--c-ring-primary`, `--c-ring-error`) with distinct light/dark values.
+- **Settings:** Settings → **Appearance** exposes the same toggle (`ThemeToggle`) with copy that themes are per device.
+- **Chrome:** `TopBar` includes `ThemeToggle` (desktop and mobile breakpoints).
+- **Brand mark:** The app chrome mark (`FlolabsMark` in `src/components/brand/FlolabsMark.tsx`) uses `fill="var(--c-primary)"` so the logo matches the theme primary in light and dark. Auth pages that still use `/flchron-logo.svg` as a static image keep a fixed fill inside the SVG file.
+- **Migration aid:** `scripts/apply-semantic-theme-classes.mjs` can help replace legacy hard-coded hex Tailwind classes with semantic tokens.
+
+New UI should prefer **semantic Tailwind tokens** (`bg-surface-container-low`, `text-primary`, …) or `var(--c-*)` in inline styles, not raw hex utilities, so both themes stay correct.
 
 ### Branding
-- Desktop sidebar shows the FloLabs logo as the primary persistent brand mark.
-- On mobile, the top bar shows the FloLabs logo as the toggle for the sidebar-style navigation.
-- Desktop top bar does not duplicate the logo.
+- Desktop sidebar shows the FloLabs mark (`FlolabsMark`) as the primary persistent brand mark.
+- On mobile, the top bar shows the same mark inside the menu toggle control for sidebar-style navigation.
+- Desktop top bar does not duplicate the logo in the main title row (aside from the mobile-only header block).
 
 ### Project Color Palette
 - `#366769` — deep teal
@@ -603,6 +620,7 @@ FloLabs_Chronos/
 ├── CLAUDE.md
 ├── GAME_MASTER.md
 ├── scripts/
+│   ├── apply-semantic-theme-classes.mjs
 │   ├── migrate-tags.ts
 │   ├── migrate-edited-field.ts
 │   ├── migrate-entry-tasks.ts
@@ -625,9 +643,11 @@ FloLabs_Chronos/
 │   │       ├── sse/
 │   │       └── cron/
 │   ├── components/
+│   │   ├── brand/
 │   │   ├── entries/
 │   │   ├── layout/
 │   │   ├── reports/
+│   │   ├── theme/
 │   │   ├── timer/
 │   │   └── ui/
 │   ├── hooks/

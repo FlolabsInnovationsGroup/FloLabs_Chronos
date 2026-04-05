@@ -13,6 +13,7 @@ Project context for coding agents working on this repository.
 - `ARCHITECTURE.md` is the **target contract**. If the code disagrees with it, fix the code.
 - `GAME_MASTER.md` tracks **what's done and what's next**. Update it after completing work.
 - `CLAUDE.md` (this file) defines **how to work** in this repo. Follow these guardrails.
+- **Default: push after work.** When you finish a coherent change (code, docs, or both), commit with a clear message and **`git push`** to `origin` so the remote stays current. Skip pushing only if the user explicitly asks you not to, or if there is nothing to commit.
 
 When starting a session, check `GAME_MASTER.md` first for current status and handoff notes.
 
@@ -43,8 +44,8 @@ This is not an open signup SaaS. Treat it as an internal operations tool with st
 
 ### Role Rules
 - **Admins** can manage teams, invite users, create/edit/archive/delete projects, see all tags (with creator names), and see all reports.
-- **Team leads** can see members and reports for their own team only.
-- **Members** can see only their own reports and which team they belong to.
+- **Team leads** can see members and reports for the **union of all teams** they belong to (`team_memberships`), not a single team only.
+- **Members** can see only their own reports and their team assignment(s).
 - **All users** can create, view, and delete their own tags.
 
 ### Team Rules
@@ -93,8 +94,43 @@ This is not an open signup SaaS. Treat it as an internal operations tool with st
 - **Auth:** NextAuth v5 credentials
 - **Realtime:** Redis + SSE
 - **Validation:** Zod
-- **Styling:** Tailwind CSS with Vellum Ink tokens
+- **Styling:** Tailwind CSS with Vellum Ink tokens; light/dark via CSS variables (`--c-*` on `:root` and `html.dark`)
 - **Deployment:** Vercel — project `flo-labs-chronos`, team `flomad-dev`
+
+---
+
+## Dark theme (implementation contract)
+
+Chronos uses **one component tree** and **two palettes** defined in `src/app/globals.css`.
+
+### How the active theme is chosen
+
+1. **`ThemeScript`** (`src/components/theme/ThemeScript.tsx`) runs with Next.js `Script` **`strategy="beforeInteractive"`** so it executes before hydration.
+2. It reads **`localStorage`** key **`chronos-theme`**. Values: `"dark"` or `"light"`.
+3. If the key is missing or invalid, it uses **`window.matchMedia("(prefers-color-scheme: dark)")`**.
+4. It adds **`class="dark"`** on **`<html>`** when dark should apply, otherwise removes it. This prevents a light flash when the user prefers or saved dark mode.
+
+### CSS and Tailwind wiring
+
+- **Light tokens** live under **`:root`**; **dark tokens** override under **`html.dark`** (same variable names, different hex values). Primary example: light `#366769`, dark `#8ecbce`.
+- **`@theme inline`** maps Tailwind color names to **`var(--c-*)`**, so utilities like **`bg-background`**, **`text-on-background`**, **`bg-surface-container-low`**, **`border-surface-container-highest`**, **`text-primary`**, **`bg-error`**, etc. switch with the theme.
+- **`@custom-variant dark`** is defined as **`&:where(html.dark, html.dark *)`** so **`dark:`** utilities apply whenever `html` has the `dark` class (not the OS `prefers-color-scheme` alone).
+- **`body`** sets **`background-color`** and **`color`** from **`var(--c-background)`** / **`var(--c-on-background)`**. Editorial extras (`--c-paper-shadow`, `--c-overlay-scrim`, `--c-warm-*`, focus rings) also have light/dark values.
+
+### User controls
+
+- **`ThemeToggle`** (`src/components/theme/ThemeToggle.tsx`): toggles **`html.dark`**, writes **`chronos-theme`** to **`localStorage`**, shows sun/moon icon with tooltip. Used in **`TopBar`** and Settings (**Appearance** card in `SettingsForm.tsx`).
+
+### Brand and assets
+
+- In-app chrome logo: **`FlolabsMark`** (`src/components/brand/FlolabsMark.tsx`) uses **`fill="var(--c-primary)"`** so the mark always matches semantic primary.
+- **`/public/flchron-logo.svg`** used on auth pages via **`<Image>`** keeps fixed colors inside the SVG; it does **not** inherit `--c-*` unless inlined or changed.
+
+### Authoring rules for agents
+
+- Prefer **semantic Tailwind classes** or **`var(--c-*)`** in inline styles; avoid new **hard-coded hex** utilities that ignore dark mode.
+- Use **`dark:`** only when light and dark must **diverge outside** the shared token set (should be rare).
+- Optional maintenance: **`node scripts/apply-semantic-theme-classes.mjs`** helps migrate pasted hex classes toward semantic tokens.
 
 ---
 
@@ -141,7 +177,7 @@ Use `src/lib/permissions.ts` for all access control. Avoid scattered inline role
 
 ### Keep V1 simple
 
-Do not introduce multi-team membership unless explicitly requested.
+Multi-team membership via **`team_memberships`** is already in scope. Do not introduce new membership or permission dimensions (e.g. extra org layers, ad-hoc sharing rules) unless explicitly requested.
 
 ### Avoid destructive user deletion
 
@@ -168,7 +204,7 @@ Tag selection must use `TagMultiSelect` component. It supports multi-select and 
 
 ### Modals must fit the screen
 
-All modals use `max-h-[calc(100vh-2rem)]` with scrollable body content. The Modal component handles this automatically.
+The shared **`Modal`** (`src/components/ui/Modal.tsx`) uses a **fixed full-viewport overlay** with **`overflow-y-auto`** on the **outer** wrapper so tall dialogs scroll with the page, not inside a clipped inner body. Keep new modal content compatible with that pattern (avoid nested `overflow-hidden` that traps focus or scroll).
 
 ---
 
@@ -215,5 +251,6 @@ When continuing work, check these first:
 - `GAME_MASTER.md` for current status
 - whether the database schema matches `src/lib/db/schema.ts`
 - whether the build passes: `pnpm exec tsc --noEmit && pnpm build`
+- whether your branch is pushed (`git status` / `git log origin/main..HEAD`)
 
 If the docs and code disagree, follow `ARCHITECTURE.md` and update the code to match.

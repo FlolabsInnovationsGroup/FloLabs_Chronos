@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -9,8 +8,8 @@ import { useTimer } from "@/hooks/use-timer";
 import { TimerActionIndicator } from "@/components/timer/TimerActionIndicator";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { getTimerStopValidation } from "@/lib/timer-rules";
+import { FlolabsMark } from "@/components/brand/FlolabsMark";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import floLabsLogo from "../../../assets/logo/FLChron_logo_512px.png";
 
 const NAV_LINKS = [
   { href: "/timer", label: "Dashboard" },
@@ -84,7 +83,7 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
             )}
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-container-low">
-              <Image src={floLabsLogo} alt="" priority className="h-6 w-6 object-contain" />
+              <FlolabsMark className="h-6 w-6" />
             </span>
             <span
               className="text-[11px] font-semibold uppercase tracking-[0.18em]"

@@ -509,7 +509,8 @@ interface TeamMemberDirectoryEntry {
   name: string;
   normalizedName: string;
   email: string | null;
-  normalizedEmail: string | null;
+  personalEmail: string | null;
+  normalizedEmails: string[];
   teamRelationIds: string[];
   onboardingRelationIds: string[];
 }
@@ -610,6 +611,12 @@ async function buildTeamMemberDirectory(): Promise<TeamMemberDirectory> {
       const email = page.properties?.Email?.type === "email"
         ? page.properties.Email.email?.trim() ?? null
         : null;
+      const personalEmail = page.properties?.["Personal Email"]?.type === "email"
+        ? page.properties["Personal Email"].email?.trim() ?? null
+        : null;
+      const normalizedEmails = [email, personalEmail]
+        .filter((value): value is string => Boolean(value?.trim()))
+        .map((value) => normalizeEmailValue(value));
       const teamRelationIds = page.properties?.Team?.type === "relation"
         ? (page.properties.Team.relation ?? []).map((relation) => relation.id)
         : [];
@@ -622,7 +629,8 @@ async function buildTeamMemberDirectory(): Promise<TeamMemberDirectory> {
         name,
         normalizedName: normalizeName(name),
         email,
-        normalizedEmail: email ? normalizeEmailValue(email) : null,
+        personalEmail,
+        normalizedEmails,
         teamRelationIds,
         onboardingRelationIds,
       });
@@ -844,34 +852,58 @@ async function resolveExistingTeamMemberPage(params: CreateTeamMemberPageParams)
   const normalizedEmail = normalizeEmailValue(params.email);
   const normalizedName = normalizeName(params.name);
 
+  const nameMatches = normalizedName
+    ? directory.entries.filter((entry) => entry.normalizedName === normalizedName)
+    : [];
+
+  if (nameMatches.length === 1) {
+    const match = nameMatches[0];
+    const hasKnownEmail = match.normalizedEmails.length > 0;
+    const emailMatches = hasKnownEmail && normalizedEmail ? match.normalizedEmails.includes(normalizedEmail) : false;
+
+    if (!hasKnownEmail || emailMatches) {
+      return { entry: match, matchedBy: "name" };
+    }
+
+    throw new TeamMemberLookupConflictError(
+      `Found an existing Notion Team Member page by name for "${params.name}", but its email fields do not match "${params.email}". Resolve the Team Member page email fields in Notion first, then retry the invitation.`,
+      [{ id: match.id, name: match.name, email: match.email ?? match.personalEmail }]
+    );
+  }
+
+  if (nameMatches.length > 1) {
+    const emailRefinedMatches = normalizedEmail
+      ? nameMatches.filter((entry) => entry.normalizedEmails.includes(normalizedEmail))
+      : [];
+
+    if (emailRefinedMatches.length === 1) {
+      return { entry: emailRefinedMatches[0], matchedBy: "email" };
+    }
+
+    const emptyEmailMatches = nameMatches.filter((entry) => entry.normalizedEmails.length === 0);
+    if (emailRefinedMatches.length === 0 && emptyEmailMatches.length === 1) {
+      return { entry: emptyEmailMatches[0], matchedBy: "name" };
+    }
+
+    throw new TeamMemberLookupConflictError(
+      buildTeamMemberConflictMessage("name", params.name, nameMatches),
+      nameMatches.map((match) => ({ id: match.id, name: match.name, email: match.email ?? match.personalEmail }))
+    );
+  }
+
   const emailMatches = normalizedEmail
-    ? directory.entries.filter((entry) => entry.normalizedEmail === normalizedEmail)
+    ? directory.entries.filter((entry) => entry.normalizedEmails.includes(normalizedEmail))
     : [];
 
   if (emailMatches.length > 1) {
     throw new TeamMemberLookupConflictError(
       buildTeamMemberConflictMessage("email", params.email, emailMatches),
-      emailMatches.map((match) => ({ id: match.id, name: match.name, email: match.email }))
+      emailMatches.map((match) => ({ id: match.id, name: match.name, email: match.email ?? match.personalEmail }))
     );
   }
 
   if (emailMatches.length === 1) {
     return { entry: emailMatches[0], matchedBy: "email" };
-  }
-
-  const nameMatches = normalizedName
-    ? directory.entries.filter((entry) => entry.normalizedName === normalizedName)
-    : [];
-
-  if (nameMatches.length > 1) {
-    throw new TeamMemberLookupConflictError(
-      buildTeamMemberConflictMessage("name", params.name, nameMatches),
-      nameMatches.map((match) => ({ id: match.id, name: match.name, email: match.email }))
-    );
-  }
-
-  if (nameMatches.length === 1) {
-    return { entry: nameMatches[0], matchedBy: "name" };
   }
 
   return null;
@@ -882,7 +914,7 @@ export async function findTeamMemberPageIdByEmail(email: string): Promise<string
   if (!normalizedEmail) return null;
 
   const directory = await getTeamMemberDirectory();
-  const matches = directory.entries.filter((entry) => entry.normalizedEmail === normalizedEmail);
+  const matches = directory.entries.filter((entry) => entry.normalizedEmails.includes(normalizedEmail));
   return matches.length === 1 ? matches[0].id : null;
 }
 

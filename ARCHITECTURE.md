@@ -62,10 +62,10 @@ Chronos should be treated as **read-only for team memberships** from a product p
 
 That means:
 - Notion Team Members data is the operational source of truth for membership intent.
-- Before creating a Notion Team Member page from an invitation, Chronos must first try to reuse an existing page by exact normalized email.
-- If no email match exists, Chronos must try a careful exact normalized-name lookup in the Team Members database.
-- If exactly one normalized-name match exists, Chronos should reuse that page instead of creating a duplicate.
-- If multiple plausible Team Member pages match the same email or normalized name, Chronos must fail the invitation flow with a clear ambiguity error instead of blindly creating another page.
+- Before creating a Notion Team Member page from an invitation, Chronos must first try a careful exact normalized-name lookup in the Team Members database.
+- If exactly one normalized-name match exists, Chronos should reuse that page instead of creating a duplicate, then validate against both `Email` and `Personal Email` when those fields are present.
+- If multiple same-name pages exist, Chronos may use `Email` or `Personal Email` to disambiguate; if ambiguity remains, it must fail with a clear error instead of blindly creating another page.
+- If no safe normalized-name reuse path exists, Chronos may fall back to exact email matching across both `Email` and `Personal Email` fields.
 - If Chronos creates an invitation and no matching Notion Team Member page exists, Chronos should create that page so the invite flow does not break integrity.
 - When Chronos creates a missing Team Member page from an invitation, it must populate the invited teams into the `Team` relation at creation time.
 - Chronos now attempts to apply a Notion template during that Team Member create call: it uses `NOTION_TEAM_MEMBER_TEMPLATE_ID` when configured, otherwise it asks Notion to use the Team Members data source's default template.
@@ -90,9 +90,9 @@ User onboarding is invite-based:
 7. First-time invite acceptance and reset-password completion both use reveal-password controls and a required password confirmation field before submit.
 8. On success, the user is created and assigned to all invited teams via `team_memberships`.
 9. The first team is still mirrored into `users.team_id` for compatibility.
-10. During invitation flow, Chronos first tries to resolve an existing Notion Team Member page by exact normalized email, then by exact normalized name.
-11. If exactly one existing Team Member page matches, Chronos reuses it and applies only minimal safe updates (missing email, missing invited-team relation entries, missing onboarding relation) instead of creating a duplicate.
-12. If multiple existing Team Member pages plausibly match, Chronos blocks invitation creation with a clear ambiguity error so the team can fix Notion manually first.
+10. During invitation flow, Chronos first tries to resolve an existing Notion Team Member page by exact normalized name.
+11. If exactly one existing Team Member page matches by name, Chronos reuses it and validates the invite email against both `Email` and `Personal Email` when present; pages with no email set may still be safely reused.
+12. If multiple existing Team Member pages plausibly match, Chronos uses `Email`/`Personal Email` to disambiguate when possible and otherwise blocks invitation creation with a clear ambiguity error so the team can fix Notion manually first.
 13. If no match exists, Chronos creates the missing Notion Team Member page, attempts to apply the configured/default Team Member template, then creates and links a related Onboarding page using the Onboarding database's default template when the Notion API supports it.
 14. After Team Member integrity is ensured, Chronos creates the invitee in every relevant MasterClass database derived from the MasterClasses index, deduplicating per target MasterClass database, titling the page as `{full name}'s {MasterClass name}`, and applying the target database's default template when possible.
 

@@ -282,7 +282,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-5 overflow-x-hidden">
       <div className="flex flex-col gap-1.5 relative">
         <input
           type="text"
@@ -308,7 +308,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
             }
           }}
           placeholder="What are you working on?"
-          className="w-full bg-transparent text-2xl italic text-[#31332f] placeholder:text-[#b2b2ad] outline-none py-2 border-b-2 border-[#efeee9] focus:border-[#366769] transition-colors"
+          className="w-full min-w-0 bg-transparent text-xl sm:text-2xl italic text-[#31332f] placeholder:text-[#b2b2ad] outline-none py-2 border-b-2 border-[#efeee9] focus:border-[#366769] transition-colors"
           style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
         />
         <TaskSuggestions query={description} open={showSuggestions} onPick={applySuggestion} />
@@ -339,7 +339,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
       />
 
       {(activeTimer || selectedTask) && (
-        <div className="flex items-center justify-between gap-3 -mt-2">
+        <div className="flex flex-col gap-1 sm:-mt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <p
             className="text-xs text-[#5e605b]"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -358,7 +358,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
       )}
 
       {!activeTimer && (
-        <div className="flex flex-wrap gap-2 items-start">
+        <div className="flex flex-col gap-2 items-stretch sm:flex-row sm:flex-wrap sm:items-start">
           <DropdownSelect
             value={selectedProjectId}
             onChange={setSelectedProjectId}
@@ -370,7 +370,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
               label: p.name,
               color: p.color ?? "#366769",
             }))}
-            className="min-w-[160px]"
+            className="w-full min-w-0 sm:min-w-[160px]"
           />
 
           <TagMultiSelect
@@ -379,7 +379,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
             options={localTags}
             onCreate={createTag}
             placeholder="Add tags…"
-            className="flex-1 min-w-[160px]"
+            className="w-full min-w-0 sm:flex-1 sm:min-w-[160px]"
           />
         </div>
       )}
@@ -414,7 +414,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
                 label: p.name,
                 color: p.color ?? "#366769",
               }))}
-              className="min-w-[160px]"
+              className="w-full min-w-0 sm:min-w-[160px]"
               disabled={submitting || projectSaving}
             />
           </div>
@@ -471,7 +471,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
         </p>
       )}
 
-      <div className="flex items-center gap-3 pt-2">
+      <div className="flex flex-col items-stretch gap-3 pt-2 sm:flex-row sm:items-center">
         {!activeTimer ? (
           <Button variant="primary" size="lg" onClick={handleStart} loading={submitting}>
             <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>

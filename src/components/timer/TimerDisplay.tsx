@@ -19,9 +19,9 @@ export function TimerDisplay() {
       </p>
 
       {/* Giant time display */}
-      <div className="flex items-baseline gap-0 leading-none">
+      <div className="flex min-w-0 items-baseline gap-0 leading-none overflow-hidden">
         <span
-          className="text-7xl md:text-8xl font-light italic text-[#31332f] tabular-nums tracking-tight select-none"
+          className="block max-w-full overflow-hidden text-5xl xs:text-6xl sm:text-7xl md:text-8xl font-light italic text-[#31332f] tabular-nums tracking-tight select-none"
           style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
         >
           {display}

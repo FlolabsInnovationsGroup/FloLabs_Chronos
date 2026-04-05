@@ -34,7 +34,7 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
   const sessionCount = todayEntries.length + (activeTimer ? 1 : 0);
 
   return (
-    <Card className="p-6 flex flex-col gap-6">
+    <Card className="min-w-0 p-4 sm:p-6 flex flex-col gap-5 sm:gap-6 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2
@@ -62,16 +62,16 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
         >
           Hours logged today
         </p>
-        <div className="flex items-baseline gap-1.5">
+        <div className="flex flex-wrap items-baseline gap-1.5 min-w-0">
           <span
-            className="text-5xl font-light italic text-[#31332f] tabular-nums"
+            className="text-4xl sm:text-5xl font-light italic text-[#31332f] tabular-nums break-words"
             style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
           >
             {hoursInt}
             <span className="text-2xl text-[#5e605b]">h {minutesInt}m</span>
           </span>
           <span
-            className="text-sm text-[#b2b2ad] ml-1"
+            className="text-sm text-[#b2b2ad] ml-0 sm:ml-1"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             / {targetHours}h target

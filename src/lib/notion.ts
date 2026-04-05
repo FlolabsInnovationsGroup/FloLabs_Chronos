@@ -9,6 +9,11 @@ interface NotionDatabaseProperty {
   type: string;
 }
 
+interface NotionBlockResult {
+  id: string;
+  type: string;
+}
+
 interface NotionDatabaseResponse {
   properties: Record<string, NotionDatabaseProperty>;
 }
@@ -24,6 +29,7 @@ interface NotionPagePropertyValue {
   email?: string | null;
   relation?: Array<{ id: string }>;
   status?: { name?: string | null };
+  number?: number | null;
 }
 
 interface NotionPageResult {
@@ -181,13 +187,13 @@ function notionHeaders(version = NOTION_VERSION, apiKey = process.env.NOTION_API
   };
 }
 
-async function getDatabaseSchema(databaseId: string, version = NOTION_VERSION) {
-  const cacheKey = `${version}:${databaseId}`;
+async function getDatabaseSchema(databaseId: string, version = NOTION_VERSION, apiKey = process.env.NOTION_API_KEY) {
+  const cacheKey = `${apiKey ?? "default"}:${version}:${databaseId}`;
   const cached = databaseSchemaPromises.get(cacheKey);
   if (cached) return cached;
 
   const promise = fetch(`${NOTION_API_BASE}/databases/${databaseId}`, {
-    headers: notionHeaders(version),
+    headers: notionHeaders(version, apiKey),
   }).then(async (res) => {
     if (!res.ok) {
       const err = await res.text();
@@ -199,6 +205,69 @@ async function getDatabaseSchema(databaseId: string, version = NOTION_VERSION) {
 
   databaseSchemaPromises.set(cacheKey, promise);
   return promise;
+}
+
+async function queryAllDatabasePages(databaseId: string, notionApiKey: string): Promise<NotionPageResult[]> {
+  const results: NotionPageResult[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const body: Record<string, unknown> = { page_size: 100 };
+    if (cursor) body.start_cursor = cursor;
+
+    const res = await fetch(`${NOTION_API_BASE}/databases/${databaseId}/query`, {
+      method: "POST",
+      headers: notionHeaders(NOTION_VERSION, notionApiKey),
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const err = await res.text().catch(() => "");
+      throw new Error(`Notion query failed: ${err || res.statusText}`);
+    }
+
+    const data = (await res.json()) as {
+      results: NotionPageResult[];
+      has_more: boolean;
+      next_cursor: string | null;
+    };
+
+    results.push(...data.results);
+    cursor = data.has_more && data.next_cursor ? data.next_cursor : undefined;
+  } while (cursor);
+
+  return results;
+}
+
+async function queryAllBlockChildren(blockId: string, notionApiKey: string): Promise<NotionBlockResult[]> {
+  const results: NotionBlockResult[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const url = new URL(`${NOTION_API_BASE}/blocks/${blockId}/children`);
+    url.searchParams.set("page_size", "100");
+    if (cursor) url.searchParams.set("start_cursor", cursor);
+
+    const res = await fetch(url, {
+      headers: notionHeaders(NOTION_VERSION, notionApiKey),
+    });
+
+    if (!res.ok) {
+      const err = await res.text().catch(() => "");
+      throw new Error(`Notion block children lookup failed: ${err || res.statusText}`);
+    }
+
+    const data = (await res.json()) as {
+      results: NotionBlockResult[];
+      has_more: boolean;
+      next_cursor: string | null;
+    };
+
+    results.push(...data.results);
+    cursor = data.has_more && data.next_cursor ? data.next_cursor : undefined;
+  } while (cursor);
+
+  return results;
 }
 
 function findPropertyName(
@@ -1091,12 +1160,194 @@ async function ensureOnboardingPageLinkedToTeamMember(params: {
   });
 }
 
+interface MasterClassIndexEntry {
+  pageId: string;
+  name: string;
+  teamRelationIds: string[];
+  targetDatabaseId: string | null;
+}
+
+async function resolvePageBackedDatabaseId(pageId: string, notionApiKey: string): Promise<string | null> {
+  try {
+    await getDatabaseSchema(pageId, NOTION_VERSION, notionApiKey);
+    return pageId;
+  } catch {
+    // not a database id; keep going
+  }
+
+  const blocks = await queryAllBlockChildren(pageId, notionApiKey).catch(() => []);
+  for (const block of blocks) {
+    if (block.type !== "child_database") continue;
+    try {
+      await getDatabaseSchema(block.id, NOTION_VERSION, notionApiKey);
+      return block.id;
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+async function loadMasterClassIndexEntries(params: {
+  databaseId: string;
+  notionApiKey: string;
+}): Promise<MasterClassIndexEntry[]> {
+  const pages = await queryAllDatabasePages(params.databaseId, params.notionApiKey);
+  const entries = await Promise.all(
+    pages.map(async (page) => ({
+      pageId: page.id,
+      name: getPageName(page),
+      teamRelationIds:
+        page.properties?.Teams?.type === "relation"
+          ? (page.properties.Teams.relation ?? []).map((relation) => relation.id)
+          : [],
+      targetDatabaseId: await resolvePageBackedDatabaseId(page.id, params.notionApiKey),
+    }))
+  );
+
+  return entries.filter((entry) => entry.teamRelationIds.length > 0 && Boolean(entry.targetDatabaseId));
+}
+
+async function ensureMasterClassPageInDatabase(params: {
+  databaseId: string;
+  teamMemberPageId: string;
+  name: string;
+  email: string;
+  notionApiKey: string;
+}): Promise<void> {
+  const schema = await getDatabaseSchema(params.databaseId, NOTION_VERSION, params.notionApiKey);
+  const titleProperty = findPropertyName(schema.properties, ["Name", "Title", "MasterClass", "Full Name"], ["title"]);
+
+  if (!titleProperty) {
+    throw new Error(`MasterClass database ${params.databaseId} has no writable title property.`);
+  }
+
+  const relationProperty = findPropertyName(
+    schema.properties,
+    ["Team Member", "Team Members", "Member", "User", "Users"],
+    ["relation"]
+  );
+  const emailProperty = findPropertyName(schema.properties, ["Email", "Personal Email"], ["email"]);
+
+  const existingPages = await queryAllDatabasePages(params.databaseId, params.notionApiKey);
+  const normalizedName = normalizeName(params.name);
+  const normalizedEmail = normalizeEmailValue(params.email);
+
+  for (const page of existingPages) {
+    const relationIds =
+      relationProperty && page.properties?.[relationProperty]?.type === "relation"
+        ? (page.properties[relationProperty].relation ?? []).map((relation) => relation.id)
+        : [];
+
+    if (relationIds.includes(params.teamMemberPageId)) {
+      return;
+    }
+
+    const existingEmail =
+      emailProperty && page.properties?.[emailProperty]?.type === "email"
+        ? page.properties[emailProperty].email?.trim().toLowerCase() ?? null
+        : null;
+    if (existingEmail && existingEmail === normalizedEmail) {
+      if (relationProperty) {
+        await appendPageRelation({
+          pageId: page.id,
+          propertyName: relationProperty,
+          relatedPageId: params.teamMemberPageId,
+          notionApiKey: params.notionApiKey,
+        });
+      }
+      return;
+    }
+
+    const existingName = getPageName(page);
+    if (existingName && normalizeName(existingName) === normalizedName) {
+      const patch: Record<string, unknown> = {};
+      if (emailProperty && !existingEmail) {
+        patch[emailProperty] = buildEmailValue(params.email);
+      }
+      if (relationProperty && !relationIds.includes(params.teamMemberPageId)) {
+        patch[relationProperty] = buildRelationValue([...new Set([...relationIds, params.teamMemberPageId])]);
+      }
+      await patchPageProperties({
+        pageId: page.id,
+        notionApiKey: params.notionApiKey,
+        properties: patch,
+      });
+      return;
+    }
+  }
+
+  const properties: Record<string, unknown> = {
+    [titleProperty]: buildTitleValue(params.name),
+  };
+
+  if (emailProperty) {
+    properties[emailProperty] = buildEmailValue(params.email);
+  }
+
+  if (relationProperty) {
+    properties[relationProperty] = buildRelationValue([params.teamMemberPageId]);
+  }
+
+  const dataSourceId = await getDatabaseDataSourceId(params.databaseId, params.notionApiKey).catch(() => null);
+  if (dataSourceId) {
+    const templated = await createPageWithTemplate({
+      dataSourceId,
+      notionApiKey: params.notionApiKey,
+      properties,
+      template: { type: "default" },
+    });
+    if (templated) return;
+  }
+
+  await createPageWithoutTemplate({
+    databaseId: params.databaseId,
+    notionApiKey: params.notionApiKey,
+    properties,
+  });
+}
+
+async function ensureMasterClassPagesForTeamMember(params: {
+  teamMemberPageId: string;
+  name: string;
+  email: string;
+  notionApiKey: string;
+  notionTeamPageIds: string[];
+  notionMasterClassesIndexDbId: string | null;
+}): Promise<void> {
+  if (!params.notionMasterClassesIndexDbId || params.notionTeamPageIds.length === 0) return;
+
+  const relevantTeamIds = new Set(params.notionTeamPageIds);
+  const indexEntries = await loadMasterClassIndexEntries({
+    databaseId: params.notionMasterClassesIndexDbId,
+    notionApiKey: params.notionApiKey,
+  });
+
+  const targetDatabaseIds = new Set<string>();
+  for (const entry of indexEntries) {
+    if (!entry.targetDatabaseId) continue;
+    if (!entry.teamRelationIds.some((teamId) => relevantTeamIds.has(teamId))) continue;
+    targetDatabaseIds.add(entry.targetDatabaseId);
+  }
+
+  for (const databaseId of targetDatabaseIds) {
+    await ensureMasterClassPageInDatabase({
+      databaseId,
+      teamMemberPageId: params.teamMemberPageId,
+      name: params.name,
+      email: params.email,
+      notionApiKey: params.notionApiKey,
+    });
+  }
+}
+
 export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): Promise<CreateTeamMemberPageResult | null> {
   if (params.notionTeamPageIds.length === 0) {
     throw new Error("Cannot create Team Member page in Notion without Team relations.");
   }
 
-  const { notionApiKey, notionOnboardingsDbId, notionTeamMembersDbId } = await getNotionConfig();
+  const { notionApiKey, notionOnboardingsDbId, notionTeamMembersDbId, notionMasterClassesIndexDbId } = await getNotionConfig();
   if (!notionApiKey || !notionTeamMembersDbId) return null;
 
   const existingMatch = await resolveExistingTeamMemberPage(params);
@@ -1108,6 +1359,15 @@ export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): 
       email: params.email,
       name: params.name,
       notionTeamPageIds: params.notionTeamPageIds,
+    });
+
+    await ensureMasterClassPagesForTeamMember({
+      teamMemberPageId: existingMatch.entry.id,
+      name: params.name,
+      email: params.email,
+      notionApiKey,
+      notionTeamPageIds: params.notionTeamPageIds,
+      notionMasterClassesIndexDbId,
     });
 
     return {
@@ -1154,6 +1414,14 @@ export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): 
     email: params.email,
     notionApiKey,
     notionOnboardingsDbId,
+  });
+  await ensureMasterClassPagesForTeamMember({
+    teamMemberPageId: result.pageId,
+    name: params.name,
+    email: params.email,
+    notionApiKey,
+    notionTeamPageIds: params.notionTeamPageIds,
+    notionMasterClassesIndexDbId,
   });
   await buildTeamMemberDirectory().catch(() => {});
 

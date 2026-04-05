@@ -70,8 +70,9 @@ That means:
 - When Chronos creates a missing Team Member page from an invitation, it must populate the invited teams into the `Team` relation at creation time.
 - Chronos now attempts to apply a Notion template during that Team Member create call: it uses `NOTION_TEAM_MEMBER_TEMPLATE_ID` when configured, otherwise it asks Notion to use the Team Members data source's default template.
 - After creating a new Team Member page, Chronos also creates a related page in the separate Onboarding database (`NOTION_ONBOARDINGS_DB_ID`) and links it back through the Team Member page's `Onboarding` relation property.
-- When Chronos reuses an existing Team Member page, it should make only the minimal safe repairs needed for invite integrity: fill in a missing email, merge in any missing invited-team relations, and create/link an Onboarding page when that relation is still empty.
-- For Onboarding pages, Chronos asks Notion to use the Onboarding data source's default template when the API/data source supports template creation; if Notion rejects that template flow, Chronos falls back to a plain page create instead of faking template content locally.
+- Chronos also creates the user in every relevant MasterClass database discovered from the MasterClasses index database (`NOTION_MASTERCLASSES_INDEX_DB_ID`). Each index row maps one or more Teams to a target MasterClass database; if multiple invited teams map to the same target database, Chronos deduplicates so only one MasterClass page is created in that database for the user.
+- When Chronos reuses an existing Team Member page, it should make only the minimal safe repairs needed for invite integrity: fill in a missing email, merge in any missing invited-team relations, create/link an Onboarding page when that relation is still empty, and ensure any newly-relevant MasterClass pages exist.
+- For Onboarding pages and MasterClass pages, Chronos asks Notion to use the target data source's default template when the API/data source supports template creation; if Notion rejects that template flow, Chronos falls back to a plain page create instead of faking template content locally.
 - Notion applies template content asynchronously after page creation. Chronos relies on the API-supported template flow for page structure/content, while still sending the critical invitation properties (`Name`, `Email`, `Team`, `Status=Onboarding`) in the Team Member create request so onboarding integrity is preserved.
 - When a Chronos user is renamed by an admin, Chronos should also update the Team Member page name in Notion, first via stored `notionTeamMemberId` and then via email-based fallback resolution if the stored ID is missing.
 - Chronos should not evolve into a freeform local membership editor that diverges from Notion.
@@ -92,6 +93,7 @@ User onboarding is invite-based:
 11. If exactly one existing Team Member page matches, Chronos reuses it and applies only minimal safe updates (missing email, missing invited-team relation entries, missing onboarding relation) instead of creating a duplicate.
 12. If multiple existing Team Member pages plausibly match, Chronos blocks invitation creation with a clear ambiguity error so the team can fix Notion manually first.
 13. If no match exists, Chronos creates the missing Notion Team Member page, attempts to apply the configured/default Team Member template, then creates and links a related Onboarding page using the Onboarding database's default template when the Notion API supports it.
+14. After Team Member integrity is ensured, Chronos creates the invitee in every relevant MasterClass database derived from the MasterClasses index, deduplicating per target MasterClass database and applying the target database's default template when possible.
 
 Legacy compatibility remains in place:
 - `invitations.team_id` is still present as a primary/default team pointer.
@@ -384,6 +386,12 @@ Synced fields:
 - `/api/cron/teams-sync`
 - Intended schedule: every 15 minutes
 
+### Weekly Team Member time-commitment sync
+- `/api/cron/weekly-time-commitment-sync`
+- Intended schedule: weekly (currently Monday 06:00 UTC in `vercel.json`)
+- Mirrors `users.weekly_target_hours` into the Notion Team Members database property named `Time Commitment`
+- Resolves Team Member pages by stored `notionTeamMemberId` first, then exact email, then exact normalized name when unique
+
 ### Sync rules
 - Upsert by Notion page ID.
 - Update changed metadata in Chronos.
@@ -512,6 +520,7 @@ For completed entries edited through the API:
 - `NOTION_ONBOARDINGS_DB_ID` — Onboarding DB used to create linked onboarding pages for new invitees
 - `NOTION_TEAMS_DB_ID` — Teams DB
 - `NOTION_TASKS_DB_ID` — Tasks DB
+- `NOTION_MASTERCLASSES_INDEX_DB_ID` — database whose rows map teams to target MasterClass databases
 - `NOTION_TEAM_MEMBER_TEMPLATE_ID` — optional explicit Team Member template/page ID for invitation-created Team Member pages
 - `NOTION_TEAM_MEMBER_TEMPLATE_TIMEZONE` — optional timezone used when Notion resolves template variables like `@today` / `@now` (defaults to `UTC` for internal integrations)
 - `CRON_SECRET`

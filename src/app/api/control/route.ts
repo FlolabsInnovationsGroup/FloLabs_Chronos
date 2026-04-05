@@ -10,6 +10,7 @@ const controlSchema = z.object({
   notionTeamMembersDbId: z.string().min(1),
   notionOnboardingsDbId: z.string().min(1),
   notionTeamsDbId: z.string().min(1),
+  notionMasterClassesIndexDbId: z.string().min(1),
   discordBotToken: z.string().optional().default(""),
   discordGuildId: z.string().optional().default(""),
   discordCategoryId: z.string().optional().default(""),
@@ -36,6 +37,7 @@ export async function GET() {
       notionTeamMembersDbId: config.notionTeamMembersDbId ?? "",
       notionOnboardingsDbId: config.notionOnboardingsDbId ?? "",
       notionTeamsDbId: config.notionTeamsDbId ?? "",
+      notionMasterClassesIndexDbId: config.notionMasterClassesIndexDbId ?? "",
       discordBotTokenPresent: Boolean(discordBotToken),
       discordBotTokenMasked: discordBotToken ? `${discordBotToken.slice(0, 6)}••••••${discordBotToken.slice(-4)}` : "",
       discordGuildId: discordGuildId ?? "",
@@ -62,6 +64,7 @@ export async function POST(req: Request) {
     { key: APP_CONFIG_KEYS.notionTeamMembersDbId, value: parsed.data.notionTeamMembersDbId, updatedBy: session.user.id },
     { key: APP_CONFIG_KEYS.notionOnboardingsDbId, value: parsed.data.notionOnboardingsDbId, updatedBy: session.user.id },
     { key: APP_CONFIG_KEYS.notionTeamsDbId, value: parsed.data.notionTeamsDbId, updatedBy: session.user.id },
+    { key: APP_CONFIG_KEYS.notionMasterClassesIndexDbId, value: parsed.data.notionMasterClassesIndexDbId, updatedBy: session.user.id },
   ];
   if (parsed.data.notionApiKey.trim()) {
     values.unshift({ key: APP_CONFIG_KEYS.notionApiKey, value: parsed.data.notionApiKey.trim(), isSecret: true, updatedBy: session.user.id });

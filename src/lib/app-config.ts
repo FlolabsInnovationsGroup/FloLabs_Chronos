@@ -8,6 +8,7 @@ export const APP_CONFIG_KEYS = {
   notionTeamMembersDbId: "notion.teamMembersDbId",
   notionOnboardingsDbId: "notion.onboardingsDbId",
   notionTeamsDbId: "notion.teamsDbId",
+  notionMasterClassesIndexDbId: "notion.masterClassesIndexDbId",
   discordBotToken: "discord.botToken",
   discordGuildId: "discord.guildId",
   discordCategoryId: "discord.categoryId",
@@ -64,6 +65,7 @@ export async function getNotionConfig() {
     APP_CONFIG_KEYS.notionTeamMembersDbId,
     APP_CONFIG_KEYS.notionOnboardingsDbId,
     APP_CONFIG_KEYS.notionTeamsDbId,
+    APP_CONFIG_KEYS.notionMasterClassesIndexDbId,
   ]);
 
   return {
@@ -78,5 +80,9 @@ export async function getNotionConfig() {
       map.get(APP_CONFIG_KEYS.notionOnboardingsDbId) ||
       null,
     notionTeamsDbId: process.env.NOTION_TEAMS_DB_ID || map.get(APP_CONFIG_KEYS.notionTeamsDbId) || null,
+    notionMasterClassesIndexDbId:
+      process.env.NOTION_MASTERCLASSES_INDEX_DB_ID ||
+      map.get(APP_CONFIG_KEYS.notionMasterClassesIndexDbId) ||
+      null,
   };
 }

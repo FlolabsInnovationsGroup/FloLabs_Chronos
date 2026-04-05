@@ -26,7 +26,7 @@ export function TimerDashboardClient({
   targetHours,
 }: TimerDashboardClientProps) {
   const { data: session } = useSession();
-  const { activeTimer, start } = useTimer();
+  const { activeTimer, start, stop } = useTimer();
   const userId = session?.user.id;
 
   const [todayEntries, setTodayEntries] = useState<TimeEntry[]>(initialTodayEntries);
@@ -70,7 +70,7 @@ export function TimerDashboardClient({
 
   async function handleReplay(entry: TimeEntry) {
     if (activeTimer) {
-      throw new Error("Stop the current timer before starting a new one from a past entry.");
+      await stop(false);
     }
 
     await start({

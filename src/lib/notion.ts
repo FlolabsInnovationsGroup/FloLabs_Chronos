@@ -1167,6 +1167,10 @@ interface MasterClassIndexEntry {
   targetDatabaseId: string | null;
 }
 
+function buildMasterClassPageTitle(fullName: string, masterClassName: string): string {
+  return `${fullName.trim()}'s ${masterClassName.trim()}`;
+}
+
 async function resolvePageBackedDatabaseId(pageId: string, notionApiKey: string): Promise<string | null> {
   try {
     await getDatabaseSchema(pageId, NOTION_VERSION, notionApiKey);
@@ -1213,6 +1217,7 @@ async function ensureMasterClassPageInDatabase(params: {
   databaseId: string;
   teamMemberPageId: string;
   name: string;
+  masterClassName: string;
   email: string;
   notionApiKey: string;
 }): Promise<void> {
@@ -1231,7 +1236,9 @@ async function ensureMasterClassPageInDatabase(params: {
   const emailProperty = findPropertyName(schema.properties, ["Email", "Personal Email"], ["email"]);
 
   const existingPages = await queryAllDatabasePages(params.databaseId, params.notionApiKey);
+  const canonicalTitle = buildMasterClassPageTitle(params.name, params.masterClassName);
   const normalizedName = normalizeName(params.name);
+  const normalizedCanonicalTitle = normalizeName(canonicalTitle);
   const normalizedEmail = normalizeEmailValue(params.email);
 
   for (const page of existingPages) {
@@ -1239,30 +1246,24 @@ async function ensureMasterClassPageInDatabase(params: {
       relationProperty && page.properties?.[relationProperty]?.type === "relation"
         ? (page.properties[relationProperty].relation ?? []).map((relation) => relation.id)
         : [];
-
-    if (relationIds.includes(params.teamMemberPageId)) {
-      return;
-    }
+    const existingName = getPageName(page);
+    const normalizedExistingName = normalizeName(existingName);
 
     const existingEmail =
       emailProperty && page.properties?.[emailProperty]?.type === "email"
         ? page.properties[emailProperty].email?.trim().toLowerCase() ?? null
         : null;
-    if (existingEmail && existingEmail === normalizedEmail) {
-      if (relationProperty) {
-        await appendPageRelation({
-          pageId: page.id,
-          propertyName: relationProperty,
-          relatedPageId: params.teamMemberPageId,
-          notionApiKey: params.notionApiKey,
-        });
-      }
-      return;
-    }
+    const matchesExistingPage =
+      relationIds.includes(params.teamMemberPageId) ||
+      (existingEmail ? existingEmail === normalizedEmail : false) ||
+      normalizedExistingName === normalizedCanonicalTitle ||
+      normalizedExistingName === normalizedName;
 
-    const existingName = getPageName(page);
-    if (existingName && normalizeName(existingName) === normalizedName) {
+    if (matchesExistingPage) {
       const patch: Record<string, unknown> = {};
+      if (existingName !== canonicalTitle) {
+        patch[titleProperty] = buildTitleValue(canonicalTitle);
+      }
       if (emailProperty && !existingEmail) {
         patch[emailProperty] = buildEmailValue(params.email);
       }
@@ -1279,7 +1280,7 @@ async function ensureMasterClassPageInDatabase(params: {
   }
 
   const properties: Record<string, unknown> = {
-    [titleProperty]: buildTitleValue(params.name),
+    [titleProperty]: buildTitleValue(canonicalTitle),
   };
 
   if (emailProperty) {
@@ -1325,10 +1326,14 @@ async function ensureMasterClassPagesForTeamMember(params: {
   });
 
   const targetDatabaseIds = new Set<string>();
+  const targetDatabaseNames = new Map<string, string>();
   for (const entry of indexEntries) {
     if (!entry.targetDatabaseId) continue;
     if (!entry.teamRelationIds.some((teamId) => relevantTeamIds.has(teamId))) continue;
     targetDatabaseIds.add(entry.targetDatabaseId);
+    if (!targetDatabaseNames.has(entry.targetDatabaseId)) {
+      targetDatabaseNames.set(entry.targetDatabaseId, entry.name);
+    }
   }
 
   for (const databaseId of targetDatabaseIds) {
@@ -1336,6 +1341,7 @@ async function ensureMasterClassPagesForTeamMember(params: {
       databaseId,
       teamMemberPageId: params.teamMemberPageId,
       name: params.name,
+      masterClassName: targetDatabaseNames.get(databaseId) ?? "MasterClass",
       email: params.email,
       notionApiKey: params.notionApiKey,
     });

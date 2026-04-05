@@ -1,7 +1,7 @@
 # GAME_MASTER.md — FloLabs Chronos Development Tracker
 
 ## Project Status
-**Date:** 2026-04-04
+**Date:** 2026-04-05
 **Phase:** V1 feature-complete → V1.1 active development
 **Stack:** Next.js 16 + Drizzle + Neon Postgres + Redis + NextAuth v5
 **URL:** https://athensgreecemarathon.com
@@ -184,6 +184,9 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 
 ## Recent Updates
 
+- Mobile dashboard navigation now exposes the FloLabs logo in the phone header and uses it to toggle a sidebar-style navigation panel, while keeping the desktop sidebar behavior intact.
+- Users page tables now use tighter horizontal spacing and slightly smaller minimum widths so more columns stay visible on smaller screens without dropping content.
+- MasterClass page creation/repair now uses the canonical title format `{full name}'s {MasterClass name}` from the MasterClasses index mapping while still reusing safe legacy matches to avoid duplicate pages.
 - Reports page mobile layout was tightened so the main report content no longer depends on horizontal scrolling: summary stats now stack responsively, the breakdown table renders as stacked cards on small screens, the detailed-entry sort controls wrap cleanly, and report entry cards split their action/duration row for narrow widths while preserving all scoped report data.
 - Live-state indicators that were still using the old sky-blue treatment were updated to the warm red live treatment on the Users page live badge, the active-timer card, and the mobile bottom timer pill.
 - Users page now shows which visible users are currently live, along with the running duration of their active entry; the data comes from existing Redis-backed active timers and is refreshed from timer SSE events without expanding member visibility.
@@ -211,6 +214,8 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 - Production deployed at https://athensgreecemarathon.com
 - Database schema migrated (per-user tags, time_entry_tags join table, and optional `time_entries.project_id` for empty-start timers)
 - Build passes: `pnpm exec tsc --noEmit` and `pnpm build` both green
+- Current verification for the mobile-nav / Users-page / MasterClass-title update is green: `pnpm exec tsc --noEmit`, targeted `pnpm exec eslint ...`, and `pnpm build`
+- Repo-wide `pnpm exec eslint .` still reports unrelated pre-existing issues in auth/control, tooltip, report-filter, timer-dashboard, and Discord-provisioning files outside this task
 - Admin account: `pm@flolabsinnovations.com`
 
 ---

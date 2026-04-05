@@ -71,6 +71,7 @@ That means:
 - Chronos now attempts to apply a Notion template during that Team Member create call: it uses `NOTION_TEAM_MEMBER_TEMPLATE_ID` when configured, otherwise it asks Notion to use the Team Members data source's default template.
 - After creating a new Team Member page, Chronos also creates a related page in the separate Onboarding database (`NOTION_ONBOARDINGS_DB_ID`) and links it back through the Team Member page's `Onboarding` relation property.
 - Chronos also creates the user in every relevant MasterClass database discovered from the MasterClasses index database (`NOTION_MASTERCLASSES_INDEX_DB_ID`). Each index row maps one or more Teams to a target MasterClass database; if multiple invited teams map to the same target database, Chronos deduplicates so only one MasterClass page is created in that database for the user.
+- MasterClass pages created or repaired by Chronos use the exact title format `{full name}'s {MasterClass name}` based on the matching MasterClasses index row; legacy plain-name pages may still be reused when they match safely so duplicate pages are not created.
 - When Chronos reuses an existing Team Member page, it should make only the minimal safe repairs needed for invite integrity: fill in a missing email, merge in any missing invited-team relations, create/link an Onboarding page when that relation is still empty, and ensure any newly-relevant MasterClass pages exist.
 - For Onboarding pages and MasterClass pages, Chronos asks Notion to use the target data source's default template when the API/data source supports template creation; if Notion rejects that template flow, Chronos falls back to a plain page create instead of faking template content locally.
 - Notion applies template content asynchronously after page creation. Chronos relies on the API-supported template flow for page structure/content, while still sending the critical invitation properties (`Name`, `Email`, `Team`, `Status=Onboarding`) in the Team Member create request so onboarding integrity is preserved.
@@ -93,7 +94,7 @@ User onboarding is invite-based:
 11. If exactly one existing Team Member page matches, Chronos reuses it and applies only minimal safe updates (missing email, missing invited-team relation entries, missing onboarding relation) instead of creating a duplicate.
 12. If multiple existing Team Member pages plausibly match, Chronos blocks invitation creation with a clear ambiguity error so the team can fix Notion manually first.
 13. If no match exists, Chronos creates the missing Notion Team Member page, attempts to apply the configured/default Team Member template, then creates and links a related Onboarding page using the Onboarding database's default template when the Notion API supports it.
-14. After Team Member integrity is ensured, Chronos creates the invitee in every relevant MasterClass database derived from the MasterClasses index, deduplicating per target MasterClass database and applying the target database's default template when possible.
+14. After Team Member integrity is ensured, Chronos creates the invitee in every relevant MasterClass database derived from the MasterClasses index, deduplicating per target MasterClass database, titling the page as `{full name}'s {MasterClass name}`, and applying the target database's default template when possible.
 
 Legacy compatibility remains in place:
 - `invitations.team_id` is still present as a primary/default team pointer.
@@ -579,8 +580,9 @@ Depending on actual database schema detection, Chronos maps:
 - Modals must fit viewport height and scroll internally.
 
 ### Branding
-- Sidebar shows the FloLabs logo as the primary persistent brand mark.
-- Top bar no longer duplicates the logo.
+- Desktop sidebar shows the FloLabs logo as the primary persistent brand mark.
+- On mobile, the top bar shows the FloLabs logo as the toggle for the sidebar-style navigation.
+- Desktop top bar does not duplicate the logo.
 
 ### Project Color Palette
 - `#366769` — deep teal

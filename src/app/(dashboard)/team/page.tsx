@@ -426,9 +426,13 @@ export default function TeamPage() {
     { label: "Joined", key: "joined" },
     ...(role === "admin" || role === "team_lead" ? [{ label: "Actions", key: null }] : []),
   ];
+  const compactHeadCellClass =
+    "px-3 sm:px-4 lg:px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[#5e605b]";
+  const compactBodyCellClass = "px-3 sm:px-4 lg:px-5 py-4 align-top";
+  const compactEmptyCellClass = "px-3 sm:px-4 lg:px-5 py-10 text-center text-sm text-[#b2b2ad]";
 
   return (
-    <div className="flex flex-col gap-8 max-w-6xl mx-auto">
+    <div className="flex flex-col gap-8 max-w-[90rem] mx-auto">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1
@@ -601,14 +605,14 @@ export default function TeamPage() {
         ) : (
           <>
             <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto">
-              <table className="w-full min-w-[960px]">
+              <table className="w-full min-w-[880px] lg:min-w-[960px]">
                 <thead>
                   <tr className="bg-[#f5f4ef]">
                     {userColumns.map((column) => (
                       <th
                         key={column.label}
                         onClick={column.key ? () => handleSort(column.key as SortKey) : undefined}
-                        className={`text-left px-5 py-3 text-xs font-semibold text-[#5e605b] uppercase tracking-wide select-none ${column.key ? "cursor-pointer hover:text-[#31332f]" : ""}`}
+                        className={`${compactHeadCellClass} select-none ${column.key ? "cursor-pointer hover:text-[#31332f]" : ""}`}
                         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                       >
                         <span className="inline-flex items-center gap-1">
@@ -627,7 +631,7 @@ export default function TeamPage() {
                   {loading ? (
                     [...Array(3)].map((_, index) => (
                       <tr key={index}>
-                        <td colSpan={userColumns.length} className="px-5 py-4">
+                        <td colSpan={userColumns.length} className="px-3 sm:px-4 lg:px-5 py-4">
                           <div className="h-4 rounded bg-[#f5f4ef] animate-pulse" />
                         </td>
                       </tr>
@@ -636,7 +640,7 @@ export default function TeamPage() {
                     <tr>
                       <td
                         colSpan={userColumns.length}
-                        className="px-5 py-10 text-center text-sm text-[#b2b2ad]"
+                        className={compactEmptyCellClass}
                         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                       >
                         No users in scope.
@@ -647,7 +651,7 @@ export default function TeamPage() {
                       const liveDuration = getLiveDuration(user.activeTimer?.startedAt, now);
                       return (
                         <tr key={user.id} className={index % 2 === 0 ? "" : "bg-[#fbf9f5]"}>
-                          <td className="px-5 py-4 align-top">
+                          <td className={compactBodyCellClass}>
                             <div>
                               <p
                                 className="text-sm font-medium text-[#31332f]"
@@ -663,12 +667,12 @@ export default function TeamPage() {
                               </p>
                             </div>
                           </td>
-                          <td className="px-5 py-4 whitespace-nowrap align-top">
+                          <td className={`${compactBodyCellClass} whitespace-nowrap`}>
                             <Badge color={user.role === "admin" ? "primary" : user.role === "team_lead" ? "secondary" : "tertiary"}>
                               <span className="whitespace-nowrap">{formatRole(user.role)}</span>
                             </Badge>
                           </td>
-                          <td className="px-5 py-4 align-top">
+                          <td className={compactBodyCellClass}>
                             <div className="flex flex-wrap gap-1">
                               {(user.teams ?? []).length > 0 ? (
                                 (user.teams ?? []).map((team) => (
@@ -686,13 +690,13 @@ export default function TeamPage() {
                               )}
                             </div>
                           </td>
-                          <td className="px-5 py-4 align-top">
+                          <td className={compactBodyCellClass}>
                             {liveDuration !== null ? (
                               <div className="flex flex-col gap-1">
                                 <Badge color="custom" className="bg-[#fde0d9] text-[#791903]">Live · {formatDurationHuman(liveDuration)}</Badge>
                                 {user.activeTimer?.description && (
                                   <p
-                                    className="max-w-[16rem] text-xs text-[#5e605b] break-words"
+                                    className="max-w-[12rem] text-xs text-[#5e605b] break-words md:max-w-[14rem] lg:max-w-[16rem]"
                                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                                   >
                                     {user.activeTimer.description}
@@ -716,7 +720,7 @@ export default function TeamPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-5 py-4 align-top">
+                          <td className={compactBodyCellClass}>
                             <span
                               className="text-sm font-medium italic text-[#31332f] tabular-nums"
                               style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
@@ -730,12 +734,12 @@ export default function TeamPage() {
                               / week
                             </span>
                           </td>
-                          <td className="px-5 py-4 align-top">
+                          <td className={compactBodyCellClass}>
                             <Badge color={user.isActive ? "primary" : "secondary"}>
                               {user.isActive ? "active" : "inactive"}
                             </Badge>
                           </td>
-                          <td className="px-5 py-4 align-top">
+                          <td className={compactBodyCellClass}>
                             <span
                               className="text-sm text-[#5e605b]"
                               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -750,8 +754,8 @@ export default function TeamPage() {
                             </span>
                           </td>
                           {(role === "admin" || role === "team_lead") && (
-                            <td className="px-5 py-4 align-top">
-                              <div className="flex gap-1">
+                            <td className={compactBodyCellClass}>
+                              <div className="flex gap-0.5 sm:gap-1">
                                 <Tooltip label="Edit member">
                                   <button
                                     onClick={() => setEditingUser(user)}
@@ -787,13 +791,13 @@ export default function TeamPage() {
 
             {role === "admin" && (
               <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto">
-                <table className="w-full min-w-[760px]">
+                <table className="w-full min-w-[680px] lg:min-w-[760px]">
                   <thead>
                     <tr className="bg-[#f5f4ef]">
                       {["Invitee", "Role", "Teams", "Expires", "Actions"].map((heading) => (
                         <th
                           key={heading}
-                          className="text-left px-5 py-3 text-xs font-semibold text-[#5e605b] uppercase tracking-wide"
+                          className={compactHeadCellClass}
                           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                         >
                           {heading}
@@ -806,7 +810,7 @@ export default function TeamPage() {
                       <tr>
                         <td
                           colSpan={5}
-                          className="px-5 py-10 text-center text-sm text-[#b2b2ad]"
+                          className={compactEmptyCellClass}
                           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                         >
                           No invitations yet.
@@ -815,7 +819,7 @@ export default function TeamPage() {
                     ) : (
                       openInvitations.map((invite, index) => (
                         <tr key={invite.id} className={index % 2 === 0 ? "" : "bg-[#fbf9f5]"}>
-                          <td className="px-5 py-4">
+                          <td className={compactBodyCellClass}>
                             <p
                               className="text-sm font-medium text-[#31332f]"
                               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -829,12 +833,12 @@ export default function TeamPage() {
                               {invite.email}
                             </p>
                           </td>
-                          <td className="px-5 py-4 whitespace-nowrap">
+                          <td className={`${compactBodyCellClass} whitespace-nowrap`}>
                             <Badge color={invite.role === "team_lead" ? "secondary" : "tertiary"}>
                               <span className="whitespace-nowrap">{formatRole(invite.role)}</span>
                             </Badge>
                           </td>
-                          <td className="px-5 py-4">
+                          <td className={compactBodyCellClass}>
                             <span
                               className="text-sm text-[#5e605b]"
                               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -842,7 +846,7 @@ export default function TeamPage() {
                               {(invite.teams ?? []).map((team) => team.name).join(", ") || "Unknown"}
                             </span>
                           </td>
-                          <td className="px-5 py-4">
+                          <td className={compactBodyCellClass}>
                             <span
                               className="text-sm text-[#5e605b]"
                               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -854,7 +858,7 @@ export default function TeamPage() {
                               })}
                             </span>
                           </td>
-                          <td className="px-5 py-4">
+                          <td className={compactBodyCellClass}>
                             <div className="flex gap-2 flex-wrap">
                               <Button variant="ghost" size="sm" onClick={() => void handleCopyInvite(invite.inviteUrl)}>
                                 Copy Link

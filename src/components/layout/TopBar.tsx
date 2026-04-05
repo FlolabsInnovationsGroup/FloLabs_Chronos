@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -7,13 +8,19 @@ import { cn } from "@/lib/utils";
 import { useTimer } from "@/hooks/use-timer";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { getTimerStopValidation } from "@/lib/timer-rules";
+import floLabsLogo from "../../../assets/logo/FLChron_logo_512px.png";
 
 const NAV_LINKS = [
   { href: "/timer", label: "Dashboard" },
   { href: "/reports", label: "Reports" },
 ];
 
-export function TopBar() {
+interface TopBarProps {
+  mobileNavOpen?: boolean;
+  onToggleMobileNav?: () => void;
+}
+
+export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const { activeTimer, start, stop, loading } = useTimer();
@@ -26,6 +33,7 @@ export function TopBar() {
     : canStop
       ? "Stop timer"
       : stopValidation.message;
+  const mobileNavLabel = mobileNavOpen ? "Hide navigation" : "Show navigation";
 
   async function handleTimerAction() {
     if (loading) return;
@@ -59,9 +67,36 @@ export function TopBar() {
   );
 
   return (
-    <header className="sticky top-0 z-30 bg-[#fbf9f5]/90 backdrop-blur-md">
-      <div className="flex items-center justify-between px-6 h-14">
-        <div />
+    <header className="sticky top-0 z-[70] bg-[#fbf9f5]/90 backdrop-blur-md">
+      <div className="flex h-14 items-center justify-between px-3 sm:px-4 md:px-6">
+        <div className="md:hidden">
+          <button
+            type="button"
+            onClick={onToggleMobileNav}
+            aria-label={mobileNavLabel}
+            aria-controls="mobile-navigation"
+            aria-expanded={mobileNavOpen}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full border border-[#e3e3dc] bg-[#fffdf9] py-1.5 pl-2 pr-3 text-[#5e605b] transition-colors",
+              mobileNavOpen ? "bg-[#f5f4ef] text-[#31332f]" : "hover:bg-[#f5f4ef] hover:text-[#31332f]"
+            )}
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f5f4ef]">
+              <Image src={floLabsLogo} alt="" priority className="h-6 w-6 object-contain" />
+            </span>
+            <span
+              className="text-[11px] font-semibold uppercase tracking-[0.18em]"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              Menu
+            </span>
+            <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
+              {mobileNavOpen ? "close" : "menu"}
+            </span>
+          </button>
+        </div>
+
+        <div className="hidden md:block" />
 
         <div className="flex items-center gap-4">
           <nav className="hidden md:flex items-center gap-1">

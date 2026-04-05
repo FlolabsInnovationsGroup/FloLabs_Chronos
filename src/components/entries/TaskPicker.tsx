@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { InlineSearchLoading } from "@/components/ui/InlineSearchLoading";
+import { FloatingListPanel } from "@/components/ui/FloatingListPanel";
 
 interface TaskOption {
   id: string;
@@ -24,6 +25,8 @@ export function TaskPicker({
   disabled = false,
 }: TaskPickerProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const anchorRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -35,9 +38,9 @@ export function TaskPicker({
     if (!open) return;
 
     function handlePointerDown(event: PointerEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
+      const t = event.target as Node;
+      if (rootRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
     }
 
     function handleEscape(event: KeyboardEvent) {
@@ -130,7 +133,7 @@ export function TaskPicker({
         {label}
       </label>
 
-      <div className="relative">
+      <div className="relative" ref={anchorRef}>
         <div className="flex items-center gap-2 rounded-xl bg-[#f5f4ef] px-3 py-2 min-h-11">
           <span className="material-symbols-outlined text-[#366769]" style={{ fontSize: "18px" }}>
             task
@@ -168,53 +171,54 @@ export function TaskPicker({
           )}
         </div>
 
-        {open && (
-          <div className="absolute left-0 right-0 top-[calc(100%+0.4rem)] z-50 overflow-hidden rounded-2xl bg-[#fbf9f5] paper-shadow ring-1 ring-[#31332f]/6">
-            <div className="max-h-72 overflow-y-auto overscroll-contain p-1.5">
-              {errorMessage ? (
-                <div
-                  className="px-3 py-2 text-sm text-[#a73b21]"
-                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                >
-                  {errorMessage}
-                </div>
-              ) : options.length === 0 ? (
-                <div
-                  className="px-3 py-2 text-sm text-[#8f918b]"
-                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                >
-                  {loading ? "Searching tasks…" : query.trim() ? "No matching tasks" : "Start typing to search tasks"}
-                </div>
-              ) : (
-                options.map((option) => {
-                  const active = option.id === value?.id;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => choose(option)}
-                      className={`w-full rounded-xl px-3 py-2 text-left text-sm transition-colors flex items-center gap-2 ${
-                        active ? "bg-[#e9e8e3] text-[#31332f]" : "text-[#5e605b] hover:bg-[#f5f4ef]"
-                      }`}
-                      style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                    >
-                      <span className="material-symbols-outlined shrink-0 text-[#366769]" style={{ fontSize: "16px" }}>
-                        task
-                      </span>
-                      <span className="truncate">{option.title}</span>
-                      {active && (
-                        <span className="material-symbols-outlined ml-auto text-[#366769]" style={{ fontSize: "16px" }}>
-                          check
-                        </span>
-                      )}
-                    </button>
-                  );
-                })
-              )}
+        <FloatingListPanel
+          ref={panelRef}
+          open={open}
+          anchorRef={anchorRef}
+          scrollClassName="max-h-72 overflow-y-auto overscroll-contain p-1.5"
+        >
+          {errorMessage ? (
+            <div
+              className="px-3 py-2 text-sm text-[#a73b21]"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              {errorMessage}
             </div>
-          </div>
-        )}
+          ) : options.length === 0 ? (
+            <div
+              className="px-3 py-2 text-sm text-[#8f918b]"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              {loading ? "Searching tasks…" : query.trim() ? "No matching tasks" : "Start typing to search tasks"}
+            </div>
+          ) : (
+            options.map((option) => {
+              const active = option.id === value?.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => choose(option)}
+                  className={`w-full rounded-xl px-3 py-2 text-left text-sm transition-colors flex items-center gap-2 ${
+                    active ? "bg-[#e9e8e3] text-[#31332f]" : "text-[#5e605b] hover:bg-[#f5f4ef]"
+                  }`}
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  <span className="material-symbols-outlined shrink-0 text-[#366769]" style={{ fontSize: "16px" }}>
+                    task
+                  </span>
+                  <span className="truncate">{option.title}</span>
+                  {active && (
+                    <span className="material-symbols-outlined ml-auto text-[#366769]" style={{ fontSize: "16px" }}>
+                      check
+                    </span>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </FloatingListPanel>
       </div>
     </div>
   );

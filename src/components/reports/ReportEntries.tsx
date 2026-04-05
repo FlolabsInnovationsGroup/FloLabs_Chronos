@@ -63,10 +63,13 @@ export function ReportEntries({ entries }: ReportEntriesProps) {
   ];
 
   return (
-    <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-hidden">
+    <div className="bg-surface-container-lowest rounded-xl paper-shadow">
       <button
+        type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between px-6 py-4 bg-[#f5f4ef] hover:bg-[#efeee9] transition-colors cursor-pointer"
+        className={`w-full flex items-center justify-between px-6 py-4 bg-[#f5f4ef] hover:bg-[#efeee9] transition-colors cursor-pointer ${
+          expanded ? "rounded-t-xl" : "rounded-xl"
+        }`}
       >
         <div className="flex items-center gap-3">
           <h3
@@ -94,7 +97,7 @@ export function ReportEntries({ entries }: ReportEntriesProps) {
       </button>
 
       {expanded && (
-        <div className="px-2 py-2 flex flex-col gap-3">
+        <div className="px-2 py-2 flex flex-col gap-3 rounded-b-xl">
           <div className="flex flex-col gap-2 px-4 py-3 rounded-xl bg-[#f5f4ef] sm:flex-row sm:flex-wrap sm:items-center">
             <span
               className="text-xs font-semibold uppercase tracking-wide text-[#5e605b]"

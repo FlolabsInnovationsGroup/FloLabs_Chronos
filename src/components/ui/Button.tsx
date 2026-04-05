@@ -3,7 +3,7 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "stop";
 type ButtonSize = "sm" | "md" | "lg";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -22,6 +22,8 @@ const variantStyles: Record<ButtonVariant, string> = {
     "bg-transparent text-on-surface-variant hover:bg-surface-container-low active:bg-surface-container disabled:opacity-50",
   danger:
     "bg-transparent text-error hover:bg-warm-surface active:bg-warm-muted disabled:opacity-50",
+  stop:
+    "bg-error text-on-chrome hover:bg-error-dim active:brightness-95 disabled:opacity-50",
 };
 
 const sizeStyles: Record<ButtonSize, string> = {

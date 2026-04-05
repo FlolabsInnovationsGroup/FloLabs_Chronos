@@ -481,7 +481,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
           </Button>
         ) : (
           <Button
-            variant={stopValidation.canStop ? "primary" : "secondary"}
+            variant={stopValidation.canStop ? "stop" : "secondary"}
             size="lg"
             onClick={handleStop}
             loading={submitting}

@@ -6,7 +6,6 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { normalizeEmail } from "@/lib/invitations";
 import { ensureDiscordResourcesForUser } from "@/lib/discord-provisioning";
-import { findTeamMemberPageIdByEmail } from "@/lib/notion";
 
 const registerSchema = z.object({
   token: z.string().min(1),
@@ -40,9 +39,6 @@ export async function POST(req: Request) {
   }
 
   const hashedPassword = await bcrypt.hash(password, 12);
-  const notionTeamMemberId =
-    invite.notionTeamMemberId ?? (await findTeamMemberPageIdByEmail(normalizedEmail).catch(() => null));
-
   const [user] = await db
     .insert(users)
     .values({
@@ -52,7 +48,7 @@ export async function POST(req: Request) {
       role: invite.role,
       teamId: teamIds[0] ?? invite.teamId,
       isActive: true,
-      notionTeamMemberId,
+      notionTeamMemberId: invite.notionTeamMemberId ?? null,
     })
     .returning({
       id: users.id,

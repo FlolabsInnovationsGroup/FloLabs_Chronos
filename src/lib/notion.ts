@@ -747,37 +747,6 @@ export async function searchTeamMemberPages(
   }));
 }
 
-export async function buildTeamMemberIndex(): Promise<Map<string, string>> {
-  const directory = await buildTeamMemberDirectory();
-  const grouped = new Map<string, TeamMemberDirectoryEntry[]>();
-
-  for (const entry of directory.entries) {
-    if (!entry.normalizedName) continue;
-    const list = grouped.get(entry.normalizedName) ?? [];
-    list.push(entry);
-    grouped.set(entry.normalizedName, list);
-  }
-
-  const index = new Map<string, string>();
-  for (const [name, matches] of grouped.entries()) {
-    if (matches.length === 1) {
-      index.set(name, matches[0].id);
-    }
-  }
-
-  return index;
-}
-
-export async function resolveTeamMemberPageId(userName: string): Promise<string | null> {
-  const normalizedUserName = normalizeName(userName);
-  if (!normalizedUserName) return null;
-
-  const directory = await getTeamMemberDirectory();
-  const matches = directory.entries.filter((entry) => entry.normalizedName === normalizedUserName);
-
-  return matches.length === 1 ? matches[0].id : null;
-}
-
 export function buildNotionEntryProperties(
   entry: FullEntry,
   teamMemberPageId: string | null,
@@ -840,13 +809,8 @@ export async function syncEntryToNotionFull(entry: FullEntry): Promise<string | 
   const isNew = !entry.notionPageId;
   const status = isNew ? "Processed" : "Edited";
 
-  let teamMemberPageId: string | null = null;
-  const storedId = (entry.user as { notionTeamMemberId?: string | null } | undefined)?.notionTeamMemberId ?? null;
-  if (storedId) {
-    teamMemberPageId = storedId;
-  } else if (entry.user?.name) {
-    teamMemberPageId = await resolveTeamMemberPageId(entry.user.name).catch(() => null);
-  }
+  const teamMemberPageId =
+    (entry.user as { notionTeamMemberId?: string | null } | undefined)?.notionTeamMemberId?.trim() || null;
 
   const schema = await getDatabaseSchema(dbId);
   const properties = buildNotionEntryProperties(entry, teamMemberPageId, status, schema.properties);
@@ -989,86 +953,6 @@ export async function updateTeamMemberRoleInNotion(
   });
 }
 
-function buildTeamMemberConflictMessage(matchType: "email" | "name", value: string, matches: TeamMemberDirectoryEntry[]) {
-  const label = matchType === "email" ? "email" : "normalized name";
-  const formattedMatches = matches
-    .map((match) => `${match.name}${match.email ? ` <${match.email}>` : ""}`)
-    .join(", ");
-
-  return `Cannot safely reuse a Notion Team Member page: multiple existing pages matched the ${label} "${value}" (${formattedMatches}). Resolve the duplicate/ambiguous Team Member pages in Notion first, then retry the invitation.`;
-}
-
-async function resolveExistingTeamMemberPage(params: CreateTeamMemberPageParams): Promise<{ entry: TeamMemberDirectoryEntry; matchedBy: "email" | "name" } | null> {
-  const directory = await getTeamMemberDirectory();
-  const normalizedEmail = normalizeEmailValue(params.email);
-  const normalizedName = normalizeName(params.name);
-
-  const nameMatches = normalizedName
-    ? directory.entries.filter((entry) => entry.normalizedName === normalizedName)
-    : [];
-
-  if (nameMatches.length === 1) {
-    const match = nameMatches[0];
-    const hasKnownEmail = match.normalizedEmails.length > 0;
-    const emailMatches = hasKnownEmail && normalizedEmail ? match.normalizedEmails.includes(normalizedEmail) : false;
-
-    if (!hasKnownEmail || emailMatches) {
-      return { entry: match, matchedBy: "name" };
-    }
-
-    throw new TeamMemberLookupConflictError(
-      `Found an existing Notion Team Member page by name for "${params.name}", but its email fields do not match "${params.email}". Resolve the Team Member page email fields in Notion first, then retry the invitation.`,
-      [{ id: match.id, name: match.name, email: match.email ?? match.personalEmail }]
-    );
-  }
-
-  if (nameMatches.length > 1) {
-    const emailRefinedMatches = normalizedEmail
-      ? nameMatches.filter((entry) => entry.normalizedEmails.includes(normalizedEmail))
-      : [];
-
-    if (emailRefinedMatches.length === 1) {
-      return { entry: emailRefinedMatches[0], matchedBy: "email" };
-    }
-
-    const emptyEmailMatches = nameMatches.filter((entry) => entry.normalizedEmails.length === 0);
-    if (emailRefinedMatches.length === 0 && emptyEmailMatches.length === 1) {
-      return { entry: emptyEmailMatches[0], matchedBy: "name" };
-    }
-
-    throw new TeamMemberLookupConflictError(
-      buildTeamMemberConflictMessage("name", params.name, nameMatches),
-      nameMatches.map((match) => ({ id: match.id, name: match.name, email: match.email ?? match.personalEmail }))
-    );
-  }
-
-  const emailMatches = normalizedEmail
-    ? directory.entries.filter((entry) => entry.normalizedEmails.includes(normalizedEmail))
-    : [];
-
-  if (emailMatches.length > 1) {
-    throw new TeamMemberLookupConflictError(
-      buildTeamMemberConflictMessage("email", params.email, emailMatches),
-      emailMatches.map((match) => ({ id: match.id, name: match.name, email: match.email ?? match.personalEmail }))
-    );
-  }
-
-  if (emailMatches.length === 1) {
-    return { entry: emailMatches[0], matchedBy: "email" };
-  }
-
-  return null;
-}
-
-export async function findTeamMemberPageIdByEmail(email: string): Promise<string | null> {
-  const normalizedEmail = normalizeEmailValue(email);
-  if (!normalizedEmail) return null;
-
-  const directory = await getTeamMemberDirectory();
-  const matches = directory.entries.filter((entry) => entry.normalizedEmails.includes(normalizedEmail));
-  return matches.length === 1 ? matches[0].id : null;
-}
-
 interface TeamMemberTemplatePreference {
   type: "default" | "template_id";
   template_id?: string;
@@ -1090,7 +974,7 @@ interface CreateTeamMemberPageResult {
   templateApplied: boolean;
   templateMode: "default" | "template_id" | "none";
   reusedExisting?: boolean;
-  matchedBy?: "email" | "name" | "explicit";
+  matchedBy?: "explicit";
 }
 
 interface NotionDatabaseLookupResponse {
@@ -1587,6 +1471,10 @@ export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): 
   const { notionApiKey, notionOnboardingsDbId, notionTeamMembersDbId, notionMasterClassesIndexDbId } = await getNotionConfig();
   if (!notionApiKey || !notionTeamMembersDbId) return null;
 
+  if (!params.notionTeamMemberPageId && !params.forceCreateNew) {
+    throw new Error("ensureTeamMemberPage requires notionTeamMemberPageId or forceCreateNew.");
+  }
+
   if (params.notionTeamMemberPageId) {
     await assertTeamMemberPageEligibleForInvite(
       params.notionTeamMemberPageId,
@@ -1621,39 +1509,6 @@ export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): 
       reusedExisting: true,
       matchedBy: "explicit",
     };
-  }
-
-  if (!params.forceCreateNew) {
-    const existingMatch = await resolveExistingTeamMemberPage(params);
-    if (existingMatch) {
-      await updateExistingTeamMemberPage({
-        pageId: existingMatch.entry.id,
-        notionApiKey,
-        notionOnboardingsDbId,
-        email: params.email,
-        name: params.name,
-        notionTeamPageIds: params.notionTeamPageIds,
-      });
-
-      await ensureMasterClassPagesForTeamMember({
-        teamMemberPageId: existingMatch.entry.id,
-        name: params.name,
-        email: params.email,
-        notionApiKey,
-        notionTeamPageIds: params.notionTeamPageIds,
-        notionMasterClassesIndexDbId,
-      });
-
-      await buildTeamMemberDirectory().catch(() => {});
-
-      return {
-        pageId: existingMatch.entry.id,
-        templateApplied: false,
-        templateMode: "none",
-        reusedExisting: true,
-        matchedBy: existingMatch.matchedBy,
-      };
-    }
   }
 
   const teamMemberProperties = buildTeamMemberProperties(params);

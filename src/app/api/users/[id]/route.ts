@@ -15,7 +15,6 @@ import {
 } from "@/lib/permissions";
 import { broadcastDataChange } from "@/lib/realtime";
 import {
-  findTeamMemberPageIdByEmail,
   updateTeamMemberName,
   updateTeamMemberRoleInNotion,
   updateTeamMemberTimeCommitment,
@@ -172,8 +171,7 @@ export async function PATCH(
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const notionTeamMemberId =
-    user.notionTeamMemberId || (await findTeamMemberPageIdByEmail(existingUser.email).catch(() => null));
+  const notionTeamMemberId = user.notionTeamMemberId?.trim() || null;
 
   if (parsed.data.name !== undefined && parsed.data.name.trim() !== existingUser.name) {
     if (notionTeamMemberId) {

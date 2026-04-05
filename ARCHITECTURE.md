@@ -62,21 +62,17 @@ Key rules:
 Chronos should be treated as **read-only for team memberships** from a product perspective.
 
 That means:
-- Notion Team Members data is the operational source of truth for membership intent.
-- Before creating a Notion Team Member page from an invitation, Chronos must first try a careful exact normalized-name lookup in the Team Members database.
-- If exactly one normalized-name match exists, Chronos should reuse that page instead of creating a duplicate, then validate against both `Email` and `Personal Email` when those fields are present.
-- If multiple same-name pages exist, Chronos may use `Email` or `Personal Email` to disambiguate; if ambiguity remains, it must fail with a clear error instead of blindly creating another page.
-- If no safe normalized-name reuse path exists, Chronos may fall back to exact email matching across both `Email` and `Personal Email` fields.
-- If Chronos creates an invitation and no matching Notion Team Member page exists, Chronos should create that page so the invite flow does not break integrity.
-- When Chronos creates a missing Team Member page from an invitation, it must populate the invited teams into the `Team` relation at creation time.
+- Notion Team Members data is the operational source of truth for **which teams** a **linked** user belongs to (the `Team` relation on their Team Member page), once `users.notion_team_member_id` is set.
+- Chronos must **not** infer or match Team Member pages by user email or by name. Admins explicitly pick a Team Members row (search) or choose **create new** when inviting; that page id is stored on `invitations.notion_team_member_id` and copied to `users.notion_team_member_id` on registration. Admins can also set or clear the link when editing a member.
+- When Chronos creates a **new** Team Member page from an invitation, it must populate the invited teams into the `Team` relation at creation time.
 - Chronos now attempts to apply a Notion template during that Team Member create call: it uses `NOTION_TEAM_MEMBER_TEMPLATE_ID` when configured, otherwise it asks Notion to use the Team Members data source's default template.
 - After creating a new Team Member page, Chronos also creates a related page in the separate Onboarding database (`NOTION_ONBOARDINGS_DB_ID`) and links it back through the Team Member page's `Onboarding` relation property.
 - Chronos also creates the user in every relevant MasterClass database discovered from the MasterClasses index database (`NOTION_MASTERCLASSES_INDEX_DB_ID`). Each index row maps one or more Teams to a target MasterClass database; if multiple invited teams map to the same target database, Chronos deduplicates so only one MasterClass page is created in that database for the user.
 - MasterClass pages created or repaired by Chronos use the exact title format `{full name}'s {MasterClass name}` based on the matching MasterClasses index row; legacy plain-name pages may still be reused when they match safely so duplicate pages are not created.
-- When Chronos reuses an existing Team Member page, it should make only the minimal safe repairs needed for invite integrity: fill in a missing email, merge in any missing invited-team relations, create/link an Onboarding page when that relation is still empty, and ensure any newly-relevant MasterClass pages exist.
+- When Chronos updates an **admin-selected** existing Team Member page for an invite, it should make only the minimal safe repairs needed for invite integrity: fill in a missing email, merge in any missing invited-team relations, create/link an Onboarding page when that relation is still empty, and ensure any newly-relevant MasterClass pages exist.
 - For Onboarding pages and MasterClass pages, Chronos asks Notion to use the target data source's default template when the API/data source supports template creation; if Notion rejects that template flow, Chronos falls back to a plain page create instead of faking template content locally.
 - Notion applies template content asynchronously after page creation. Chronos relies on the API-supported template flow for page structure/content, while still sending the critical invitation properties (`Name`, `Email`, `Team`, `Status=Onboarding`) in the Team Member create request so onboarding integrity is preserved.
-- When a Chronos user is renamed by an admin, Chronos should also update the Team Member page name in Notion, first via stored `notionTeamMemberId` and then via email-based fallback resolution if the stored ID is missing.
+- When a Chronos user is renamed by an admin, Chronos updates the Team Member page title in Notion only when `notionTeamMemberId` is set (no email or name fallback).
 - Chronos should not evolve into a freeform local membership editor that diverges from Notion.
 
 ### Invitations
@@ -91,11 +87,10 @@ User onboarding is invite-based:
 7. First-time invite acceptance and reset-password completion both use reveal-password controls and a required password confirmation field before submit.
 8. On success, the user is created and assigned to all invited teams via `team_memberships`.
 9. The first team is still mirrored into `users.team_id` for compatibility.
-10. During invitation flow, Chronos first tries to resolve an existing Notion Team Member page by exact normalized name.
-11. If exactly one existing Team Member page matches by name, Chronos reuses it and validates the invite email against both `Email` and `Personal Email` when present; pages with no email set may still be safely reused.
-12. If multiple existing Team Member pages plausibly match, Chronos uses `Email`/`Personal Email` to disambiguate when possible and otherwise blocks invitation creation with a clear ambiguity error so the team can fix Notion manually first.
-13. If no match exists, Chronos creates the missing Notion Team Member page, attempts to apply the configured/default Team Member template, then creates and links a related Onboarding page using the Onboarding database's default template when the Notion API supports it.
-14. After Team Member integrity is ensured, Chronos creates the invitee in every relevant MasterClass database derived from the MasterClasses index, deduplicating per target MasterClass database, titling the page as `{full name}'s {MasterClass name}`, and applying the target database's default template when possible.
+10. During invitation flow, the admin explicitly selects a Team Member page in Notion (search) or chooses **create new**; Chronos does not auto-resolve pages by name or email.
+11. For a selected existing page, if `Email` or `Personal Email` is set on that page, it must match the invite email or invitation creation fails with a clear error; empty email fields are allowed.
+12. Chronos then ensures the Team Member row (update or create), applies the configured/default Team Member template when creating, links Onboarding and Masterclasses per the operating rules above.
+13. Chronos stores the Team Member page id on `invitations.notion_team_member_id` and copies it to `users.notion_team_member_id` when the user registers.
 
 Legacy compatibility remains in place:
 - `invitations.team_id` is still present as a primary/default team pointer.
@@ -389,9 +384,12 @@ Synced fields:
 - `/api/cron/teams-sync`
 - Intended schedule: every 15 minutes
 
+### Team membership rows (`team_memberships`)
+- For each user with `users.notion_team_member_id` set, the cron loads that Team Member page from Notion and **replaces** that user's `team_memberships` from the page's `Team` relation (Notion team page ids mapped to Chronos `teams.id` via `teams.notion_page_id`). It also sets `users.team_id` to the first mapped team (compatibility).
+- Users **without** `notion_team_member_id` are left unchanged by this step (invite-time and admin-edited memberships remain until an admin links a Team Member page).
+
 ### Team Member time-commitment updates
-- Updating a user's `weekly_target_hours` in Chronos immediately updates the Notion Team Members database property named `Time Commitment`
-- Resolution uses stored `notionTeamMemberId` first, then exact email as fallback when the stored ID is missing
+- Updating a user's `weekly_target_hours` in Chronos immediately updates the Notion Team Members database property named `Time Commitment` when `notionTeamMemberId` is set (no email fallback).
 
 ### Team Member role sync (Chronos → Notion)
 - When an admin changes a user's Chronos role (`admin` / `team_lead` / `member`), Chronos attempts to patch the corresponding Team Member page in Notion: it looks for a **select** or **status** property named `Role`, `Chronos Role`, or `App Role`, and sets the option whose name matches (e.g. `Team Lead`, `Member`, `Admin`) when present in the schema.

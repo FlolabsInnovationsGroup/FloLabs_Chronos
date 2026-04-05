@@ -35,10 +35,9 @@
 - [x] Duplicate email prevention
 - [x] Invitation-created Notion Team Member pages now attempt to apply a Notion template (`NOTION_TEAM_MEMBER_TEMPLATE_ID` when set, otherwise the data source default template) with safe fallback to plain page creation
 - [x] New invitation-created Team Member pages now also create a linked Onboarding database page and attach it through the Team Member page's `Onboarding` relation
-- [x] Invitation flow now reuses existing Team Member pages by exact normalized email first, then exact normalized name, instead of blindly creating duplicates when older Notion records are missing email
-- [x] Invitation flow now blocks ambiguous Team Member matches with a clear 409 error so the team can resolve Notion manually before retrying
-- [x] Invite and Edit Member modals use a Notion Team Members search picker (explicit page selection); invite can create a new row which runs Team Member + Onboarding + Masterclasses provisioning; `invitations.notion_team_member_id` carries the link through registration
-- [x] Reused Team Member pages now receive minimal safe repairs (missing email, missing invited-team relations, missing onboarding relation) instead of creating a duplicate page
+- [x] Invite and Edit Member modals use a Notion Team Members search picker (explicit page or create-new); `invitations.notion_team_member_id` carries the link through registration — no automatic email/name matching for Team Member pages
+- [x] `teams-sync` sets `team_memberships` from each user's linked Notion Team Member page (`Team` relation) only when `users.notion_team_member_id` is set; unlinked users keep invite/admin memberships in Chronos
+- [x] Reused Team Member pages still receive minimal safe repairs (email/teams/onboarding) when chosen explicitly for an invite
 - [x] Confirmed limitation: Notion's public API does not expose a documented guest-invite/share-page endpoint, so Chronos cannot automate Floffice guest invites
 
 ### Team Visibility ✅
@@ -118,7 +117,7 @@
 ### Feature 2: Notion + Discord Sync (replaces Python Lambda) ✅
 
 - `NOTION_ONBOARDINGS_DB_ID` added to `.env.local` and `.env.production.local` for the linked Onboarding database
-- `src/lib/notion.ts` — added `buildTeamMemberIndex`, `resolveTeamMemberPageId`, `buildNotionEntryProperties`, `syncEntryToNotionFull`, `markEntryDeleted`, `queryNotionEntriesWindow`
+- `src/lib/notion.ts` — `buildNotionEntryProperties`, `syncEntryToNotionFull`, `markEntryDeleted`, `queryNotionEntriesWindow` (Team Member relation uses stored `notion_team_member_id` only)
 - `src/lib/discord.ts` — added `sendDiscordText`, `buildEntryAddedMessage`, `buildEntryEditedMessage`, `buildEntryDeletedMessage`
 - `src/lib/redis-cache.ts` — thin Redis get/set wrapper for caching the team name index
 - `src/app/api/cron/notion-sync/route.ts` — full rewrite: upsert new/edited entries, detect deletes, fire Discord notifications fire-and-forget

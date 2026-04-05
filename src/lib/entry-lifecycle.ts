@@ -1,12 +1,7 @@
 import { db } from "@/lib/db";
 import { projects, tags, timeEntries, timeEntryTags, users } from "@/lib/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
-import {
-  markEntryDeleted,
-  resolveTeamMemberPageId,
-  syncEntryToNotionFull,
-  updateEntryStatus,
-} from "@/lib/notion";
+import { markEntryDeleted, syncEntryToNotionFull, updateEntryStatus } from "@/lib/notion";
 import {
   notifyEntryAdded,
   notifyEntryDeleted,
@@ -76,7 +71,7 @@ export async function syncAndNotifyEntry(
     .set({ notionPageId, syncedAt: new Date() })
     .where(eq(timeEntries.id, entryId));
 
-  const notionTeamMemberId = entry.user?.notionTeamMemberId || (entry.user?.name ? await resolveTeamMemberPageId(entry.user.name) : null);
+  const notionTeamMemberId = entry.user?.notionTeamMemberId?.trim() || null;
   if (!notionTeamMemberId) {
     await updateEntryStatus(notionPageId, "Processed").catch(() => {});
     return { synced: true, notified: false, notionPageId, reason: "queued-no-team-member" };

@@ -21,7 +21,7 @@ const createInvitationSchema = z
     role: z.enum(["team_lead", "member"]).default("member"),
     teamId: z.string().uuid().optional(),
     teamIds: z.array(z.string().uuid()).optional(),
-    expiresAt: z.string().datetime().optional(),
+    expiresAt: z.coerce.date().optional(),
     notionTeamMemberPageId: z.string().min(1).optional(),
     createNewNotionTeamMember: z.boolean().optional(),
   })
@@ -86,7 +86,12 @@ export async function POST(req: Request) {
   if (!session?.user || !canManageInvitations(session.user)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
 
-  const body = await req.json();
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   const parsed = createInvitationSchema.safeParse(body);
   if (!parsed.success) {
     const first = parsed.error.issues[0];
@@ -154,8 +159,11 @@ export async function POST(req: Request) {
   }
 
   const token = createInvitationToken();
-  const expiresAt = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : new Date();
-  if (!parsed.data.expiresAt) {
+  let expiresAt: Date;
+  if (parsed.data.expiresAt != null) {
+    expiresAt = parsed.data.expiresAt;
+  } else {
+    expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
   }
   if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {

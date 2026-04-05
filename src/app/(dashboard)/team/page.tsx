@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -61,8 +61,20 @@ function defaultInviteExpiry() {
 }
 
 async function readJson(res: Response) {
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? "Request failed.");
+  const text = await res.text();
+  let data: unknown = {};
+  if (text) {
+    try {
+      data = JSON.parse(text) as unknown;
+    } catch {
+      /* non-JSON body (e.g. HTML error page) */
+    }
+  }
+  if (!res.ok) {
+    const errObj = data && typeof data === "object" && data !== null ? (data as { error?: unknown }) : {};
+    const msg = typeof errObj.error === "string" && errObj.error.trim() ? errObj.error : null;
+    throw new Error(msg ?? `Request failed (${res.status}${res.statusText ? ` ${res.statusText}` : ""}).`);
+  }
   return data;
 }
 
@@ -115,6 +127,7 @@ export default function TeamPage() {
   const [inviteExpiresAt, setInviteExpiresAt] = useState(defaultInviteExpiry());
   const [editInviteExpiresAt, setEditInviteExpiresAt] = useState("");
   const [saving, setSaving] = useState(false);
+  const inviteSubmitLock = useRef(false);
 
   const [editName, setEditName] = useState("");
   const [editTeamMemberNotion, setEditTeamMemberNotion] = useState<{ id: string; title: string } | null>(null);
@@ -152,10 +165,15 @@ export default function TeamPage() {
         requests.push(fetch("/api/invitations", { cache: "no-store" }));
       }
 
-      const payloads = await Promise.all((await Promise.all(requests)).map(readJson));
-      setUsers(payloads[0].users ?? []);
-      setTeams(payloads[1].teams ?? []);
-      setInvitations(role === "admin" ? (payloads[2]?.invitations ?? []) : []);
+      const raw = await Promise.all((await Promise.all(requests)).map(readJson));
+      const usersPayload = raw[0] as { users?: TeamUser[] };
+      const teamsPayload = raw[1] as { teams?: Team[] };
+      setUsers(usersPayload.users ?? []);
+      setTeams(teamsPayload.teams ?? []);
+      if (role === "admin") {
+        const invPayload = raw[2] as { invitations?: TeamInvitation[] } | undefined;
+        setInvitations(invPayload?.invitations ?? []);
+      }
     } catch (err) {
       if (!silent) {
         setError(err instanceof Error ? err.message : "Failed to load team data.");
@@ -338,12 +356,20 @@ export default function TeamPage() {
       setError("Select a Team Member page in Notion, or create a new one.");
       return;
     }
+    const expiresMs = new Date(inviteExpiresAt).getTime();
+    if (!inviteExpiresAt.trim() || Number.isNaN(expiresMs)) {
+      setError("Choose a valid expiration date and time.");
+      return;
+    }
+    if (inviteSubmitLock.current) return;
+    inviteSubmitLock.current = true;
 
     setSaving(true);
+    setError("");
 
     try {
       const useNotionMemberSource = !inviteCreateNewNotion && Boolean(inviteTeamMemberNotion);
-      const data = await readJson(
+      const data = (await readJson(
         await fetch("/api/invitations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -359,7 +385,7 @@ export default function TeamPage() {
               : { notionTeamMemberPageId: inviteTeamMemberNotion!.id }),
           }),
         })
-      );
+      )) as { inviteUrl?: string };
       setCopiedInviteUrl(data.inviteUrl ?? "");
       setInviteTeamMemberNotion(null);
       setInviteCreateNewNotion(false);
@@ -369,12 +395,13 @@ export default function TeamPage() {
       setInviteTeamIds([]);
       setInviteExpiresAt(defaultInviteExpiry());
       setShowInvite(false);
-      await refresh({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create invitation.");
     } finally {
       setSaving(false);
+      inviteSubmitLock.current = false;
     }
+    void refresh({ silent: true });
   }
 
   async function handleEditUser(e: React.FormEvent) {
@@ -530,7 +557,7 @@ export default function TeamPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col items-end gap-2 md:flex-row md:items-center">
           {(role === "admin" || role === "team_lead") && (
             <div className="rounded-xl bg-surface-container-low px-3 py-2 text-sm text-on-background">
               <span

@@ -492,7 +492,7 @@ type FullEntry = TimeEntry & {
   tags?: { id: string; name: string }[];
 };
 
-function normalizeNotionId(id: string): string {
+export function normalizeNotionId(id: string): string {
   return id.replace(/-/g, "").toLowerCase();
 }
 
@@ -706,6 +706,43 @@ async function assertTeamMemberPageEligibleForInvite(
       [{ id: page.id, name: title, email: page.properties?.Email?.type === "email" ? page.properties.Email.email ?? null : null }]
     );
   }
+}
+
+/** Email, display name, and Team relation page IDs from a Team Members DB row (for invite flows). */
+export async function getInviteSourceFromNotionTeamMemberPage(pageId: string): Promise<{
+  email: string;
+  name: string;
+  notionTeamPageIds: string[];
+}> {
+  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
+  if (!notionApiKey || !notionTeamMembersDbId) {
+    throw new Error("Notion Team Members database is not configured.");
+  }
+
+  const page = await verifyTeamMemberBelongsToTeamMembersDatabase(pageId, notionTeamMembersDbId, notionApiKey);
+
+  const emailProp = page.properties?.Email?.type === "email" ? page.properties.Email.email?.trim() ?? "" : "";
+  const personalProp =
+    page.properties?.["Personal Email"]?.type === "email" ? page.properties["Personal Email"].email?.trim() ?? "" : "";
+  const primaryEmail = emailProp || personalProp;
+  if (!primaryEmail) {
+    throw new Error(
+      "This Team Member page has no email in Notion. Add an Email (or Personal Email) property before inviting."
+    );
+  }
+
+  const teamProperty = page.properties?.Team;
+  const notionTeamPageIds =
+    teamProperty?.type === "relation" ? (teamProperty.relation ?? []).map((relation) => relation.id).filter(Boolean) : [];
+  if (notionTeamPageIds.length === 0) {
+    throw new Error("This Team Member page has no Team relations in Notion. Link at least one team before inviting.");
+  }
+
+  return {
+    email: primaryEmail,
+    name: getPageName(page),
+    notionTeamPageIds,
+  };
 }
 
 /** Ensures a page ID is a non-archived row in the configured Team Members database (admin linking). */

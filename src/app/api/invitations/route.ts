@@ -1,17 +1,22 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { invitationTeamMemberships, invitations, teams, users } from "@/lib/db/schema";
 import { buildInviteUrl, createInvitationToken, normalizeEmail } from "@/lib/invitations";
-import { ensureTeamMemberPage, TeamMemberLookupConflictError } from "@/lib/notion";
+import {
+  ensureTeamMemberPage,
+  getInviteSourceFromNotionTeamMemberPage,
+  normalizeNotionId,
+  TeamMemberLookupConflictError,
+} from "@/lib/notion";
 import { canManageInvitations } from "@/lib/permissions";
 import { broadcastDataChange } from "@/lib/realtime";
 
 const createInvitationSchema = z
   .object({
-    email: z.string().email(),
+    email: z.string().optional(),
     name: z.string().min(1),
     role: z.enum(["team_lead", "member"]).default("member"),
     teamId: z.string().uuid().optional(),
@@ -27,6 +32,20 @@ const createInvitationSchema = z
   .refine((d) => !(d.notionTeamMemberPageId && d.createNewNotionTeamMember), {
     message: "Cannot both select an existing page and create a new one.",
     path: ["createNewNotionTeamMember"],
+  })
+  .superRefine((d, ctx) => {
+    const useNotionSource = Boolean(d.notionTeamMemberPageId) && d.createNewNotionTeamMember !== true;
+    if (useNotionSource) return;
+    const trimmed = d.email?.trim() ?? "";
+    if (!trimmed) {
+      ctx.addIssue({ code: "custom", message: "Email is required.", path: ["email"] });
+    } else if (!z.string().email().safeParse(trimmed).success) {
+      ctx.addIssue({ code: "custom", message: "Invalid email address.", path: ["email"] });
+    }
+    const teamIds = d.teamIds ?? (d.teamId ? [d.teamId] : []);
+    if (teamIds.length === 0) {
+      ctx.addIssue({ code: "custom", message: "At least one team is required.", path: ["teamIds"] });
+    }
   });
 
 
@@ -74,9 +93,54 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: first?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const normalizedEmail = normalizeEmail(parsed.data.email);
-  const teamIds = parsed.data.teamIds ?? (parsed.data.teamId ? [parsed.data.teamId] : []);
-  if (teamIds.length === 0) return NextResponse.json({ error: "At least one team is required." }, { status: 400 });
+  const useNotionMemberSource =
+    Boolean(parsed.data.notionTeamMemberPageId) && parsed.data.createNewNotionTeamMember !== true;
+
+  let normalizedEmail: string;
+  let teamIds: string[];
+  let inviteName = parsed.data.name.trim();
+  let notionTeamPageIdsForEnsure: string[];
+
+  if (useNotionMemberSource) {
+    let notionSource: Awaited<ReturnType<typeof getInviteSourceFromNotionTeamMemberPage>>;
+    try {
+      notionSource = await getInviteSourceFromNotionTeamMemberPage(parsed.data.notionTeamMemberPageId!);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Could not read Team Member from Notion.";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+    inviteName = notionSource.name.trim() || inviteName;
+    normalizedEmail = normalizeEmail(notionSource.email);
+
+    const teamLinkRows = await db
+      .select({ id: teams.id, notionPageId: teams.notionPageId })
+      .from(teams)
+      .where(isNotNull(teams.notionPageId));
+    const chronosIdByNotionNorm = new Map<string, string>();
+    for (const row of teamLinkRows) {
+      if (row.notionPageId) chronosIdByNotionNorm.set(normalizeNotionId(row.notionPageId), row.id);
+    }
+    teamIds = [];
+    for (const nid of notionSource.notionTeamPageIds) {
+      const chronosId = chronosIdByNotionNorm.get(normalizeNotionId(nid));
+      if (chronosId && !teamIds.includes(chronosId)) teamIds.push(chronosId);
+    }
+    if (teamIds.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "None of the teams linked on this Notion page are synced to Chronos yet. Check team sync or link teams that exist in Chronos.",
+        },
+        { status: 400 }
+      );
+    }
+    notionTeamPageIdsForEnsure = notionSource.notionTeamPageIds;
+  } else {
+    normalizedEmail = normalizeEmail(parsed.data.email!.trim());
+    teamIds = parsed.data.teamIds ?? (parsed.data.teamId ? [parsed.data.teamId] : []);
+    if (teamIds.length === 0) return NextResponse.json({ error: "At least one team is required." }, { status: 400 });
+    notionTeamPageIdsForEnsure = [];
+  }
 
   const teamRows = await db.select({ id: teams.id, name: teams.name, slug: teams.slug, notionPageId: teams.notionPageId }).from(teams).where(inArray(teams.id, teamIds));
   if (teamRows.length !== teamIds.length) return NextResponse.json({ error: "One or more selected teams do not exist." }, { status: 404 });
@@ -98,8 +162,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Expiration must be a valid future date." }, { status: 400 });
   }
 
-  const notionTeamPageIds = teamRows.map((team) => team.notionPageId).filter((id): id is string => Boolean(id));
-  if (notionTeamPageIds.length !== teamRows.length) {
+  const notionTeamPageIds = useNotionMemberSource
+    ? notionTeamPageIdsForEnsure
+    : teamRows.map((team) => team.notionPageId).filter((id): id is string => Boolean(id));
+  if (!useNotionMemberSource && notionTeamPageIds.length !== teamRows.length) {
+    return NextResponse.json({ error: "One or more selected teams are not linked to a Notion team page yet." }, { status: 409 });
+  }
+  if (teamRows.some((t) => !t.notionPageId)) {
     return NextResponse.json({ error: "One or more selected teams are not linked to a Notion team page yet." }, { status: 409 });
   }
 
@@ -107,7 +176,7 @@ export async function POST(req: Request) {
   try {
     const notionResult = await ensureTeamMemberPage({
       email: normalizedEmail,
-      name: parsed.data.name.trim(),
+      name: inviteName,
       notionTeamPageIds,
       notionTeamMemberPageId: parsed.data.notionTeamMemberPageId,
       forceCreateNew: parsed.data.createNewNotionTeamMember === true,
@@ -124,7 +193,7 @@ export async function POST(req: Request) {
     .insert(invitations)
     .values({
       email: normalizedEmail,
-      name: parsed.data.name.trim(),
+      name: inviteName,
       role: parsed.data.role,
       teamId: teamIds[0],
       token,

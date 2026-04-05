@@ -342,15 +342,17 @@ export default function TeamPage() {
     setSaving(true);
 
     try {
+      const useNotionMemberSource = !inviteCreateNewNotion && Boolean(inviteTeamMemberNotion);
       const data = await readJson(
         await fetch("/api/invitations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: nameForInvite,
-            email: inviteEmail,
+            ...(useNotionMemberSource
+              ? {}
+              : { email: inviteEmail, teamIds: inviteTeamIds }),
             role: inviteRole,
-            teamIds: inviteTeamIds,
             expiresAt: new Date(inviteExpiresAt).toISOString(),
             ...(inviteCreateNewNotion
               ? { createNewNotionTeamMember: true }
@@ -1002,6 +1004,10 @@ export default function TeamPage() {
               setInviteTeamMemberNotion(next);
               setInviteCreateNewNotion(false);
               if (next?.title) setInviteNewMemberName(next.title);
+              if (next) {
+                setInviteEmail("");
+                setInviteTeamIds([]);
+              }
             }}
             createNewActive={inviteCreateNewNotion}
             onBeginCreateNew={() => {
@@ -1019,17 +1025,29 @@ export default function TeamPage() {
               hint="Used as the Team Member title in Notion and as the invite name in Chronos."
             />
           )}
-          <Input label="Email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="jane@example.com" />
-          <Select label="Role" options={INVITE_ROLES} value={inviteRole} onChange={(value) => setInviteRole(value as "member" | "team_lead")} />
-          <div className="flex flex-col gap-1.5">
-            <label
-              className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
+          {inviteTeamMemberNotion && !inviteCreateNewNotion ? (
+            <p
+              className="text-sm text-on-surface-variant"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
-              Teams
-            </label>
-            <MultiSelect options={activeTeamOptions} value={inviteTeamIds} onChange={setInviteTeamIds} placeholder="Choose one or more teams" />
-          </div>
+              Email and teams are read from this Team Member row in the Notion Team Members database when you create the
+              invitation.
+            </p>
+          ) : (
+            <>
+              <Input label="Email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="jane@example.com" />
+              <div className="flex flex-col gap-1.5">
+                <label
+                  className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  Teams
+                </label>
+                <MultiSelect options={activeTeamOptions} value={inviteTeamIds} onChange={setInviteTeamIds} placeholder="Choose one or more teams" />
+              </div>
+            </>
+          )}
+          <Select label="Role" options={INVITE_ROLES} value={inviteRole} onChange={(value) => setInviteRole(value as "member" | "team_lead")} />
           <Input label="Expiration" type="datetime-local" value={inviteExpiresAt} onChange={(e) => setInviteExpiresAt(e.target.value)} hint="Default is 7 days from now, but you can change it here." />
           <div className="flex justify-end gap-3">
             <Button variant="ghost" type="button" onClick={() => setShowInvite(false)}>

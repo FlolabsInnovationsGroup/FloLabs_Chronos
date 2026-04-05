@@ -53,6 +53,7 @@ export interface Project {
   name: string;
   color: string;
   icon: string;
+  requiresTaskOnStop: boolean;
   archived: boolean;
   createdAt: Date;
 }
@@ -90,6 +91,7 @@ export interface TimeEntry {
 export interface ActiveTimer {
   userId: string;
   projectId: string | null;
+  projectRequiresTaskOnStop?: boolean;
   tagIds: string[];
   description: string;
   notionTaskPageId?: string | null;

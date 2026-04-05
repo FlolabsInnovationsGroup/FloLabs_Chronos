@@ -133,6 +133,7 @@ export const projects = pgTable("projects", {
   name: text("name").notNull(),
   color: text("color").default("#366769"),
   icon: text("icon").default("folder"),
+  requiresTaskOnStop: boolean("requires_task_on_stop").notNull().default(false),
   archived: boolean("archived").default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });

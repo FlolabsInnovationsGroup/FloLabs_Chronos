@@ -218,7 +218,7 @@ The entry-list edit experience must be considered authoritative for user-facing 
 
 ### Stop Timer
 1. API loads the active timer from Redis.
-2. Chronos requires both a non-empty description and a selected task before a non-discard stop is allowed.
+2. Chronos requires a selected project and a non-empty description before a non-discard stop is allowed. A selected task is required only when the chosen project has `requires_task_on_stop = true`.
 3. API computes `durationMs`.
 4. API writes the completed entry to PostgreSQL.
 5. API writes tag associations to `time_entry_tags`.
@@ -310,12 +310,13 @@ CREATE TABLE invitation_team_memberships (
 );
 
 CREATE TABLE projects (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name        TEXT NOT NULL,
-  color       TEXT DEFAULT '#366769',
-  icon        TEXT DEFAULT 'folder',
-  archived    BOOLEAN DEFAULT false,
-  created_at  TIMESTAMPTZ DEFAULT now()
+  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name                    TEXT NOT NULL,
+  color                   TEXT DEFAULT '#366769',
+  icon                    TEXT DEFAULT 'folder',
+  requires_task_on_stop   BOOLEAN NOT NULL DEFAULT false,
+  archived                BOOLEAN DEFAULT false,
+  created_at              TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE TABLE tags (

@@ -59,10 +59,12 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
   const stopValidation = useMemo(
     () =>
       getTimerStopValidation({
+        projectId: selectedProjectId || null,
+        projectRequiresTaskOnStop: selectedProject?.requiresTaskOnStop ?? false,
         description,
         notionTaskPageId: selectedTask?.id ?? null,
       }),
-    [description, selectedTask]
+    [selectedProjectId, selectedProject?.requiresTaskOnStop, description, selectedTask]
   );
 
   async function createTag(name: string): Promise<TagOption | null> {
@@ -332,7 +334,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
         value={selectedTask}
         onChange={(task) => void handleTaskChange(task)}
         placeholder="Search Notion tasks…"
-        label="Task"
+        label={selectedProject?.requiresTaskOnStop ? "Task *" : "Task"}
         disabled={submitting || taskSaving}
       />
 

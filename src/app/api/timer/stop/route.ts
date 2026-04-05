@@ -22,7 +22,23 @@ export async function POST(req: Request) {
   const timer = await getActiveTimer(userId);
   if (!timer) return NextResponse.json({ error: "No active timer" }, { status: 404 });
 
-  const stopValidation = getTimerStopValidation(timer);
+  let timerForValidation = timer;
+  if (db && timer.projectId) {
+    const [project] = await db
+      .select({ id: projects.id, requiresTaskOnStop: projects.requiresTaskOnStop })
+      .from(projects)
+      .where(eq(projects.id, timer.projectId))
+      .limit(1);
+
+    if (project) {
+      timerForValidation = {
+        ...timer,
+        projectRequiresTaskOnStop: project.requiresTaskOnStop,
+      };
+    }
+  }
+
+  const stopValidation = getTimerStopValidation(timerForValidation);
 
   if (!discard && !stopValidation.canStop) {
     return NextResponse.json(

@@ -11,6 +11,7 @@ const updateSchema = z.object({
   name: z.string().min(1).optional(),
   color: z.string().optional(),
   icon: z.string().optional(),
+  requiresTaskOnStop: z.boolean().optional(),
   archived: z.boolean().optional(),
 });
 

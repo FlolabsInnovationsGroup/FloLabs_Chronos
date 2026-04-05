@@ -205,6 +205,8 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 - Reused Team Member pages are now patched minimally for invite integrity instead of being replaced with fresh duplicates.
 - Invitation-created/repaired Team Member flows now also create MasterClass pages in every relevant MasterClass database derived from the MasterClasses index, deduplicated per target database and using each target database's default template when possible.
 - User weekly target-hour edits now update the linked Notion Team Member page's `Time Commitment` property immediately instead of waiting for a scheduled sync.
+- Timer stop validation is now project-aware: project + description are always required, while tasks are required only for projects marked `requiresTaskOnStop`.
+- Projects now expose a `requiresTaskOnStop` setting so cases like Program Task can enforce a task before stop.
 - Notion DB configuration in the control panel now distinguishes Team Members DB vs Onboarding DB vs MasterClasses index DB instead of overloading a single Notion DB setting.
 - Confirmed from current Notion developer docs: there is no documented API endpoint for inviting a guest to a page/workspace page, so Floffice guest access remains a manual Notion-admin step.
 - Legacy loose scripts `scripts/tmp-app-config-init.js` and `scripts/tmp-app-config-seed.js` were checked for removal; they are not present in the current repo state.

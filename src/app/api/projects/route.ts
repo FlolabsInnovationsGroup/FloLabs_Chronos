@@ -20,6 +20,7 @@ const createSchema = z.object({
   name: z.string().min(1),
   color: z.string().default("#366769"),
   icon: z.string().default("folder"),
+  requiresTaskOnStop: z.boolean().default(false),
 });
 
 export async function POST(req: Request) {

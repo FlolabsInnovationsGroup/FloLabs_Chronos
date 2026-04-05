@@ -46,6 +46,7 @@ function ProjectForm({
   const [color, setColor] = useState(initial?.color ?? "#366769");
   const [icon, setIcon] = useState(initial?.icon ?? "folder");
   const [iconSearch, setIconSearch] = useState("");
+  const [requiresTaskOnStop, setRequiresTaskOnStop] = useState(initial?.requiresTaskOnStop ?? false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -65,7 +66,7 @@ function ProjectForm({
     }
     setSaving(true);
     try {
-      await onSave({ name, color, icon });
+      await onSave({ name, color, icon, requiresTaskOnStop });
     } catch {
       setError("Failed to save project");
     } finally {
@@ -124,6 +125,24 @@ function ProjectForm({
             </button>
           ))}
           <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-10 h-10 rounded-full cursor-pointer border-0 p-0 bg-transparent" title="Custom color" />
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-[#f5f4ef] p-4 flex items-start gap-3">
+        <input
+          id="project-requires-task"
+          type="checkbox"
+          checked={requiresTaskOnStop}
+          onChange={(e) => setRequiresTaskOnStop(e.target.checked)}
+          className="mt-1 h-4 w-4 rounded border-[#d8d6cd] text-[#366769]"
+        />
+        <div className="min-w-0">
+          <label htmlFor="project-requires-task" className="text-sm font-medium text-[#31332f]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+            Require a task to stop timers for this project
+          </label>
+          <p className="text-xs text-[#5e605b] mt-1" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+            Description and project are always required. Enable this only for projects like Program Task.
+          </p>
         </div>
       </div>
 
@@ -307,6 +326,9 @@ export default function ProjectsPage() {
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: project.color ?? "#366769" }} />
                     <span className="text-xs text-[#b2b2ad] font-mono" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{project.color}</span>
                   </div>
+                  <p className="text-xs text-[#5e605b] mt-2" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                    {project.requiresTaskOnStop ? "Task required to stop timers" : "Task optional on stop"}
+                  </p>
                 </div>
 
                 {canManageProjects && (

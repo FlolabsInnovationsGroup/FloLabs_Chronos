@@ -32,9 +32,10 @@ export async function PATCH(req: Request) {
   const nextTaskPageId = parsed.data.notionTaskPageId;
   const nextTaskTitle = parsed.data.notionTaskTitle;
 
+  let selectedProject: { id: string; requiresTaskOnStop: boolean } | null = null;
   if (db && requestedProjectId) {
     const [ownedProject] = await db
-      .select({ id: projects.id })
+      .select({ id: projects.id, requiresTaskOnStop: projects.requiresTaskOnStop })
       .from(projects)
       .where(eq(projects.id, requestedProjectId))
       .limit(1);
@@ -42,6 +43,8 @@ export async function PATCH(req: Request) {
     if (!ownedProject) {
       return NextResponse.json({ error: "Project not found" }, { status: 400 });
     }
+
+    selectedProject = ownedProject;
   }
 
   if (db && requestedTagIds.length > 0) {
@@ -58,6 +61,7 @@ export async function PATCH(req: Request) {
   const updatedTimer = {
     ...activeTimer,
     ...(requestedProjectId !== undefined ? { projectId: requestedProjectId } : {}),
+    ...(requestedProjectId !== undefined ? { projectRequiresTaskOnStop: selectedProject?.requiresTaskOnStop ?? false } : {}),
     tagIds: requestedTagIds,
     ...(nextDescription !== undefined ? { description: nextDescription } : {}),
     ...(nextTaskPageId !== undefined ? { notionTaskPageId: nextTaskPageId } : {}),

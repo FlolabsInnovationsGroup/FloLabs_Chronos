@@ -27,9 +27,10 @@ export async function POST(req: Request) {
   const userId = session.user.id;
   const startedAt = Date.now();
 
+  let selectedProject: { id: string; requiresTaskOnStop: boolean } | null = null;
   if (db && projectId) {
     const [project] = await db
-      .select({ id: projects.id })
+      .select({ id: projects.id, requiresTaskOnStop: projects.requiresTaskOnStop })
       .from(projects)
       .where(eq(projects.id, projectId))
       .limit(1);
@@ -37,6 +38,8 @@ export async function POST(req: Request) {
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 400 });
     }
+
+    selectedProject = project;
   }
 
   const uniqueTagIds = [...new Set(tagIds)];
@@ -54,6 +57,7 @@ export async function POST(req: Request) {
   const timer = {
     userId,
     projectId: projectId ?? null,
+    projectRequiresTaskOnStop: selectedProject?.requiresTaskOnStop ?? false,
     tagIds: uniqueTagIds,
     description,
     notionTaskPageId: notionTaskPageId ?? null,

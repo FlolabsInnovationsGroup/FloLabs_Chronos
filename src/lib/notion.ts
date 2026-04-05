@@ -838,6 +838,66 @@ export async function updateTeamMemberTimeCommitment(notionPageId: string, weekl
   }
 }
 
+function findTeamMembersRolePropertyName(properties: Record<string, NotionDatabaseProperty>): string | null {
+  const candidates = ["Role", "Chronos Role", "App Role", "Chronos role"];
+  for (const name of candidates) {
+    const p = properties[name];
+    if (p && (p.type === "select" || p.type === "status")) return name;
+  }
+  return null;
+}
+
+/** Sync Chronos role to Notion Team Members `Role` (or `Chronos Role` / `App Role`) select or status when option names match. */
+export async function updateTeamMemberRoleInNotion(
+  notionPageId: string,
+  chronosRole: "admin" | "team_lead" | "member"
+): Promise<void> {
+  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
+  if (!notionApiKey || !notionTeamMembersDbId) return;
+
+  const schema = await getDatabaseSchema(notionTeamMembersDbId, NOTION_VERSION, notionApiKey);
+  const propName = findTeamMembersRolePropertyName(schema.properties);
+  if (!propName) return;
+
+  const raw = schema.properties[propName] as NotionDatabaseProperty & {
+    select?: { options?: Array<{ name: string }> };
+    status?: { options?: Array<{ name: string }> };
+  };
+
+  const optionNames =
+    raw.type === "select"
+      ? (raw.select?.options ?? []).map((o) => o.name).filter(Boolean)
+      : raw.type === "status"
+        ? (raw.status?.options ?? []).map((o) => o.name).filter(Boolean)
+        : [];
+
+  if (optionNames.length === 0) return;
+
+  const tryNames =
+    chronosRole === "admin"
+      ? ["Admin", "admin", "Administrator"]
+      : chronosRole === "team_lead"
+        ? ["Team Lead", "Team lead", "team_lead", "Lead"]
+        : ["Member", "member"];
+
+  const matched =
+    tryNames.find((c) => optionNames.includes(c)) ??
+    optionNames.find((n) => n.replace(/\s+/g, "_").toLowerCase() === chronosRole);
+
+  if (!matched) return;
+
+  const properties: Record<string, unknown> =
+    raw.type === "select"
+      ? { [propName]: { select: { name: matched } } }
+      : { [propName]: { status: { name: matched } } };
+
+  await patchPageProperties({
+    pageId: notionPageId,
+    notionApiKey,
+    properties,
+  });
+}
+
 function buildTeamMemberConflictMessage(matchType: "email" | "name", value: string, matches: TeamMemberDirectoryEntry[]) {
   const label = matchType === "email" ? "email" : "normalized name";
   const formattedMatches = matches

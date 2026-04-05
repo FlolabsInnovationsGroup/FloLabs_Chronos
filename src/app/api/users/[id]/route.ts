@@ -4,9 +4,22 @@ import { db } from "@/lib/db";
 import { timeEntries, users, tags } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { canManageTeams, getAccessibleTeamIds, getUserTeams, isAdmin, isTeamLead, replaceUserTeamMemberships } from "@/lib/permissions";
+import {
+  canManageTeams,
+  getAccessibleTeamIds,
+  getUserTeams,
+  isAdmin,
+  isMember,
+  isTeamLead,
+  replaceUserTeamMemberships,
+} from "@/lib/permissions";
 import { broadcastDataChange } from "@/lib/realtime";
-import { findTeamMemberPageIdByEmail, updateTeamMemberName, updateTeamMemberTimeCommitment } from "@/lib/notion";
+import {
+  findTeamMemberPageIdByEmail,
+  updateTeamMemberName,
+  updateTeamMemberRoleInNotion,
+  updateTeamMemberTimeCommitment,
+} from "@/lib/notion";
 
 const updateSchema = z.object({
   role: z.enum(["admin", "team_lead", "member"]).optional(),
@@ -32,8 +45,9 @@ export async function PATCH(
 
   const userIsAdmin = isAdmin(session.user);
   const userIsTeamLead = isTeamLead(session.user);
+  const userIsMember = isMember(session.user);
 
-  if (!userIsAdmin && !userIsTeamLead) {
+  if (!userIsAdmin && !userIsTeamLead && !userIsMember) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
@@ -53,7 +67,19 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (userIsTeamLead && !userIsAdmin) {
+  if (userIsMember && !userIsAdmin && !userIsTeamLead) {
+    if (id !== session.user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const allowedKeys = ["weeklyTargetHours"];
+    const attemptedKeys = Object.keys(parsed.data).filter(
+      (k) => parsed.data[k as keyof typeof parsed.data] !== undefined
+    );
+    const forbidden = attemptedKeys.filter((k) => !allowedKeys.includes(k));
+    if (forbidden.length > 0) {
+      return NextResponse.json({ error: "Members can only update their own weekly target hours." }, { status: 403 });
+    }
+  } else if (userIsTeamLead && !userIsAdmin) {
     const accessibleTeamIds = await getAccessibleTeamIds(session.user);
     const existingTeams = await getUserTeams(existingUser.id);
     const overlap = existingTeams.some((team) => accessibleTeamIds?.includes(team.id));
@@ -75,7 +101,12 @@ export async function PATCH(
   const existingTeams = await getUserTeams(existingUser.id);
   const finalTeamIds = requestedTeamIds ?? existingTeams.map((team) => team.id);
 
-  if (finalRole !== "admin" && finalTeamIds.length === 0) {
+  const mutatesTeamsOrRole =
+    requestedTeamIds !== undefined ||
+    parsed.data.teamId !== undefined ||
+    (parsed.data.role !== undefined && parsed.data.role !== existingUser.role);
+
+  if (finalRole !== "admin" && finalTeamIds.length === 0 && mutatesTeamsOrRole) {
     return NextResponse.json(
       { error: "Team leads and members must belong to at least one team." },
       { status: 400 }
@@ -125,6 +156,10 @@ export async function PATCH(
 
   if (parsed.data.weeklyTargetHours !== undefined && notionTeamMemberId) {
     await updateTeamMemberTimeCommitment(notionTeamMemberId, parsed.data.weeklyTargetHours);
+  }
+
+  if (parsed.data.role !== undefined && parsed.data.role !== existingUser.role && notionTeamMemberId) {
+    await updateTeamMemberRoleInNotion(notionTeamMemberId, parsed.data.role).catch(() => {});
   }
 
   if (requestedTeamIds !== undefined) {

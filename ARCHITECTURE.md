@@ -393,6 +393,10 @@ Synced fields:
 - Updating a user's `weekly_target_hours` in Chronos immediately updates the Notion Team Members database property named `Time Commitment`
 - Resolution uses stored `notionTeamMemberId` first, then exact email as fallback when the stored ID is missing
 
+### Team Member role sync (Chronos → Notion)
+- When an admin changes a user's Chronos role (`admin` / `team_lead` / `member`), Chronos attempts to patch the corresponding Team Member page in Notion: it looks for a **select** or **status** property named `Role`, `Chronos Role`, or `App Role`, and sets the option whose name matches (e.g. `Team Lead`, `Member`, `Admin`) when present in the schema.
+- Chronos does **not** read or write a **LinkedIn Headline** property; that field was removed from the Team Members database in Notion and is not part of the integration contract.
+
 ### Sync rules
 - Upsert by Notion page ID.
 - Update changed metadata in Chronos.
@@ -457,7 +461,7 @@ Use centralized helpers in `src/lib/permissions.ts`.
 | Create/edit/archive/delete projects | Yes | No | No |
 | Tags page | All tags | Own tags | Own tags |
 | Create/delete own tags | Yes | Yes | Yes |
-| Team page | All visible teams/users | Accessible teams/users | Own assignments only |
+| Team page (Users tab) | All users + full edit | All users in shared teams; may edit weekly target hours for those users | Only own row; may edit own weekly target hours |
 | Create invites | Yes | No | No |
 | Disable/delete invites | Yes | No | No |
 | Reports | All users | Accessible users only | Own only |

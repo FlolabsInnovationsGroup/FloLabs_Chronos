@@ -424,7 +424,7 @@ export default function TeamPage() {
     { label: "Weekly", key: "weekly" },
     { label: "Status", key: null },
     { label: "Joined", key: "joined" },
-    ...(role === "admin" || role === "team_lead" ? [{ label: "Actions", key: null }] : []),
+    ...(role === "admin" || role === "team_lead" || role === "member" ? [{ label: "Actions", key: null }] : []),
   ];
   const compactHeadCellClass =
     "px-3 sm:px-4 lg:px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-on-surface-variant";
@@ -448,8 +448,8 @@ export default function TeamPage() {
             {role === "admin"
               ? "Admins manage teams, invitations, and member roles."
               : role === "team_lead"
-                ? "You can see the members across all teams you belong to."
-                : "You can see all teams you belong to."}
+                ? "You can see every member in the teams you belong to and edit their weekly time commitment."
+                : "You see only your account. You can update your weekly time target."}
           </p>
         </div>
 
@@ -590,19 +590,7 @@ export default function TeamPage() {
         </div>
       )}
 
-      {activeTab === "users" &&
-        (role === "member" ? (
-          <div className="bg-surface-container-lowest rounded-xl paper-shadow p-6">
-            <p
-              className="text-sm text-on-surface-variant"
-              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-            >
-              {(currentUser?.teams?.length ?? 0) > 0
-                ? `You currently belong to ${(currentUser?.teams ?? []).map((team) => team.name).join(", ")}.`
-                : "You do not have a team assignment yet."}
-            </p>
-          </div>
-        ) : (
+      {activeTab === "users" && (
           <>
             <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto">
               <table className="w-full min-w-[880px] lg:min-w-[960px]">
@@ -772,27 +760,46 @@ export default function TeamPage() {
                                 : "—"}
                             </span>
                           </td>
-                          {(role === "admin" || role === "team_lead") && (
+                          {(role === "admin" || role === "team_lead" || role === "member") && (
                             <td className={compactBodyCellClass}>
                               <div className="flex gap-0.5 sm:gap-1">
-                                <Tooltip label="Edit member">
-                                  <button
-                                    onClick={() => setEditingUser(user)}
-                                    className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low"
-                                  >
-                                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
-                                      edit
-                                    </span>
-                                  </button>
-                                </Tooltip>
-                                {role === "admin" && user.id !== session?.user.id && (
-                                  <Tooltip label="Delete member">
+                                {(role === "admin" || role === "team_lead") && (
+                                  <>
+                                    <Tooltip label="Edit member">
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingUser(user)}
+                                        className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low"
+                                      >
+                                        <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                                          edit
+                                        </span>
+                                      </button>
+                                    </Tooltip>
+                                    {role === "admin" && user.id !== session?.user.id && (
+                                      <Tooltip label="Delete member">
+                                        <button
+                                          type="button"
+                                          onClick={() => setConfirmDeleteUser(user)}
+                                          className="p-1.5 rounded-lg text-on-surface-variant hover:bg-warm-surface hover:text-error"
+                                        >
+                                          <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                                            delete
+                                          </span>
+                                        </button>
+                                      </Tooltip>
+                                    )}
+                                  </>
+                                )}
+                                {role === "member" && user.id === userId && (
+                                  <Tooltip label="Edit weekly target">
                                     <button
-                                      onClick={() => setConfirmDeleteUser(user)}
-                                      className="p-1.5 rounded-lg text-on-surface-variant hover:bg-warm-surface hover:text-error"
+                                      type="button"
+                                      onClick={() => setEditingUser(user)}
+                                      className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low"
                                     >
                                       <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
-                                        delete
+                                        edit
                                       </span>
                                     </button>
                                   </Tooltip>
@@ -901,7 +908,7 @@ export default function TeamPage() {
               </div>
             )}
           </>
-        ))}
+        )}
 
       <Modal open={showInvite} onClose={() => setShowInvite(false)} title="Invite Member">
         <form onSubmit={handleInvite} className="flex flex-col gap-4">
@@ -943,7 +950,11 @@ export default function TeamPage() {
         </form>
       </Modal>
 
-      <Modal open={!!editingUser} onClose={() => setEditingUser(null)} title="Edit Member">
+      <Modal
+        open={!!editingUser}
+        onClose={() => setEditingUser(null)}
+        title={role === "member" ? "Weekly target" : "Edit Member"}
+      >
         <form onSubmit={handleEditUser} className="flex flex-col gap-4">
           {role === "admin" && (
             <>

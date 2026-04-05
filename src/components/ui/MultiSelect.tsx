@@ -64,7 +64,7 @@ export function MultiSelect({
       <div
         className={cn(
           "min-h-9 flex flex-wrap items-center gap-1.5 rounded-xl bg-surface-container-low px-3 py-1.5 cursor-text",
-          "focus-within:ring-2 focus-within:ring-primary/20",
+          "focus-within:ring-2 focus-within:ring-inset focus-within:ring-primary/20",
           disabled && "opacity-50 pointer-events-none"
         )}
         onClick={() => setOpen((v) => !v)}

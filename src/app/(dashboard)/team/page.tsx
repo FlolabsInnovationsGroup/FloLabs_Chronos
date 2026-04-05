@@ -488,10 +488,11 @@ export default function TeamPage() {
   const compactBodyCellClass = "px-3 sm:px-4 lg:px-5 py-4 align-top";
   const compactEmptyCellClass = "px-3 sm:px-4 lg:px-5 py-10 text-center text-sm text-outline-variant";
   /** Keeps action controls visible while scrolling wide tables on tablet/desktop (md+). */
-  const tableActionsHeadClass =
-    "md:sticky md:right-0 md:z-[2] md:border-l md:border-outline-variant/25 md:bg-surface-container-low md:whitespace-nowrap md:shadow-[-8px_0_16px_-10px_rgba(0,0,0,0.18)]";
+  const tableActionsShadowClass =
+    "md:[box-shadow:-1px_0_0_rgb(0_0_0_/_0.07),-14px_0_28px_-8px_rgb(0_0_0_/_0.11),-32px_0_56px_-14px_rgb(0_0_0_/_0.07)]";
+  const tableActionsHeadClass = `md:sticky md:right-0 md:z-[2] md:border-l md:border-outline-variant/30 md:bg-surface-container-low md:whitespace-nowrap ${tableActionsShadowClass}`;
   const tableActionsCellClass = (stripedRow: boolean) =>
-    `md:sticky md:right-0 md:z-[1] md:border-l md:border-outline-variant/25 md:whitespace-nowrap md:shadow-[-8px_0_16px_-10px_rgba(0,0,0,0.12)] ${stripedRow ? "md:bg-background" : "md:bg-surface-container-lowest"}`;
+    `md:sticky md:right-0 md:z-[1] md:border-l md:border-outline-variant/30 md:whitespace-nowrap ${tableActionsShadowClass} ${stripedRow ? "md:bg-background" : "md:bg-surface-container-lowest"}`;
 
   return (
     <div className="flex flex-col gap-8 max-w-[90rem] mx-auto">

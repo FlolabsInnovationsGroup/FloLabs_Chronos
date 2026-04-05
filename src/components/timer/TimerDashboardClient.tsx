@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useSSE } from "@/hooks/use-sse";
+import { useTimer } from "@/hooks/use-timer";
 import { TimerDisplay } from "@/components/timer/TimerDisplay";
 import { TimerControls } from "@/components/timer/TimerControls";
 import { ActiveTimerCard } from "@/components/timer/ActiveTimerCard";
@@ -25,6 +26,7 @@ export function TimerDashboardClient({
   targetHours,
 }: TimerDashboardClientProps) {
   const { data: session } = useSession();
+  const { activeTimer, start } = useTimer();
   const userId = session?.user.id;
 
   const [todayEntries, setTodayEntries] = useState<TimeEntry[]>(initialTodayEntries);
@@ -66,6 +68,20 @@ export function TimerDashboardClient({
     )
   );
 
+  async function handleReplay(entry: TimeEntry) {
+    if (activeTimer) {
+      throw new Error("Stop the current timer before starting a new one from a past entry.");
+    }
+
+    await start({
+      projectId: entry.projectId ?? null,
+      tagIds: (entry.tags ?? []).map((tag) => tag.id),
+      description: entry.description,
+      notionTaskPageId: entry.notionTaskPageId ?? null,
+      notionTaskTitle: entry.notionTaskTitle ?? null,
+    });
+  }
+
   return (
     <>
       <div className="grid grid-cols-12 gap-8">
@@ -88,7 +104,7 @@ export function TimerDashboardClient({
             {recentEntries.length} entries
           </span>
         </div>
-        <EntryList entries={recentEntries} emptyMessage="No sessions yet. Start your first one above." />
+        <EntryList entries={recentEntries} onResume={handleReplay} emptyMessage="No sessions yet. Start your first one above." />
       </div>
     </>
   );

@@ -34,6 +34,8 @@ interface NotionPagePropertyValue {
 
 interface NotionPageResult {
   id: string;
+  archived?: boolean;
+  parent?: { type?: string; database_id?: string };
   properties?: Record<string, NotionPagePropertyValue>;
 }
 
@@ -490,6 +492,10 @@ type FullEntry = TimeEntry & {
   tags?: { id: string; name: string }[];
 };
 
+function normalizeNotionId(id: string): string {
+  return id.replace(/-/g, "").toLowerCase();
+}
+
 function normalizeName(name: string): string {
   return name
     .normalize("NFKD")
@@ -655,6 +661,91 @@ async function getTeamMemberDirectory(): Promise<TeamMemberDirectory> {
   return buildTeamMemberDirectory();
 }
 
+async function verifyTeamMemberBelongsToTeamMembersDatabase(
+  pageId: string,
+  notionTeamMembersDbId: string,
+  notionApiKey: string
+): Promise<NotionPageResult> {
+  const page = await retrievePage(pageId, notionApiKey);
+  if (!page || page.archived) {
+    throw new Error("Team Member page was not found or is archived.");
+  }
+  const parent = page.parent;
+  if (parent?.type !== "database_id" || !parent.database_id) {
+    throw new Error("This page is not a row in a Notion database.");
+  }
+  if (normalizeNotionId(parent.database_id) !== normalizeNotionId(notionTeamMembersDbId)) {
+    throw new Error("This page is not in the configured Team Members database.");
+  }
+  return page;
+}
+
+function teamMemberInviteEmailsFromPage(page: NotionPageResult): string[] {
+  const email = page.properties?.Email?.type === "email" ? page.properties.Email.email?.trim() ?? "" : "";
+  const personal =
+    page.properties?.["Personal Email"]?.type === "email" ? page.properties["Personal Email"].email?.trim() ?? "" : "";
+  const set = new Set<string>();
+  if (email) set.add(normalizeEmailValue(email));
+  if (personal) set.add(normalizeEmailValue(personal));
+  return [...set].filter(Boolean);
+}
+
+async function assertTeamMemberPageEligibleForInvite(
+  pageId: string,
+  inviteEmail: string,
+  notionApiKey: string,
+  notionTeamMembersDbId: string
+): Promise<void> {
+  const page = await verifyTeamMemberBelongsToTeamMembersDatabase(pageId, notionTeamMembersDbId, notionApiKey);
+  const normalizedInvite = normalizeEmailValue(inviteEmail);
+  const known = teamMemberInviteEmailsFromPage(page);
+  if (known.length > 0 && !known.includes(normalizedInvite)) {
+    const title = getPageName(page);
+    throw new TeamMemberLookupConflictError(
+      `The selected Team Member page "${title}" has an email that does not match the invitation email "${inviteEmail}". Pick a different page or fix the email on that Notion page.`,
+      [{ id: page.id, name: title, email: page.properties?.Email?.type === "email" ? page.properties.Email.email ?? null : null }]
+    );
+  }
+}
+
+/** Ensures a page ID is a non-archived row in the configured Team Members database (admin linking). */
+export async function verifyNotionTeamMemberPageRow(pageId: string): Promise<void> {
+  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
+  if (!notionApiKey || !notionTeamMembersDbId) {
+    throw new Error("Notion Team Members database is not configured.");
+  }
+  await verifyTeamMemberBelongsToTeamMembersDatabase(pageId, notionTeamMembersDbId, notionApiKey);
+}
+
+/** Search cached Team Member directory by title or email (substring, case-insensitive). */
+export async function searchTeamMemberPages(
+  query: string,
+  limit = 40
+): Promise<Array<{ id: string; name: string; email: string | null }>> {
+  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
+  if (!notionApiKey || !notionTeamMembersDbId) return [];
+
+  const directory = await getTeamMemberDirectory();
+  const q = query.trim().toLowerCase();
+  const cap = Math.min(Math.max(1, limit), 60);
+
+  let list = directory.entries;
+  if (q) {
+    list = list.filter((entry) => {
+      if (entry.name.toLowerCase().includes(q)) return true;
+      if (entry.email?.toLowerCase().includes(q)) return true;
+      if (entry.personalEmail?.toLowerCase().includes(q)) return true;
+      return false;
+    });
+  }
+
+  list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+  return list.slice(0, cap).map((e) => ({
+    id: e.id,
+    name: e.name,
+    email: e.email ?? e.personalEmail ?? null,
+  }));
+}
 
 export async function buildTeamMemberIndex(): Promise<Map<string, string>> {
   const directory = await buildTeamMemberDirectory();
@@ -988,6 +1079,10 @@ interface CreateTeamMemberPageParams {
   email: string;
   name: string;
   notionTeamPageIds: string[];
+  /** When set, this exact Team Members row is updated (no fuzzy matching). */
+  notionTeamMemberPageId?: string | null;
+  /** When true, always create a new Team Members row (Onboarding + Masterclasses still run). */
+  forceCreateNew?: boolean;
 }
 
 interface CreateTeamMemberPageResult {
@@ -995,7 +1090,7 @@ interface CreateTeamMemberPageResult {
   templateApplied: boolean;
   templateMode: "default" | "template_id" | "none";
   reusedExisting?: boolean;
-  matchedBy?: "email" | "name";
+  matchedBy?: "email" | "name" | "explicit";
 }
 
 interface NotionDatabaseLookupResponse {
@@ -1069,6 +1164,11 @@ async function updateExistingTeamMemberPage(params: {
     if (changed) {
       patch.Team = buildRelationValue([...relationIds]);
     }
+  }
+
+  const currentTitle = getPageName(page);
+  if (params.name.trim() && normalizeName(params.name) !== normalizeName(currentTitle)) {
+    patch.Name = buildTitleValue(params.name.trim());
   }
 
   const statusProperty = page.properties?.Status;
@@ -1487,10 +1587,15 @@ export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): 
   const { notionApiKey, notionOnboardingsDbId, notionTeamMembersDbId, notionMasterClassesIndexDbId } = await getNotionConfig();
   if (!notionApiKey || !notionTeamMembersDbId) return null;
 
-  const existingMatch = await resolveExistingTeamMemberPage(params);
-  if (existingMatch) {
+  if (params.notionTeamMemberPageId) {
+    await assertTeamMemberPageEligibleForInvite(
+      params.notionTeamMemberPageId,
+      params.email,
+      notionApiKey,
+      notionTeamMembersDbId
+    );
     await updateExistingTeamMemberPage({
-      pageId: existingMatch.entry.id,
+      pageId: params.notionTeamMemberPageId,
       notionApiKey,
       notionOnboardingsDbId,
       email: params.email,
@@ -1499,7 +1604,7 @@ export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): 
     });
 
     await ensureMasterClassPagesForTeamMember({
-      teamMemberPageId: existingMatch.entry.id,
+      teamMemberPageId: params.notionTeamMemberPageId,
       name: params.name,
       email: params.email,
       notionApiKey,
@@ -1507,13 +1612,48 @@ export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): 
       notionMasterClassesIndexDbId,
     });
 
+    await buildTeamMemberDirectory().catch(() => {});
+
     return {
-      pageId: existingMatch.entry.id,
+      pageId: params.notionTeamMemberPageId,
       templateApplied: false,
       templateMode: "none",
       reusedExisting: true,
-      matchedBy: existingMatch.matchedBy,
+      matchedBy: "explicit",
     };
+  }
+
+  if (!params.forceCreateNew) {
+    const existingMatch = await resolveExistingTeamMemberPage(params);
+    if (existingMatch) {
+      await updateExistingTeamMemberPage({
+        pageId: existingMatch.entry.id,
+        notionApiKey,
+        notionOnboardingsDbId,
+        email: params.email,
+        name: params.name,
+        notionTeamPageIds: params.notionTeamPageIds,
+      });
+
+      await ensureMasterClassPagesForTeamMember({
+        teamMemberPageId: existingMatch.entry.id,
+        name: params.name,
+        email: params.email,
+        notionApiKey,
+        notionTeamPageIds: params.notionTeamPageIds,
+        notionMasterClassesIndexDbId,
+      });
+
+      await buildTeamMemberDirectory().catch(() => {});
+
+      return {
+        pageId: existingMatch.entry.id,
+        templateApplied: false,
+        templateMode: "none",
+        reusedExisting: true,
+        matchedBy: existingMatch.matchedBy,
+      };
+    }
   }
 
   const teamMemberProperties = buildTeamMemberProperties(params);

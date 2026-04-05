@@ -37,6 +37,7 @@
 - [x] New invitation-created Team Member pages now also create a linked Onboarding database page and attach it through the Team Member page's `Onboarding` relation
 - [x] Invitation flow now reuses existing Team Member pages by exact normalized email first, then exact normalized name, instead of blindly creating duplicates when older Notion records are missing email
 - [x] Invitation flow now blocks ambiguous Team Member matches with a clear 409 error so the team can resolve Notion manually before retrying
+- [x] Invite and Edit Member modals use a Notion Team Members search picker (explicit page selection); invite can create a new row which runs Team Member + Onboarding + Masterclasses provisioning; `invitations.notion_team_member_id` carries the link through registration
 - [x] Reused Team Member pages now receive minimal safe repairs (missing email, missing invited-team relations, missing onboarding relation) instead of creating a duplicate page
 - [x] Confirmed limitation: Notion's public API does not expose a documented guest-invite/share-page endpoint, so Chronos cannot automate Floffice guest invites
 

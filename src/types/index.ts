@@ -19,6 +19,8 @@ export interface User {
     notionTaskPageId?: string | null;
     notionTaskTitle?: string | null;
   } | null;
+  /** Linked Notion Team Members database row (set at invite acceptance or by admin). */
+  notionTeamMemberId?: string | null;
 }
 
 export interface Team {
@@ -47,6 +49,7 @@ export interface Invitation {
   createdAt: Date;
   team?: Pick<Team, "id" | "name" | "slug">;
   teams?: Pick<Team, "id" | "name" | "slug">[];
+  notionTeamMemberId?: string | null;
 }
 
 export interface Project {

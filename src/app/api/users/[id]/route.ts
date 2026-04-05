@@ -19,6 +19,7 @@ import {
   updateTeamMemberName,
   updateTeamMemberRoleInNotion,
   updateTeamMemberTimeCommitment,
+  verifyNotionTeamMemberPageRow,
 } from "@/lib/notion";
 
 const updateSchema = z.object({
@@ -28,6 +29,7 @@ const updateSchema = z.object({
   teamIds: z.array(z.string().uuid()).optional(),
   isActive: z.boolean().optional(),
   weeklyTargetHours: z.number().min(0).max(168).optional(),
+  notionTeamMemberId: z.string().min(1).nullable().optional(),
   discordWebhookUrl: z.string().url().nullable().optional(),
   notifyOnStart: z.boolean().optional(),
   notifyOnStop: z.boolean().optional(),
@@ -58,7 +60,14 @@ export async function PATCH(
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
   const [existingUser] = await db
-    .select({ id: users.id, role: users.role, teamId: users.teamId, name: users.name, notionTeamMemberId: users.notionTeamMemberId })
+    .select({
+      id: users.id,
+      role: users.role,
+      teamId: users.teamId,
+      name: users.name,
+      email: users.email,
+      notionTeamMemberId: users.notionTeamMemberId,
+    })
     .from(users)
     .where(eq(users.id, id))
     .limit(1);
@@ -125,6 +134,22 @@ export async function PATCH(
   if (parsed.data.dailySummary !== undefined) updateData.dailySummary = parsed.data.dailySummary;
   if (parsed.data.weeklyTargetHours !== undefined) updateData.weeklyTargetHours = parsed.data.weeklyTargetHours;
 
+  if (parsed.data.notionTeamMemberId !== undefined) {
+    if (parsed.data.notionTeamMemberId === null) {
+      updateData.notionTeamMemberId = null;
+    } else {
+      try {
+        await verifyNotionTeamMemberPageRow(parsed.data.notionTeamMemberId);
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : "Invalid Notion Team Member page." },
+          { status: 400 }
+        );
+      }
+      updateData.notionTeamMemberId = parsed.data.notionTeamMemberId;
+    }
+  }
+
   const [user] = await db
     .update(users)
     .set(updateData)
@@ -137,6 +162,7 @@ export async function PATCH(
       teamId: users.teamId,
       isActive: users.isActive,
       weeklyTargetHours: users.weeklyTargetHours,
+      notionTeamMemberId: users.notionTeamMemberId,
       discordWebhookUrl: users.discordWebhookUrl,
       notifyOnStart: users.notifyOnStart,
       notifyOnStop: users.notifyOnStop,
@@ -146,7 +172,8 @@ export async function PATCH(
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const notionTeamMemberId = existingUser.notionTeamMemberId || await findTeamMemberPageIdByEmail(user.email).catch(() => null);
+  const notionTeamMemberId =
+    user.notionTeamMemberId || (await findTeamMemberPageIdByEmail(existingUser.email).catch(() => null));
 
   if (parsed.data.name !== undefined && parsed.data.name.trim() !== existingUser.name) {
     if (notionTeamMemberId) {

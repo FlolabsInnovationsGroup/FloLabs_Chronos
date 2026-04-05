@@ -9,14 +9,25 @@ import { ensureTeamMemberPage, TeamMemberLookupConflictError } from "@/lib/notio
 import { canManageInvitations } from "@/lib/permissions";
 import { broadcastDataChange } from "@/lib/realtime";
 
-const createInvitationSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(1),
-  role: z.enum(["team_lead", "member"]).default("member"),
-  teamId: z.string().uuid().optional(),
-  teamIds: z.array(z.string().uuid()).optional(),
-  expiresAt: z.string().datetime().optional(),
-});
+const createInvitationSchema = z
+  .object({
+    email: z.string().email(),
+    name: z.string().min(1),
+    role: z.enum(["team_lead", "member"]).default("member"),
+    teamId: z.string().uuid().optional(),
+    teamIds: z.array(z.string().uuid()).optional(),
+    expiresAt: z.string().datetime().optional(),
+    notionTeamMemberPageId: z.string().min(1).optional(),
+    createNewNotionTeamMember: z.boolean().optional(),
+  })
+  .refine((d) => Boolean(d.notionTeamMemberPageId) || d.createNewNotionTeamMember === true, {
+    message: "Select a Team Member page in Notion, or choose to create a new one.",
+    path: ["notionTeamMemberPageId"],
+  })
+  .refine((d) => !(d.notionTeamMemberPageId && d.createNewNotionTeamMember), {
+    message: "Cannot both select an existing page and create a new one.",
+    path: ["createNewNotionTeamMember"],
+  });
 
 
 async function getInvitationTeams(invitationIds: string[]) {
@@ -58,7 +69,10 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   const parsed = createInvitationSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    return NextResponse.json({ error: first?.message ?? "Invalid input" }, { status: 400 });
+  }
 
   const normalizedEmail = normalizeEmail(parsed.data.email);
   const teamIds = parsed.data.teamIds ?? (parsed.data.teamId ? [parsed.data.teamId] : []);
@@ -89,12 +103,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "One or more selected teams are not linked to a Notion team page yet." }, { status: 409 });
   }
 
+  let notionPageId: string | null = null;
   try {
-    await ensureTeamMemberPage({
+    const notionResult = await ensureTeamMemberPage({
       email: normalizedEmail,
       name: parsed.data.name.trim(),
       notionTeamPageIds,
+      notionTeamMemberPageId: parsed.data.notionTeamMemberPageId,
+      forceCreateNew: parsed.data.createNewNotionTeamMember === true,
     });
+    notionPageId = notionResult?.pageId ?? null;
   } catch (error) {
     if (error instanceof TeamMemberLookupConflictError) {
       return NextResponse.json({ error: error.message, matches: error.matches }, { status: 409 });
@@ -102,7 +120,19 @@ export async function POST(req: Request) {
     throw error;
   }
 
-  const [invite] = await db.insert(invitations).values({ email: normalizedEmail, name: parsed.data.name.trim(), role: parsed.data.role, teamId: teamIds[0], token, invitedById: session.user.id, expiresAt }).returning();
+  const [invite] = await db
+    .insert(invitations)
+    .values({
+      email: normalizedEmail,
+      name: parsed.data.name.trim(),
+      role: parsed.data.role,
+      teamId: teamIds[0],
+      token,
+      invitedById: session.user.id,
+      expiresAt,
+      notionTeamMemberId: notionPageId,
+    })
+    .returning();
   await db.insert(invitationTeamMemberships).values(teamIds.map((teamId) => ({ invitationId: invite.id, teamId }))).onConflictDoNothing();
 
   broadcastDataChange("team");

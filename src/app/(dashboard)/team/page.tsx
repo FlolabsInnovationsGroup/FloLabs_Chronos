@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { Select } from "@/components/ui/Select";
+import { TeamMemberNotionPicker } from "@/components/team/TeamMemberNotionPicker";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useSSE } from "@/hooks/use-sse";
 import { formatDurationHuman } from "@/lib/utils";
@@ -91,7 +92,9 @@ export default function TeamPage() {
   const [confirmDisableInvite, setConfirmDisableInvite] = useState<TeamInvitation | null>(null);
   const [confirmDeleteInvite, setConfirmDeleteInvite] = useState<TeamInvitation | null>(null);
 
-  const [inviteName, setInviteName] = useState("");
+  const [inviteTeamMemberNotion, setInviteTeamMemberNotion] = useState<{ id: string; title: string } | null>(null);
+  const [inviteCreateNewNotion, setInviteCreateNewNotion] = useState(false);
+  const [inviteNewMemberName, setInviteNewMemberName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"member" | "team_lead">("member");
   const [inviteTeamIds, setInviteTeamIds] = useState<string[]>([]);
@@ -100,6 +103,7 @@ export default function TeamPage() {
   const [saving, setSaving] = useState(false);
 
   const [editName, setEditName] = useState("");
+  const [editTeamMemberNotion, setEditTeamMemberNotion] = useState<{ id: string; title: string } | null>(null);
   const [editRole, setEditRole] = useState<Role>("member");
   const [editTeamIds, setEditTeamIds] = useState<string[]>([]);
   const [editIsActive, setEditIsActive] = useState(true);
@@ -194,8 +198,20 @@ export default function TeamPage() {
   }, [inviteTeamIds.length, teams]);
 
   useEffect(() => {
+    if (!showInvite) return;
+    setInviteTeamMemberNotion(null);
+    setInviteCreateNewNotion(false);
+    setInviteNewMemberName("");
+  }, [showInvite]);
+
+  useEffect(() => {
     if (!editingUser) return;
     setEditName(editingUser.name);
+    setEditTeamMemberNotion(
+      editingUser.notionTeamMemberId
+        ? { id: editingUser.notionTeamMemberId, title: editingUser.name }
+        : null
+    );
     setEditRole(editingUser.role);
     setEditTeamIds((editingUser.teams ?? []).map((team) => team.id));
     setEditIsActive(editingUser.isActive);
@@ -297,6 +313,18 @@ export default function TeamPage() {
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
+    const nameForInvite = inviteCreateNewNotion
+      ? inviteNewMemberName.trim()
+      : inviteTeamMemberNotion?.title.trim() ?? "";
+    if (!nameForInvite) {
+      setError(inviteCreateNewNotion ? "Enter a name for the new Team Member page." : "Select a Team Member page in Notion.");
+      return;
+    }
+    if (!inviteCreateNewNotion && !inviteTeamMemberNotion) {
+      setError("Select a Team Member page in Notion, or create a new one.");
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -305,16 +333,21 @@ export default function TeamPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: inviteName,
+            name: nameForInvite,
             email: inviteEmail,
             role: inviteRole,
             teamIds: inviteTeamIds,
             expiresAt: new Date(inviteExpiresAt).toISOString(),
+            ...(inviteCreateNewNotion
+              ? { createNewNotionTeamMember: true }
+              : { notionTeamMemberPageId: inviteTeamMemberNotion!.id }),
           }),
         })
       );
       setCopiedInviteUrl(data.inviteUrl ?? "");
-      setInviteName("");
+      setInviteTeamMemberNotion(null);
+      setInviteCreateNewNotion(false);
+      setInviteNewMemberName("");
       setInviteEmail("");
       setInviteRole("member");
       setInviteTeamIds([]);
@@ -345,6 +378,7 @@ export default function TeamPage() {
                   role: editRole,
                   teamIds: editRole === "admin" ? [] : editTeamIds,
                   isActive: editIsActive,
+                  notionTeamMemberId: editTeamMemberNotion?.id ?? null,
                 }
               : {}),
             weeklyTargetHours: editWeeklyTarget,
@@ -935,7 +969,30 @@ export default function TeamPage() {
 
       <Modal open={showInvite} onClose={() => setShowInvite(false)} title="Invite Member">
         <form onSubmit={handleInvite} className="flex flex-col gap-4">
-          <Input label="Full Name" value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="Jane Smith" />
+          <TeamMemberNotionPicker
+            variant="invite"
+            value={inviteTeamMemberNotion}
+            onChange={(next) => {
+              setInviteTeamMemberNotion(next);
+              setInviteCreateNewNotion(false);
+              if (next?.title) setInviteNewMemberName(next.title);
+            }}
+            createNewActive={inviteCreateNewNotion}
+            onBeginCreateNew={() => {
+              setInviteCreateNewNotion(true);
+              setInviteTeamMemberNotion(null);
+            }}
+            onCancelCreateNew={() => setInviteCreateNewNotion(false)}
+          />
+          {inviteCreateNewNotion && (
+            <Input
+              label="Name for new Notion page"
+              value={inviteNewMemberName}
+              onChange={(e) => setInviteNewMemberName(e.target.value)}
+              placeholder="Jane Smith"
+              hint="Used as the Team Member title in Notion and as the invite name in Chronos."
+            />
+          )}
           <Input label="Email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="jane@example.com" />
           <Select label="Role" options={INVITE_ROLES} value={inviteRole} onChange={(value) => setInviteRole(value as "member" | "team_lead")} />
           <div className="flex flex-col gap-1.5">
@@ -981,7 +1038,15 @@ export default function TeamPage() {
         <form onSubmit={handleEditUser} className="flex flex-col gap-4">
           {role === "admin" && (
             <>
-              <Input label="Full Name" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Member name" />
+              <TeamMemberNotionPicker
+                variant="edit"
+                label="Notion Team Member"
+                value={editTeamMemberNotion}
+                onChange={(next) => {
+                  setEditTeamMemberNotion(next);
+                  if (next?.title) setEditName(next.title);
+                }}
+              />
               <Select label="Role" options={EDIT_ROLES} value={editRole} onChange={(value) => setEditRole(value as Role)} />
               <div className="flex flex-col gap-1.5">
                 <label

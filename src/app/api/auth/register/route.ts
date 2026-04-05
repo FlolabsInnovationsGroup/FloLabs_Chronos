@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { normalizeEmail } from "@/lib/invitations";
 import { ensureDiscordResourcesForUser } from "@/lib/discord-provisioning";
+import { findTeamMemberPageIdByEmail } from "@/lib/notion";
 
 const registerSchema = z.object({
   token: z.string().min(1),
@@ -39,14 +40,29 @@ export async function POST(req: Request) {
   }
 
   const hashedPassword = await bcrypt.hash(password, 12);
-  const [user] = await db.insert(users).values({
-    name: name.trim(),
-    email: normalizedEmail,
-    password: hashedPassword,
-    role: invite.role,
-    teamId: teamIds[0] ?? invite.teamId,
-    isActive: true,
-  }).returning({ id: users.id, email: users.email, name: users.name, role: users.role, teamId: users.teamId, isActive: users.isActive });
+  const notionTeamMemberId =
+    invite.notionTeamMemberId ?? (await findTeamMemberPageIdByEmail(normalizedEmail).catch(() => null));
+
+  const [user] = await db
+    .insert(users)
+    .values({
+      name: name.trim(),
+      email: normalizedEmail,
+      password: hashedPassword,
+      role: invite.role,
+      teamId: teamIds[0] ?? invite.teamId,
+      isActive: true,
+      notionTeamMemberId,
+    })
+    .returning({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+      teamId: users.teamId,
+      isActive: users.isActive,
+      notionTeamMemberId: users.notionTeamMemberId,
+    });
 
   const effectiveTeamIds = teamIds.length > 0 ? teamIds : (invite.teamId ? [invite.teamId] : []);
   if (effectiveTeamIds.length > 0) {

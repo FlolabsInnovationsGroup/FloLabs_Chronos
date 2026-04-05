@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { InlineSearchLoading } from "@/components/ui/InlineSearchLoading";
 
 interface FoundDatabase {
   id: string;
@@ -149,7 +150,10 @@ export function ControlForm() {
               </p>
             </div>
             <div className="flex gap-3">
-              <Input label="Search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Tasks, Team Members, Teams…" />
+              <div className="flex-1 flex flex-col gap-1.5">
+                <Input label="Search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Tasks, Team Members, Teams…" />
+                <div className="h-4">{searching ? <InlineSearchLoading label="Searching Notion…" /> : null}</div>
+              </div>
               <div className="self-end">
                 <Button variant="ghost" type="button" onClick={() => void handleSearch()} loading={searching}>Search</Button>
               </div>

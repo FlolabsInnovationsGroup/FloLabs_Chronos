@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { InlineSearchLoading } from "@/components/ui/InlineSearchLoading";
 
 interface TaskOption {
   id: string;
@@ -152,11 +153,7 @@ export function TaskPicker({
             className="flex-1 bg-transparent outline-none text-sm text-[#31332f] placeholder:text-[#b2b2ad] disabled:cursor-not-allowed"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           />
-          {loading && (
-            <span className="text-xs text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
-              Searching…
-            </span>
-          )}
+          {loading && <InlineSearchLoading />}
           {value && !disabled && (
             <button
               type="button"

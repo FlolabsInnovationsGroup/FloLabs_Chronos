@@ -10,7 +10,8 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "db:migrate:invitations-notion": "tsx scripts/migrate-invitations-notion-team-member-id.ts"
   },
   "dependencies": {
     "@auth/core": "^0.34.3",

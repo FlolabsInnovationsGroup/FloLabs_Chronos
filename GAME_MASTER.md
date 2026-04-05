@@ -211,6 +211,7 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 - Timer header now includes a round play/stop quick-action button beside the avatar; active timers show a disabled grey stop state until the stop requirements are satisfied.
 - Removed the duplicate active-description display beneath the timer clock so the Description field is the authoritative inline source.
 - Added migration script `scripts/migrate-timer-project-optional.ts` and ran it successfully.
+- Added `scripts/migrate-invitations-notion-team-member-id.ts` and `pnpm db:migrate:invitations-notion` for environments where `invitations.notion_team_member_id` was never applied (without it, `POST /api/invitations` insert fails against the Drizzle schema).
 - Invitation onboarding now routes Team Member page creation through shared Notion helpers instead of duplicating raw fetch logic in `src/app/api/invitations/route.ts`.
 - Team Member creation now supports Notion's native page-template flow and falls back cleanly when templates are unavailable or misconfigured.
 - New Team Member pages now also create a linked Onboarding page in `NOTION_ONBOARDINGS_DB_ID`, attempt to use that database's default template, and then patch the Team Member page's `Onboarding` relation.

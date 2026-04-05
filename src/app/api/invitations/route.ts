@@ -236,7 +236,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: err.message, matches: err.matches }, { status: 409 });
     }
     console.error("[api/invitations POST]", err);
-    const message = err instanceof Error ? err.message : "Invitation could not be created.";
+    const message = err instanceof Error ? err.message : String(err);
+    if (/notion_team_member_id|column .*notion_team_member_id/i.test(message)) {
+      return NextResponse.json(
+        {
+          error:
+            "Database is missing invitations.notion_team_member_id. Run `pnpm db:migrate:invitations-notion` (or `pnpm db:push`) against this environment.",
+        },
+        { status: 503 }
+      );
+    }
     const notionOrUpstream =
       /notion/i.test(message) ||
       message.includes("Team Members database") ||

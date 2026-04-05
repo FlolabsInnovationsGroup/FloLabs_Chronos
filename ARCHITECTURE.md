@@ -286,16 +286,17 @@ CREATE TABLE password_reset_tokens (
 );
 
 CREATE TABLE invitations (
-  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email          TEXT NOT NULL,
-  name           TEXT NOT NULL,
-  role           TEXT NOT NULL DEFAULT 'member',
-  team_id        UUID NOT NULL REFERENCES teams(id),
-  token          TEXT NOT NULL UNIQUE,
-  invited_by_id  UUID NOT NULL REFERENCES users(id),
-  expires_at     TIMESTAMPTZ NOT NULL,
-  accepted_at    TIMESTAMPTZ,
-  created_at     TIMESTAMPTZ DEFAULT now()
+  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email                   TEXT NOT NULL,
+  name                    TEXT NOT NULL,
+  role                    TEXT NOT NULL DEFAULT 'member',
+  team_id                 UUID NOT NULL REFERENCES teams(id),
+  token                   TEXT NOT NULL UNIQUE,
+  invited_by_id           UUID NOT NULL REFERENCES users(id),
+  expires_at              TIMESTAMPTZ NOT NULL,
+  accepted_at             TIMESTAMPTZ,
+  created_at              TIMESTAMPTZ DEFAULT now(),
+  notion_team_member_id   TEXT
 );
 
 CREATE TABLE invitation_team_memberships (

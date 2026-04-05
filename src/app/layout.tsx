@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Newsreader, Work_Sans } from "next/font/google";
+import { ThemeScript } from "@/components/theme/ThemeScript";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -32,7 +33,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${newsreader.variable} ${workSans.variable} h-full`}>
+    <html lang="en" className={`${newsreader.variable} ${workSans.variable} h-full`} suppressHydrationWarning>
       <head>
         <link
           rel="stylesheet"
@@ -40,9 +41,10 @@ export default function RootLayout({
         />
       </head>
       <body
-        className="min-h-full"
+        className="min-h-full bg-background text-on-background antialiased"
         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
       >
+        <ThemeScript />
         {children}
       </body>
     </html>

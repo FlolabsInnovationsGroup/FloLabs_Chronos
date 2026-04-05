@@ -67,26 +67,26 @@ export function ReportEntries({ entries }: ReportEntriesProps) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className={`w-full flex items-center justify-between px-6 py-4 bg-[#f5f4ef] hover:bg-[#efeee9] transition-colors cursor-pointer ${
+        className={`w-full flex items-center justify-between px-6 py-4 bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer ${
           expanded ? "rounded-t-xl" : "rounded-xl"
         }`}
       >
         <div className="flex items-center gap-3">
           <h3
-            className="text-sm font-semibold text-[#31332f]"
+            className="text-sm font-semibold text-on-background"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Detailed Entries
           </h3>
           <span
-            className="text-xs text-[#b2b2ad]"
+            className="text-xs text-outline-variant"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {entries.length} {entries.length === 1 ? "entry" : "entries"}
           </span>
         </div>
         <span
-          className="material-symbols-outlined text-[#5e605b] transition-transform duration-200"
+          className="material-symbols-outlined text-on-surface-variant transition-transform duration-200"
           style={{
             fontSize: "20px",
             transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
@@ -98,9 +98,9 @@ export function ReportEntries({ entries }: ReportEntriesProps) {
 
       {expanded && (
         <div className="px-2 py-2 flex flex-col gap-3 rounded-b-xl">
-          <div className="flex flex-col gap-2 px-4 py-3 rounded-xl bg-[#f5f4ef] sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex flex-col gap-2 px-4 py-3 rounded-xl bg-surface-container-low sm:flex-row sm:flex-wrap sm:items-center">
             <span
-              className="text-xs font-semibold uppercase tracking-wide text-[#5e605b]"
+              className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               Sort by
@@ -112,8 +112,8 @@ export function ReportEntries({ entries }: ReportEntriesProps) {
                 onClick={() => handleSort(column.key)}
                 className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide transition-colors ${
                   sortKey === column.key
-                    ? "border-[#d7d2c8] bg-white text-[#31332f]"
-                    : "border-transparent bg-transparent text-[#5e605b] hover:text-[#31332f]"
+                    ? "border-sort-border bg-surface-container-lowest text-on-background"
+                    : "border-transparent bg-transparent text-on-surface-variant hover:text-on-background"
                 }`}
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >

@@ -23,7 +23,7 @@ export function Input({ label, error, hint, className, id, ...props }: InputProp
       {label && (
         <label
           htmlFor={inputId}
-          className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+          className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           {label}
@@ -32,11 +32,11 @@ export function Input({ label, error, hint, className, id, ...props }: InputProp
       <input
         id={inputId}
         className={cn(
-          "w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none",
-          "placeholder:text-[#b2b2ad]",
-          "focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20",
+          "w-full px-3 py-2.5 text-sm text-on-background bg-surface-container-low rounded-lg outline-none",
+          "placeholder:text-outline-variant",
+          "focus:bg-background focus:ring-2 focus:ring-primary/20",
           "transition-all duration-150",
-          error && "ring-2 ring-[#a73b21]/30 bg-[#fff7f6]",
+          error && "ring-2 ring-error/30 bg-warm-surface",
           "disabled:opacity-50 disabled:cursor-not-allowed",
           className
         )}
@@ -45,7 +45,7 @@ export function Input({ label, error, hint, className, id, ...props }: InputProp
       />
       {error && (
         <p
-          className="text-xs text-[#a73b21]"
+          className="text-xs text-error"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           {error}
@@ -53,7 +53,7 @@ export function Input({ label, error, hint, className, id, ...props }: InputProp
       )}
       {hint && !error && (
         <p
-          className="text-xs text-[#5e605b]"
+          className="text-xs text-on-surface-variant"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           {hint}
@@ -71,7 +71,7 @@ export function Textarea({ label, error, hint, className, id, ...props }: Textar
       {label && (
         <label
           htmlFor={inputId}
-          className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+          className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           {label}
@@ -80,11 +80,11 @@ export function Textarea({ label, error, hint, className, id, ...props }: Textar
       <textarea
         id={inputId}
         className={cn(
-          "w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none resize-none",
-          "placeholder:text-[#b2b2ad]",
-          "focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20",
+          "w-full px-3 py-2.5 text-sm text-on-background bg-surface-container-low rounded-lg outline-none resize-none",
+          "placeholder:text-outline-variant",
+          "focus:bg-background focus:ring-2 focus:ring-primary/20",
           "transition-all duration-150",
-          error && "ring-2 ring-[#a73b21]/30 bg-[#fff7f6]",
+          error && "ring-2 ring-error/30 bg-warm-surface",
           "disabled:opacity-50 disabled:cursor-not-allowed",
           className
         )}
@@ -93,7 +93,7 @@ export function Textarea({ label, error, hint, className, id, ...props }: Textar
       />
       {error && (
         <p
-          className="text-xs text-[#a73b21]"
+          className="text-xs text-error"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           {error}
@@ -101,7 +101,7 @@ export function Textarea({ label, error, hint, className, id, ...props }: Textar
       )}
       {hint && !error && (
         <p
-          className="text-xs text-[#5e605b]"
+          className="text-xs text-on-surface-variant"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           {hint}

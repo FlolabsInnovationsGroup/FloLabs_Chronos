@@ -47,8 +47,8 @@ function SidebarLink(params: {
           ? "w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition-colors"
           : "w-full flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 transition-colors group",
         isActive
-          ? "bg-[#e9e8e3] text-[#366769]"
-          : "text-[#595a6b] hover:text-[#366769] hover:bg-[#f5f4ef]"
+          ? "bg-surface-container-high text-primary"
+          : "text-on-secondary-fixed-variant hover:text-primary hover:bg-surface-container-low"
       )}
     >
       <span
@@ -108,7 +108,7 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
           aria-label="Close navigation"
           onClick={onClose}
           className={cn(
-            "absolute inset-0 bg-[#31332f]/18 backdrop-blur-[2px] transition-opacity duration-200",
+            "absolute inset-0 bg-chrome/18 backdrop-blur-[2px] transition-opacity duration-200",
             open ? "opacity-100" : "opacity-0"
           )}
         />
@@ -117,19 +117,19 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
           id="mobile-navigation"
           aria-label="Main navigation"
           className={cn(
-            "relative flex h-full w-[min(18rem,calc(100vw-1rem))] max-w-full flex-col border-r border-[#efeee9] bg-surface-container-lowest paper-shadow px-3 py-4 transition-transform duration-200 ease-out",
+            "relative flex h-full w-[min(18rem,calc(100vw-1rem))] max-w-full flex-col border-r border-surface-container bg-surface-container-lowest paper-shadow px-3 py-4 transition-transform duration-200 ease-out",
             open ? "translate-x-0" : "-translate-x-full"
           )}
         >
           <div className="px-2 pb-3">
             <p
-              className="text-[11px] uppercase tracking-[0.18em] text-[#8b8b84]"
+              className="text-[11px] uppercase tracking-[0.18em] text-label-muted"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               Navigation
             </p>
             <p
-              className="mt-1 text-sm text-[#5e605b]"
+              className="mt-1 text-sm text-on-surface-variant"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               FloLabs Chronos
@@ -148,7 +148,7 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
             ))}
           </nav>
 
-          <div className="mt-4 border-t border-[#efeee9] pt-3">
+          <div className="mt-4 border-t border-surface-container pt-3">
             <SettingsLink pathname={pathname} mobile onNavigate={onClose} />
           </div>
         </aside>
@@ -163,7 +163,7 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
     >
       <Link
         href="/timer"
-        className="w-14 h-14 flex items-center justify-center rounded-xl mb-3 hover:bg-[#f5f4ef] transition-colors"
+        className="w-14 h-14 flex items-center justify-center rounded-xl mb-3 hover:bg-surface-container-low transition-colors"
         aria-label="FloLabs Chronos home"
       >
         <Image

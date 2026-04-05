@@ -427,22 +427,22 @@ export default function TeamPage() {
     ...(role === "admin" || role === "team_lead" ? [{ label: "Actions", key: null }] : []),
   ];
   const compactHeadCellClass =
-    "px-3 sm:px-4 lg:px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[#5e605b]";
+    "px-3 sm:px-4 lg:px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-on-surface-variant";
   const compactBodyCellClass = "px-3 sm:px-4 lg:px-5 py-4 align-top";
-  const compactEmptyCellClass = "px-3 sm:px-4 lg:px-5 py-10 text-center text-sm text-[#b2b2ad]";
+  const compactEmptyCellClass = "px-3 sm:px-4 lg:px-5 py-10 text-center text-sm text-outline-variant";
 
   return (
     <div className="flex flex-col gap-8 max-w-[90rem] mx-auto">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1
-            className="text-2xl font-light italic text-[#31332f]"
+            className="text-2xl font-light italic text-on-background"
             style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
           >
             Users
           </h1>
           <p
-            className="text-sm text-[#5e605b] mt-1"
+            className="text-sm text-on-surface-variant mt-1"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {role === "admin"
@@ -455,7 +455,7 @@ export default function TeamPage() {
 
         <div className="flex items-center gap-2">
           {(role === "admin" || role === "team_lead") && (
-            <div className="rounded-xl bg-[#f5f4ef] px-3 py-2 text-sm text-[#31332f]">
+            <div className="rounded-xl bg-surface-container-low px-3 py-2 text-sm text-on-background">
               <span
                 className="font-medium"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -475,15 +475,15 @@ export default function TeamPage() {
         </div>
       </div>
 
-      <div className="inline-flex rounded-xl bg-[#f5f4ef] p-1 self-start">
+      <div className="inline-flex rounded-xl bg-surface-container-low p-1 self-start">
         <button
-          className={`px-4 py-2 rounded-lg text-sm ${activeTab === "teams" ? "bg-white text-[#31332f] shadow-sm" : "text-[#5e605b]"}`}
+          className={`px-4 py-2 rounded-lg text-sm ${activeTab === "teams" ? "bg-surface-container-lowest text-on-background shadow-sm" : "text-on-surface-variant"}`}
           onClick={() => setActiveTab("teams")}
         >
           Teams
         </button>
         <button
-          className={`px-4 py-2 rounded-lg text-sm ${activeTab === "users" ? "bg-white text-[#31332f] shadow-sm" : "text-[#5e605b]"}`}
+          className={`px-4 py-2 rounded-lg text-sm ${activeTab === "users" ? "bg-surface-container-lowest text-on-background shadow-sm" : "text-on-surface-variant"}`}
           onClick={() => setActiveTab("users")}
         >
           Users
@@ -491,9 +491,9 @@ export default function TeamPage() {
       </div>
 
       {copiedInviteUrl && (
-        <div className="rounded-xl bg-[#f5f4ef] p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="rounded-xl bg-surface-container-low p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <p
-            className="text-sm text-[#31332f] break-all"
+            className="text-sm text-on-background break-all"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {copiedInviteUrl}
@@ -506,7 +506,7 @@ export default function TeamPage() {
 
       {error && (
         <p
-          className="text-sm text-[#a73b21] bg-[#fff7f6] px-4 py-3 rounded-xl"
+          className="text-sm text-error bg-warm-surface px-4 py-3 rounded-xl"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           {error}
@@ -517,12 +517,12 @@ export default function TeamPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {loading ? (
             [...Array(3)].map((_, index) => (
-              <div key={index} className="h-32 rounded-xl bg-[#f5f4ef] animate-pulse" />
+              <div key={index} className="h-32 rounded-xl bg-surface-container-low animate-pulse" />
             ))
           ) : teamCards.length === 0 ? (
             <div className="md:col-span-3 bg-surface-container-lowest rounded-xl paper-shadow p-6">
               <p
-                className="text-sm text-[#5e605b]"
+                className="text-sm text-on-surface-variant"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 No teams are configured yet.
@@ -533,7 +533,7 @@ export default function TeamPage() {
               <div key={team.id} className="bg-surface-container-lowest rounded-xl paper-shadow p-5">
                 <div className="flex items-center justify-between">
                   <p
-                    className="text-xs uppercase tracking-wide text-[#5e605b]"
+                    className="text-xs uppercase tracking-wide text-on-surface-variant"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
                     Teams
@@ -543,41 +543,41 @@ export default function TeamPage() {
                   </Badge>
                 </div>
                 <h2
-                  className="text-xl font-light italic text-[#31332f] mt-1"
+                  className="text-xl font-light italic text-on-background mt-1"
                   style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
                 >
                   {team.name}
                 </h2>
                 <p
-                  className="text-xs text-[#b2b2ad] mt-1"
+                  className="text-xs text-outline-variant mt-1"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
                   {team.slug}
                 </p>
                 <div className="grid grid-cols-2 gap-3 mt-4">
-                  <div className="rounded-xl bg-[#f5f4ef] p-3">
+                  <div className="rounded-xl bg-surface-container-low p-3">
                     <p
-                      className="text-xs uppercase tracking-wide text-[#5e605b]"
+                      className="text-xs uppercase tracking-wide text-on-surface-variant"
                       style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                     >
                       Members
                     </p>
                     <p
-                      className="text-2xl font-light italic text-[#31332f] mt-1"
+                      className="text-2xl font-light italic text-on-background mt-1"
                       style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
                     >
                       {team.memberCount}
                     </p>
                   </div>
-                  <div className="rounded-xl bg-[#f5f4ef] p-3">
+                  <div className="rounded-xl bg-surface-container-low p-3">
                     <p
-                      className="text-xs uppercase tracking-wide text-[#5e605b]"
+                      className="text-xs uppercase tracking-wide text-on-surface-variant"
                       style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                     >
                       Pending
                     </p>
                     <p
-                      className="text-2xl font-light italic text-[#31332f] mt-1"
+                      className="text-2xl font-light italic text-on-background mt-1"
                       style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
                     >
                       {team.pendingInvites}
@@ -594,7 +594,7 @@ export default function TeamPage() {
         (role === "member" ? (
           <div className="bg-surface-container-lowest rounded-xl paper-shadow p-6">
             <p
-              className="text-sm text-[#5e605b]"
+              className="text-sm text-on-surface-variant"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               {(currentUser?.teams?.length ?? 0) > 0
@@ -607,12 +607,12 @@ export default function TeamPage() {
             <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto">
               <table className="w-full min-w-[880px] lg:min-w-[960px]">
                 <thead>
-                  <tr className="bg-[#f5f4ef]">
+                  <tr className="bg-surface-container-low">
                     {userColumns.map((column) => (
                       <th
                         key={column.label}
                         onClick={column.key ? () => handleSort(column.key as SortKey) : undefined}
-                        className={`${compactHeadCellClass} select-none ${column.key ? "cursor-pointer hover:text-[#31332f]" : ""}`}
+                        className={`${compactHeadCellClass} select-none ${column.key ? "cursor-pointer hover:text-on-background" : ""}`}
                         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                       >
                         <span className="inline-flex items-center gap-1">
@@ -632,7 +632,7 @@ export default function TeamPage() {
                     [...Array(3)].map((_, index) => (
                       <tr key={index}>
                         <td colSpan={userColumns.length} className="px-3 sm:px-4 lg:px-5 py-4">
-                          <div className="h-4 rounded bg-[#f5f4ef] animate-pulse" />
+                          <div className="h-4 rounded bg-surface-container-low animate-pulse" />
                         </td>
                       </tr>
                     ))
@@ -650,17 +650,17 @@ export default function TeamPage() {
                     sortedUsers.map((user, index) => {
                       const liveDuration = getLiveDuration(user.activeTimer?.startedAt, now);
                       return (
-                        <tr key={user.id} className={index % 2 === 0 ? "" : "bg-[#fbf9f5]"}>
+                        <tr key={user.id} className={index % 2 === 0 ? "" : "bg-background"}>
                           <td className={compactBodyCellClass}>
                             <div>
                               <p
-                                className="text-sm font-medium text-[#31332f]"
+                                className="text-sm font-medium text-on-background"
                                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                               >
                                 {user.name}
                               </p>
                               <p
-                                className="text-xs text-[#b2b2ad]"
+                                className="text-xs text-outline-variant"
                                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                               >
                                 {user.email}
@@ -682,7 +682,7 @@ export default function TeamPage() {
                                 ))
                               ) : (
                                 <span
-                                  className="text-sm text-[#5e605b]"
+                                  className="text-sm text-on-surface-variant"
                                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                                 >
                                   Unassigned
@@ -693,10 +693,10 @@ export default function TeamPage() {
                           <td className={compactBodyCellClass}>
                             {liveDuration !== null ? (
                               <div className="flex flex-col gap-1">
-                                <Badge color="custom" className="bg-[#fde0d9] text-[#791903]">Live · {formatDurationHuman(liveDuration)}</Badge>
+                                <Badge color="custom" className="bg-warm-muted text-error-dim">Live · {formatDurationHuman(liveDuration)}</Badge>
                                 {user.activeTimer?.description && (
                                   <p
-                                    className="max-w-[12rem] text-xs text-[#5e605b] break-words md:max-w-[14rem] lg:max-w-[16rem]"
+                                    className="max-w-[12rem] text-xs text-on-surface-variant break-words md:max-w-[14rem] lg:max-w-[16rem]"
                                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                                   >
                                     {user.activeTimer.description}
@@ -732,7 +732,7 @@ export default function TeamPage() {
                               </div>
                             ) : (
                               <span
-                                className="text-sm text-[#b2b2ad]"
+                                className="text-sm text-outline-variant"
                                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                               >
                                 —
@@ -741,13 +741,13 @@ export default function TeamPage() {
                           </td>
                           <td className={compactBodyCellClass}>
                             <span
-                              className="text-sm font-medium italic text-[#31332f] tabular-nums"
+                              className="text-sm font-medium italic text-on-background tabular-nums"
                               style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
                             >
                               {user.weeklyTargetHours ?? 40}h
                             </span>
                             <span
-                              className="text-xs text-[#b2b2ad] ml-1"
+                              className="text-xs text-outline-variant ml-1"
                               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                             >
                               / week
@@ -760,7 +760,7 @@ export default function TeamPage() {
                           </td>
                           <td className={compactBodyCellClass}>
                             <span
-                              className="text-sm text-[#5e605b]"
+                              className="text-sm text-on-surface-variant"
                               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                             >
                               {user.createdAt
@@ -778,7 +778,7 @@ export default function TeamPage() {
                                 <Tooltip label="Edit member">
                                   <button
                                     onClick={() => setEditingUser(user)}
-                                    className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef]"
+                                    className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low"
                                   >
                                     <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
                                       edit
@@ -789,7 +789,7 @@ export default function TeamPage() {
                                   <Tooltip label="Delete member">
                                     <button
                                       onClick={() => setConfirmDeleteUser(user)}
-                                      className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#fff7f6] hover:text-[#a73b21]"
+                                      className="p-1.5 rounded-lg text-on-surface-variant hover:bg-warm-surface hover:text-error"
                                     >
                                       <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
                                         delete
@@ -812,7 +812,7 @@ export default function TeamPage() {
               <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto">
                 <table className="w-full min-w-[680px] lg:min-w-[760px]">
                   <thead>
-                    <tr className="bg-[#f5f4ef]">
+                    <tr className="bg-surface-container-low">
                       {["Invitee", "Role", "Teams", "Expires", "Actions"].map((heading) => (
                         <th
                           key={heading}
@@ -837,16 +837,16 @@ export default function TeamPage() {
                       </tr>
                     ) : (
                       openInvitations.map((invite, index) => (
-                        <tr key={invite.id} className={index % 2 === 0 ? "" : "bg-[#fbf9f5]"}>
+                        <tr key={invite.id} className={index % 2 === 0 ? "" : "bg-background"}>
                           <td className={compactBodyCellClass}>
                             <p
-                              className="text-sm font-medium text-[#31332f]"
+                              className="text-sm font-medium text-on-background"
                               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                             >
                               {invite.name}
                             </p>
                             <p
-                              className="text-xs text-[#b2b2ad]"
+                              className="text-xs text-outline-variant"
                               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                             >
                               {invite.email}
@@ -859,7 +859,7 @@ export default function TeamPage() {
                           </td>
                           <td className={compactBodyCellClass}>
                             <span
-                              className="text-sm text-[#5e605b]"
+                              className="text-sm text-on-surface-variant"
                               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                             >
                               {(invite.teams ?? []).map((team) => team.name).join(", ") || "Unknown"}
@@ -867,7 +867,7 @@ export default function TeamPage() {
                           </td>
                           <td className={compactBodyCellClass}>
                             <span
-                              className="text-sm text-[#5e605b]"
+                              className="text-sm text-on-surface-variant"
                               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                             >
                               {new Date(invite.expiresAt).toLocaleDateString("en-US", {
@@ -910,7 +910,7 @@ export default function TeamPage() {
           <Select label="Role" options={INVITE_ROLES} value={inviteRole} onChange={(value) => setInviteRole(value as "member" | "team_lead")} />
           <div className="flex flex-col gap-1.5">
             <label
-              className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+              className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               Teams
@@ -951,7 +951,7 @@ export default function TeamPage() {
               <Select label="Role" options={EDIT_ROLES} value={editRole} onChange={(value) => setEditRole(value as Role)} />
               <div className="flex flex-col gap-1.5">
                 <label
-                  className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                  className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
                   Teams
@@ -969,10 +969,10 @@ export default function TeamPage() {
                   type="checkbox"
                   checked={editIsActive}
                   onChange={(e) => setEditIsActive(e.target.checked)}
-                  className="w-4 h-4 rounded accent-[#366769]"
+                  className="w-4 h-4 rounded accent-primary"
                 />
                 <span
-                  className="text-sm text-[#31332f]"
+                  className="text-sm text-on-background"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
                   Active account
@@ -1001,7 +1001,7 @@ export default function TeamPage() {
       <Modal open={!!confirmDeleteUser} onClose={() => setConfirmDeleteUser(null)} title="Delete member" size="sm">
         <div className="flex flex-col gap-4">
           <p
-            className="text-sm text-[#5e605b]"
+            className="text-sm text-on-surface-variant"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Delete {confirmDeleteUser?.name}? This permanently removes the member account if it has no time entries.
@@ -1020,7 +1020,7 @@ export default function TeamPage() {
       <Modal open={!!confirmDisableInvite} onClose={() => setConfirmDisableInvite(null)} title="Disable invitation link" size="sm">
         <div className="flex flex-col gap-4">
           <p
-            className="text-sm text-[#5e605b]"
+            className="text-sm text-on-surface-variant"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Disable the invitation link for {confirmDisableInvite?.email}? Existing links will stop working immediately.
@@ -1039,7 +1039,7 @@ export default function TeamPage() {
       <Modal open={!!confirmDeleteInvite} onClose={() => setConfirmDeleteInvite(null)} title="Delete invitation link" size="sm">
         <div className="flex flex-col gap-4">
           <p
-            className="text-sm text-[#5e605b]"
+            className="text-sm text-on-surface-variant"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Delete the invitation for {confirmDeleteInvite?.email}? This cannot be undone.

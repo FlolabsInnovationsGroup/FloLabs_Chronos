@@ -9,6 +9,7 @@ import { useTimer } from "@/hooks/use-timer";
 import { TimerActionIndicator } from "@/components/timer/TimerActionIndicator";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { getTimerStopValidation } from "@/lib/timer-rules";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import floLabsLogo from "../../../assets/logo/FLChron_logo_512px.png";
 
 const NAV_LINKS = [
@@ -56,9 +57,9 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
       aria-label={timerActionLabel}
       className={cn(
         "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
-        !activeTimer && "bg-[#366769] text-[#e3feff] hover:bg-[#295a5d]",
-        canStop && "bg-[#a73b21] text-[#fff7f6] hover:bg-[#791903]",
-        activeTimer && !canStop && "bg-[#e9e8e3] text-[#a7a79f] cursor-not-allowed"
+        !activeTimer && "bg-primary text-on-primary hover:bg-primary-dim",
+        canStop && "bg-error text-on-chrome hover:bg-error-dim",
+        activeTimer && !canStop && "bg-surface-container-high text-disabled-on cursor-not-allowed"
       )}
     >
       <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
@@ -68,7 +69,7 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
   );
 
   return (
-    <header className="sticky top-0 z-[70] bg-[#fbf9f5]/90 backdrop-blur-md">
+    <header className="sticky top-0 z-[70] bg-background/90 backdrop-blur-md">
       <div className="flex h-14 items-center justify-between px-3 sm:px-4 md:px-6">
         <div className="md:hidden">
           <button
@@ -78,11 +79,11 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
             aria-controls="mobile-navigation"
             aria-expanded={mobileNavOpen}
             className={cn(
-              "inline-flex items-center gap-2 rounded-full border border-[#e3e3dc] bg-[#fffdf9] py-1.5 pl-2 pr-3 text-[#5e605b] transition-colors",
-              mobileNavOpen ? "bg-[#f5f4ef] text-[#31332f]" : "hover:bg-[#f5f4ef] hover:text-[#31332f]"
+              "inline-flex items-center gap-2 rounded-full border border-surface-container-highest bg-surface-container-lowest py-1.5 pl-2 pr-3 text-on-surface-variant transition-colors",
+              mobileNavOpen ? "bg-surface-container-low text-on-background" : "hover:bg-surface-container-low hover:text-on-background"
             )}
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f5f4ef]">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-container-low">
               <Image src={floLabsLogo} alt="" priority className="h-6 w-6 object-contain" />
             </span>
             <span
@@ -111,8 +112,8 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
                   className={cn(
                     "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
                     isActive
-                      ? "bg-[#e9e8e3] text-[#31332f]"
-                      : "text-[#5e605b] hover:text-[#31332f] hover:bg-[#f5f4ef]"
+                      ? "bg-surface-container-high text-on-background"
+                      : "text-on-surface-variant hover:text-on-background hover:bg-surface-container-low"
                   )}
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
@@ -122,8 +123,13 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
             })}
           </nav>
 
-          <div className="hidden md:flex items-center">
+          <div className="hidden md:flex items-center gap-2">
             <TimerActionIndicator compact />
+            <ThemeToggle />
+          </div>
+
+          <div className="md:hidden">
+            <ThemeToggle />
           </div>
 
           <Tooltip label={timerActionLabel} delayMs={300}>
@@ -131,7 +137,7 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
           </Tooltip>
 
           <div
-            className="w-8 h-8 rounded-full bg-[#366769] text-[#e3feff] flex items-center justify-center text-sm font-semibold cursor-pointer select-none"
+            className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center text-sm font-semibold cursor-pointer select-none"
             title={session?.user?.name ?? "User"}
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >

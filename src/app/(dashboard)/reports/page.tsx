@@ -263,13 +263,13 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1
-            className="text-2xl font-light italic text-[#31332f]"
+            className="text-2xl font-light italic text-on-background"
             style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
           >
             Reports
           </h1>
           <p
-            className="text-sm text-[#5e605b] mt-0.5"
+            className="text-sm text-on-surface-variant mt-0.5"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {entries.length} entries &mdash; {totalHours}h total
@@ -304,18 +304,18 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           },
         ].map(({ label, value, icon }) => (
           <div key={label} className="bg-surface-container-lowest rounded-xl paper-shadow p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-[#b9ecee] flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-[#366769]" style={{ fontSize: "20px" }}>{icon}</span>
+            <div className="w-10 h-10 rounded-xl bg-primary-container flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-primary" style={{ fontSize: "20px" }}>{icon}</span>
             </div>
             <div>
               <p
-                className="text-xs text-[#5e605b] uppercase tracking-wide font-medium"
+                className="text-xs text-on-surface-variant uppercase tracking-wide font-medium"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 {label}
               </p>
               <p
-                className="text-2xl font-light italic text-[#31332f] tabular-nums"
+                className="text-2xl font-light italic text-on-background tabular-nums"
                 style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
               >
                 {value}

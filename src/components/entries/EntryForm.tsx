@@ -211,7 +211,7 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
 
         <div className="flex flex-col gap-1.5">
           <label
-            className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+            className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Tags
@@ -230,14 +230,14 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5">
                 <label
-                  className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                  className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
                   Start Time
                 </label>
                 {startLocked && (
                   <Tooltip label="Locked — end was already edited" position="top">
-                    <span className="text-[#5e605b] cursor-default select-none">🔒</span>
+                    <span className="text-on-surface-variant cursor-default select-none">🔒</span>
                   </Tooltip>
                 )}
               </div>
@@ -252,14 +252,14 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5">
                 <label
-                  className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                  className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
                   End Time
                 </label>
                 {endLocked && (
                   <Tooltip label="Locked — start was already edited" position="top">
-                    <span className="text-[#5e605b] cursor-default select-none">🔒</span>
+                    <span className="text-on-surface-variant cursor-default select-none">🔒</span>
                   </Tooltip>
                 )}
               </div>
@@ -275,7 +275,7 @@ export function EntryForm({ open, onClose, onSaved, entry, projects, tags }: Ent
 
         {error && (
           <p
-            className="text-sm text-[#a73b21]"
+            className="text-sm text-error"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {error}

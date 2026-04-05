@@ -38,16 +38,16 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2
-          className="text-base font-semibold text-[#31332f]"
+          className="text-base font-semibold text-on-background"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           Daily Momentum
         </h2>
         {activeTimer && (
-          <span className="flex items-center gap-1.5 rounded-full bg-[#fde0d9] px-2.5 py-1 text-xs font-medium text-[#791903]">
+          <span className="flex items-center gap-1.5 rounded-full bg-warm-muted px-2.5 py-1 text-xs font-medium text-error-dim">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#a73b21] opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#a73b21]" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-error" />
             </span>
             Live
           </span>
@@ -57,21 +57,21 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
       {/* Hours logged */}
       <div className="flex flex-col gap-1">
         <p
-          className="text-xs uppercase tracking-widest text-[#755a40] font-medium"
+          className="text-xs uppercase tracking-widest text-tertiary font-medium"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           Hours logged today
         </p>
         <div className="flex flex-wrap items-baseline gap-1.5 min-w-0">
           <span
-            className="text-4xl sm:text-5xl font-light italic text-[#31332f] tabular-nums break-words"
+            className="text-4xl sm:text-5xl font-light italic text-on-background tabular-nums break-words"
             style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
           >
             {hoursInt}
-            <span className="text-2xl text-[#5e605b]">h {minutesInt}m</span>
+            <span className="text-2xl text-on-surface-variant">h {minutesInt}m</span>
           </span>
           <span
-            className="text-sm text-[#b2b2ad] ml-0 sm:ml-1"
+            className="text-sm text-outline-variant ml-0 sm:ml-1"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             / {targetHours}h target
@@ -81,17 +81,17 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
 
       {/* Progress bar */}
       <div className="flex flex-col gap-2">
-        <div className="w-full h-2 bg-[#f5f4ef] rounded-full overflow-hidden">
+        <div className="w-full h-2 bg-surface-container-low rounded-full overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-1000"
             style={{
               width: `${progressPct}%`,
-              backgroundColor: progressPct >= 100 ? "#366769" : "#abdddf",
+              backgroundColor: progressPct >= 100 ? "var(--c-primary)" : "var(--c-primary-fixed-dim)",
             }}
           />
         </div>
         <p
-          className="text-xs text-[#5e605b]"
+          className="text-xs text-on-surface-variant"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           {progressPct >= 100
@@ -102,30 +102,30 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-[#f5f4ef] rounded-xl p-3.5 flex flex-col gap-1">
+        <div className="bg-surface-container-low rounded-xl p-3.5 flex flex-col gap-1">
           <p
-            className="text-xs text-[#5e605b] uppercase tracking-wide font-medium"
+            className="text-xs text-on-surface-variant uppercase tracking-wide font-medium"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Sessions
           </p>
           <p
-            className="text-2xl font-light italic text-[#31332f] tabular-nums"
+            className="text-2xl font-light italic text-on-background tabular-nums"
             style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
           >
             {sessionCount}
           </p>
         </div>
 
-        <div className="bg-[#f5f4ef] rounded-xl p-3.5 flex flex-col gap-1">
+        <div className="bg-surface-container-low rounded-xl p-3.5 flex flex-col gap-1">
           <p
-            className="text-xs text-[#5e605b] uppercase tracking-wide font-medium"
+            className="text-xs text-on-surface-variant uppercase tracking-wide font-medium"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {activeTimer ? "Active Project" : "Last Project"}
           </p>
           <p
-            className="text-sm font-medium text-[#31332f] truncate mt-1"
+            className="text-sm font-medium text-on-background truncate mt-1"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             title={activeProjectName ?? todayEntries[0]?.project?.name ?? "None"}
           >

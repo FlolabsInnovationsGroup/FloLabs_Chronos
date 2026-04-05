@@ -5,6 +5,7 @@ import { signOut } from "next-auth/react";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 interface SettingsFormProps {
   user: {
@@ -86,17 +87,35 @@ export function SettingsForm({ user }: SettingsFormProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      <Card className="p-6 flex flex-row flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2
+            className="text-base font-medium text-on-background"
+            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          >
+            Appearance
+          </h2>
+          <p
+            className="text-sm text-on-surface-variant mt-0.5"
+            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          >
+            Light or dark theme (saved on this device)
+          </p>
+        </div>
+        <ThemeToggle />
+      </Card>
+
       {/* Profile info */}
       <Card className="p-6 flex flex-col gap-5">
         <div>
           <h2
-            className="text-base font-medium text-[#31332f]"
+            className="text-base font-medium text-on-background"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Profile
           </h2>
           <p
-            className="text-sm text-[#5e605b] mt-0.5"
+            className="text-sm text-on-surface-variant mt-0.5"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Update your display name
@@ -121,7 +140,7 @@ export function SettingsForm({ user }: SettingsFormProps) {
             </Button>
             {nameSuccess && (
               <span
-                className="text-sm text-[#366769]"
+                className="text-sm text-primary"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 Saved
@@ -135,13 +154,13 @@ export function SettingsForm({ user }: SettingsFormProps) {
       <Card className="p-6 flex flex-col gap-5">
         <div>
           <h2
-            className="text-base font-medium text-[#31332f]"
+            className="text-base font-medium text-on-background"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Password
           </h2>
           <p
-            className="text-sm text-[#5e605b] mt-0.5"
+            className="text-sm text-on-surface-variant mt-0.5"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Change your account password
@@ -182,7 +201,7 @@ export function SettingsForm({ user }: SettingsFormProps) {
             </Button>
             {pwSuccess && (
               <span
-                className="text-sm text-[#366769]"
+                className="text-sm text-primary"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 Password updated
@@ -195,13 +214,13 @@ export function SettingsForm({ user }: SettingsFormProps) {
       <Card className="p-6 flex flex-col gap-4">
         <div>
           <h2
-            className="text-base font-medium text-[#31332f]"
+            className="text-base font-medium text-on-background"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Session
           </h2>
           <p
-            className="text-sm text-[#5e605b] mt-0.5"
+            className="text-sm text-on-surface-variant mt-0.5"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Sign out of your FloLabs Chronos account on this device

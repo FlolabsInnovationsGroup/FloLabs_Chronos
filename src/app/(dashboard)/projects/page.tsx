@@ -89,18 +89,18 @@ function ProjectForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-      <div className="rounded-2xl bg-[#f5f4ef] p-4 flex items-center gap-4">
+      <div className="rounded-2xl bg-surface-container-low p-4 flex items-center gap-4">
         <span className="material-symbols-outlined shrink-0" style={{ fontSize: "34px", color }}>
           {icon}
         </span>
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wide text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+          <p className="text-xs uppercase tracking-wide text-on-surface-variant" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             Preview
           </p>
-          <p className="text-lg italic text-[#31332f] truncate" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>
+          <p className="text-lg italic text-on-background truncate" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>
             {name.trim() || "Your project name"}
           </p>
-          <p className="text-xs text-[#b2b2ad] mt-0.5" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+          <p className="text-xs text-outline-variant mt-0.5" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             {icon.replace(/_/g, " ")}
           </p>
         </div>
@@ -109,7 +109,7 @@ function ProjectForm({
       <Input label="Project Name" placeholder="e.g. Website Redesign" value={name} onChange={(e) => setName(e.target.value)} error={error} />
 
       <div className="flex flex-col gap-2">
-        <label className="text-xs font-medium text-[#5e605b] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+        <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
           Color
         </label>
         <div className="flex flex-wrap gap-2">
@@ -128,19 +128,19 @@ function ProjectForm({
         </div>
       </div>
 
-      <div className="rounded-2xl bg-[#f5f4ef] p-4 flex items-start gap-3">
+      <div className="rounded-2xl bg-surface-container-low p-4 flex items-start gap-3">
         <input
           id="project-requires-task"
           type="checkbox"
           checked={requiresTaskOnStop}
           onChange={(e) => setRequiresTaskOnStop(e.target.checked)}
-          className="mt-1 h-4 w-4 rounded border-[#d8d6cd] text-[#366769]"
+          className="mt-1 h-4 w-4 rounded border-outline-variant text-primary"
         />
         <div className="min-w-0">
-          <label htmlFor="project-requires-task" className="text-sm font-medium text-[#31332f]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+          <label htmlFor="project-requires-task" className="text-sm font-medium text-on-background" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             Require a task to stop timers for this project
           </label>
-          <p className="text-xs text-[#5e605b] mt-1" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+          <p className="text-xs text-on-surface-variant mt-1" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             Description and project are always required. Enable this only for projects like Program Task.
           </p>
         </div>
@@ -148,7 +148,7 @@ function ProjectForm({
 
       <div className="flex flex-col gap-2">
         <Input label="Search Material icon" placeholder="Search icons like folder, rocket, chart, palette..." value={iconSearch} onChange={(e) => setIconSearch(e.target.value)} />
-        <div className="rounded-2xl bg-[#f5f4ef] p-3 max-h-72 overflow-y-auto">
+        <div className="rounded-2xl bg-surface-container-low p-3 max-h-72 overflow-y-auto">
           <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
             {filteredIcons.map((item) => {
               const active = icon === item;
@@ -157,18 +157,23 @@ function ProjectForm({
                   key={item}
                   type="button"
                   onClick={() => setIcon(item)}
-                  className="group rounded-2xl px-2 py-3 flex flex-col items-center justify-center gap-2 transition-all hover:bg-[#fbf9f5]"
+                  className="group rounded-2xl px-2 py-3 flex flex-col items-center justify-center gap-2 transition-all hover:bg-background"
                   style={{ backgroundColor: active ? `${color}18` : "transparent", outline: active ? `2px solid ${color}` : "none" }}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: "24px", color: active ? color : "#5e605b" }}>{item}</span>
-                  <span className="text-[10px] leading-tight text-center break-words text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: "24px", color: active ? color : "var(--c-on-surface-variant)" }}
+                  >
+                    {item}
+                  </span>
+                  <span className="text-[10px] leading-tight text-center break-words text-on-surface-variant" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
                     {item.replace(/_/g, " ")}
                   </span>
                 </button>
               );
             })}
           </div>
-          {filteredIcons.length === 0 && <p className="text-sm text-[#b2b2ad] text-center py-6" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>No icons found for that search.</p>}
+          {filteredIcons.length === 0 && <p className="text-sm text-outline-variant text-center py-6" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>No icons found for that search.</p>}
         </div>
       </div>
 
@@ -184,7 +189,7 @@ function ProjectForm({
 
       <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete project" size="sm">
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-[#5e605b]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+          <p className="text-sm text-on-surface-variant" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             Delete this project? This will also delete all time entries linked to it. This action cannot be undone.
           </p>
           <div className="flex justify-end gap-3">
@@ -287,8 +292,8 @@ export default function ProjectsPage() {
     <div className="flex flex-col gap-8 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-light italic text-[#31332f]" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Projects</h1>
-          <p className="text-sm text-[#5e605b] mt-0.5" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+          <h1 className="text-2xl font-light italic text-on-background" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Projects</h1>
+          <p className="text-sm text-on-surface-variant mt-0.5" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             {activeProjects.length} active project{activeProjects.length !== 1 ? "s" : ""}
           </p>
         </div>
@@ -302,12 +307,12 @@ export default function ProjectsPage() {
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => <div key={i} className="h-28 bg-[#f5f4ef] rounded-xl animate-pulse" />)}
+          {[...Array(6)].map((_, i) => <div key={i} className="h-28 bg-surface-container-low rounded-xl animate-pulse" />)}
         </div>
       ) : activeProjects.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <span className="material-symbols-outlined text-[#b2b2ad]" style={{ fontSize: "40px" }}>folder_open</span>
-          <p className="text-sm text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+          <span className="material-symbols-outlined text-outline-variant" style={{ fontSize: "40px" }}>folder_open</span>
+          <p className="text-sm text-outline-variant" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             No projects yet. Create one to start tracking.
           </p>
         </div>
@@ -316,17 +321,30 @@ export default function ProjectsPage() {
           {activeProjects.map((project) => (
             <Card key={project.id} className="p-5 group relative">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${project.color}20` }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: "20px", color: project.color ?? "#366769" }}>{project.icon ?? "folder"}</span>
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                  style={{
+                    backgroundColor: `color-mix(in srgb, ${project.color ?? "var(--c-primary)"} 18%, transparent)`,
+                  }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: "20px", color: project.color ?? "var(--c-primary)" }}
+                  >
+                    {project.icon ?? "folder"}
+                  </span>
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-[#31332f] truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{project.name}</p>
+                  <p className="font-medium text-on-background truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{project.name}</p>
                   <div className="flex items-center gap-1.5 mt-1">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: project.color ?? "#366769" }} />
-                    <span className="text-xs text-[#b2b2ad] font-mono" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{project.color}</span>
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: project.color ?? "var(--c-primary)" }}
+                    />
+                    <span className="text-xs text-outline-variant font-mono" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{project.color}</span>
                   </div>
-                  <p className="text-xs text-[#5e605b] mt-2" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                  <p className="text-xs text-on-surface-variant mt-2" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
                     {project.requiresTaskOnStop ? "Task required to stop timers" : "Task optional on stop"}
                   </p>
                 </div>
@@ -334,12 +352,12 @@ export default function ProjectsPage() {
                 {canManageProjects && (
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Tooltip label="Edit">
-                      <button onClick={() => setEditProject(project)} className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors">
+                      <button onClick={() => setEditProject(project)} className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-background transition-colors">
                         <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>edit</span>
                       </button>
                     </Tooltip>
                     <Tooltip label="Archive">
-                      <button onClick={() => handleArchive(project)} className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors">
+                      <button onClick={() => handleArchive(project)} className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-background transition-colors">
                         <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>archive</span>
                       </button>
                     </Tooltip>
@@ -353,20 +371,30 @@ export default function ProjectsPage() {
 
       {archivedProjects.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold text-[#b2b2ad] uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+          <h2 className="text-sm font-semibold text-outline-variant uppercase tracking-wide" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             Archived ({archivedProjects.length})
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {archivedProjects.map((project) => (
               <Card key={project.id} variant="tonal" className="p-5 opacity-60 group relative">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${project.color ?? "#366769"}18` }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: "18px", color: project.color ?? "#366769" }}>{project.icon ?? "folder"}</span>
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{
+                      backgroundColor: `color-mix(in srgb, ${project.color ?? "var(--c-primary)"} 18%, transparent)`,
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: "18px", color: project.color ?? "var(--c-primary)" }}
+                    >
+                      {project.icon ?? "folder"}
+                    </span>
                   </div>
-                  <p className="text-sm text-[#5e605b] flex-1 truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{project.name}</p>
+                  <p className="text-sm text-on-surface-variant flex-1 truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{project.name}</p>
                   {canManageProjects && (
                     <Tooltip label="Unarchive">
-                      <button onClick={() => handleArchive(project)} className="p-1 rounded text-[#5e605b] hover:text-[#31332f] opacity-0 group-hover:opacity-100 transition-all">
+                      <button onClick={() => handleArchive(project)} className="p-1 rounded text-on-surface-variant hover:text-on-background opacity-0 group-hover:opacity-100 transition-all">
                         <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>unarchive</span>
                       </button>
                     </Tooltip>

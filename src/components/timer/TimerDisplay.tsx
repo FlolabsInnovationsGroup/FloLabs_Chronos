@@ -12,7 +12,7 @@ export function TimerDisplay() {
     <div className="flex flex-col gap-2">
       {/* Label */}
       <p
-        className="text-sm font-medium uppercase tracking-widest text-[#755a40]"
+        className="text-sm font-medium uppercase tracking-widest text-tertiary"
         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
       >
         {activeTimer ? "Current Focus" : "Ready to Focus"}
@@ -21,7 +21,7 @@ export function TimerDisplay() {
       {/* Giant time display */}
       <div className="flex min-w-0 items-baseline gap-0 leading-none overflow-hidden">
         <span
-          className="block max-w-full overflow-hidden text-5xl xs:text-6xl sm:text-7xl md:text-8xl font-light italic text-[#31332f] tabular-nums tracking-tight select-none"
+          className="block max-w-full overflow-hidden text-5xl xs:text-6xl sm:text-7xl md:text-8xl font-light italic text-on-background tabular-nums tracking-tight select-none"
           style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
         >
           {display}

@@ -14,11 +14,11 @@ export function TimerActionIndicator({ compact = false }: TimerActionIndicatorPr
   if (compact) {
     return (
       <div
-        className="inline-flex items-center gap-2 rounded-full bg-[#f5f4ef] px-3 py-1.5 text-[#5e605b]"
+        className="inline-flex items-center gap-2 rounded-full bg-surface-container-low px-3 py-1.5 text-on-surface-variant"
         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         aria-live="polite"
       >
-        <svg className="h-4 w-4 animate-spin text-[#366769]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <svg className="h-4 w-4 animate-spin text-primary" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.2" />
           <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
         </svg>
@@ -29,11 +29,11 @@ export function TimerActionIndicator({ compact = false }: TimerActionIndicatorPr
 
   return (
     <div
-      className="inline-flex items-center gap-2 rounded-full bg-[#f5f4ef] px-4 py-2 text-[#5e605b] shadow-sm"
+      className="inline-flex items-center gap-2 rounded-full bg-surface-container-low px-4 py-2 text-on-surface-variant shadow-sm"
       style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
       aria-live="polite"
     >
-      <svg className="h-4 w-4 animate-spin text-[#366769]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <svg className="h-4 w-4 animate-spin text-primary" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.2" />
         <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
       </svg>

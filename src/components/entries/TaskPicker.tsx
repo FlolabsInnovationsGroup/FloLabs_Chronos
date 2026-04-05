@@ -127,15 +127,15 @@ export function TaskPicker({
   return (
     <div ref={rootRef} className="flex flex-col gap-1.5 relative">
       <label
-        className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+        className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
       >
         {label}
       </label>
 
       <div className="relative" ref={anchorRef}>
-        <div className="flex items-center gap-2 rounded-xl bg-[#f5f4ef] px-3 py-2 min-h-11">
-          <span className="material-symbols-outlined text-[#366769]" style={{ fontSize: "18px" }}>
+        <div className="flex items-center gap-2 rounded-xl bg-surface-container-low px-3 py-2 min-h-11">
+          <span className="material-symbols-outlined text-primary" style={{ fontSize: "18px" }}>
             task
           </span>
           <input
@@ -153,7 +153,7 @@ export function TaskPicker({
             }}
             placeholder={placeholder}
             disabled={disabled}
-            className="flex-1 bg-transparent outline-none text-sm text-[#31332f] placeholder:text-[#b2b2ad] disabled:cursor-not-allowed"
+            className="flex-1 bg-transparent outline-none text-sm text-on-background placeholder:text-outline-variant disabled:cursor-not-allowed"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           />
           {loading && <InlineSearchLoading />}
@@ -161,7 +161,7 @@ export function TaskPicker({
             <button
               type="button"
               onClick={clear}
-              className="p-1 rounded text-[#8f918b] hover:text-[#31332f] transition-colors"
+              className="p-1 rounded text-subtle-ink hover:text-on-background transition-colors"
               aria-label="Clear selected task"
             >
               <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
@@ -179,14 +179,14 @@ export function TaskPicker({
         >
           {errorMessage ? (
             <div
-              className="px-3 py-2 text-sm text-[#a73b21]"
+              className="px-3 py-2 text-sm text-error"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               {errorMessage}
             </div>
           ) : options.length === 0 ? (
             <div
-              className="px-3 py-2 text-sm text-[#8f918b]"
+              className="px-3 py-2 text-sm text-subtle-ink"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               {loading ? "Searching tasks…" : query.trim() ? "No matching tasks" : "Start typing to search tasks"}
@@ -201,16 +201,16 @@ export function TaskPicker({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => choose(option)}
                   className={`w-full rounded-xl px-3 py-2 text-left text-sm transition-colors flex items-center gap-2 ${
-                    active ? "bg-[#e9e8e3] text-[#31332f]" : "text-[#5e605b] hover:bg-[#f5f4ef]"
+                    active ? "bg-surface-container-high text-on-background" : "text-on-surface-variant hover:bg-surface-container-low"
                   }`}
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
-                  <span className="material-symbols-outlined shrink-0 text-[#366769]" style={{ fontSize: "16px" }}>
+                  <span className="material-symbols-outlined shrink-0 text-primary" style={{ fontSize: "16px" }}>
                     task
                   </span>
                   <span className="truncate">{option.title}</span>
                   {active && (
-                    <span className="material-symbols-outlined ml-auto text-[#366769]" style={{ fontSize: "16px" }}>
+                    <span className="material-symbols-outlined ml-auto text-primary" style={{ fontSize: "16px" }}>
                       check
                     </span>
                   )}

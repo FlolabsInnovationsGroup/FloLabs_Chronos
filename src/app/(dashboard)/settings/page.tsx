@@ -13,13 +13,13 @@ export default async function SettingsPage() {
     <div className="max-w-2xl mx-auto flex flex-col gap-6">
       <div>
         <h1
-          className="text-2xl font-light italic text-[#31332f]"
+          className="text-2xl font-light italic text-on-background"
           style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
         >
           Settings
         </h1>
         <p
-          className="text-sm text-[#5e605b] mt-0.5"
+          className="text-sm text-on-surface-variant mt-0.5"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           Manage your account

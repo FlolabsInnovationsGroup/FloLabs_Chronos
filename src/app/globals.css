@@ -1,65 +1,221 @@
 @import "tailwindcss";
 
-@theme {
-  /* Vellum Ink Color System */
-  --color-surface-bright: #fbf9f5;
-  --color-tertiary-fixed: #fed9b8;
-  --color-on-primary-fixed: #104648;
-  --color-on-tertiary-fixed-variant: #6f553b;
-  --color-tertiary-fixed-dim: #efcbab;
-  --color-on-secondary-fixed-variant: #595a6b;
-  --color-primary: #366769;
-  --color-surface-container-high: #e9e8e3;
-  --color-surface-container: #efeee9;
-  --color-surface-container-low: #f5f4ef;
-  --color-secondary: #5c5e6e;
-  --color-on-secondary-container: #4f5161;
-  --color-on-primary-container: #27595b;
-  --color-secondary-fixed: #e1e1f5;
-  --color-outline: #7a7b76;
-  --color-primary-dim: #295a5d;
-  --color-secondary-dim: #505262;
-  --color-error-container: #fd795a;
-  --color-secondary-container: #e1e1f5;
-  --color-background: #fbf9f5;
-  --color-surface: #fbf9f5;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-dim: #dadad4;
-  --color-primary-fixed: #b9ecee;
-  --color-surface-container-highest: #e3e3dc;
-  --color-error: #a73b21;
-  --color-error-dim: #791903;
-  --color-on-background: #31332f;
-  --color-on-primary-fixed-variant: #326365;
-  --color-surface-variant: #e3e3dc;
-  --color-on-secondary-fixed: #3d3e4e;
-  --color-on-error: #fff7f6;
-  --color-on-error-container: #6e1400;
-  --color-on-primary: #e3feff;
-  --color-tertiary-dim: #684e35;
-  --color-tertiary-container: #fed9b8;
-  --color-primary-container: #b9ecee;
-  --color-outline-variant: #b2b2ad;
-  --color-on-tertiary: #fff7f4;
-  --color-on-surface: #31332f;
-  --color-on-secondary: #faf8ff;
-  --color-secondary-fixed-dim: #d3d3e6;
-  --color-on-tertiary-fixed: #503921;
-  --color-inverse-surface: #0e0e0d;
-  --color-tertiary: #755a40;
-  --color-primary-fixed-dim: #abdddf;
-  --color-on-tertiary-container: #644b32;
-  --color-surface-tint: #366769;
-  --color-on-surface-variant: #5e605b;
-  --color-inverse-on-surface: #9e9d99;
-  --color-inverse-primary: #cafdff;
+/*
+ * Theming: all Tailwind theme colors resolve to --c-* variables. :root = light, html.dark = dark.
+ * New UI should use semantic utilities (bg-background, text-on-background, bg-surface-container-low,
+ * border-surface-container, text-primary, …) or var(--c-*) in inline styles — not raw hex classes.
+ * Optional: node scripts/apply-semantic-theme-classes.mjs helps migrate pasted hex utilities.
+ */
 
-  /* Typography */
+/* Tailwind `dark:` variant — prefer semantic tokens; use dark: only when light/dark must diverge outside the palette */
+@custom-variant dark (&:where(html.dark, html.dark *));
+
+/* Light palette (default) */
+:root {
+  --c-surface-bright: #fbf9f5;
+  --c-tertiary-fixed: #fed9b8;
+  --c-on-primary-fixed: #104648;
+  --c-on-tertiary-fixed-variant: #6f553b;
+  --c-tertiary-fixed-dim: #efcbab;
+  --c-on-secondary-fixed-variant: #595a6b;
+  --c-primary: #366769;
+  --c-surface-container-high: #e9e8e3;
+  --c-surface-container: #efeee9;
+  --c-surface-container-low: #f5f4ef;
+  --c-secondary: #5c5e6e;
+  --c-on-secondary-container: #4f5161;
+  --c-on-primary-container: #27595b;
+  --c-outline: #7a7b76;
+  --c-primary-dim: #295a5d;
+  --c-secondary-dim: #505262;
+  --c-error-container: #fd795a;
+  --c-secondary-container: #e1e1f5;
+  --c-secondary-fixed: #e1e1f5;
+  --c-secondary-fixed-dim: #d3d3e6;
+  --c-background: #fbf9f5;
+  --c-surface: #fbf9f5;
+  --c-surface-container-lowest: #ffffff;
+  --c-surface-dim: #dadad4;
+  --c-primary-fixed: #b9ecee;
+  --c-surface-container-highest: #e3e3dc;
+  --c-error: #a73b21;
+  --c-error-dim: #791903;
+  --c-on-background: #31332f;
+  --c-surface-variant: #e3e3dc;
+  --c-on-secondary-fixed: #3d3e4e;
+  --c-on-error: #fff7f6;
+  --c-on-error-container: #6e1400;
+  --c-on-primary: #e3feff;
+  --c-tertiary-dim: #684e35;
+  --c-tertiary-container: #fed9b8;
+  --c-primary-container: #b9ecee;
+  --c-outline-variant: #b2b2ad;
+  --c-on-tertiary: #fff7f4;
+  --c-on-surface: #31332f;
+  --c-inverse-surface: #0e0e0d;
+  --c-tertiary: #755a40;
+  --c-primary-fixed-dim: #abdddf;
+  --c-on-tertiary-container: #644b32;
+  --c-surface-tint: #366769;
+  --c-on-surface-variant: #5e605b;
+  --c-inverse-on-surface: #9e9d99;
+  --c-inverse-primary: #cafdff;
+  --c-on-tertiary-fixed: #503921;
+  /* Editorial extras */
+  --c-warm-surface: #fff7f6;
+  --c-warm-muted: #fde0d9;
+  --c-warm-border: #f4d5cc;
+  --c-subtle-ink: #8f918b;
+  --c-sort-border: #d7d2c8;
+  --c-chrome: #31332f;
+  --c-on-chrome: #fbf9f5;
+  --c-disabled-fill: #696964;
+  --c-disabled-on: #c8c7c2;
+  --c-success-tint: #eef8f6;
+  --c-locked-input: #ece9e2;
+  --c-label-muted: #8b8b84;
+  --c-overlay-scrim: rgb(49 51 47 / 0.2);
+  --c-paper-shadow: 0 12px 32px -4px rgb(49 51 47 / 0.06);
+  --c-ring-primary: rgb(54 103 105 / 0.2);
+  --c-ring-error: rgb(167 59 33 / 0.3);
+}
+
+html.dark {
+  color-scheme: dark;
+  --c-surface-bright: #161615;
+  --c-tertiary-fixed: #5c4a38;
+  --c-on-primary-fixed: #c5eef0;
+  --c-on-tertiary-fixed-variant: #d4c4b0;
+  --c-tertiary-fixed-dim: #4a3d30;
+  --c-on-secondary-fixed-variant: #c5c6d4;
+  --c-primary: #8ecbce;
+  --c-surface-container-high: #383834;
+  --c-surface-container: #2e2e2b;
+  --c-surface-container-low: #252524;
+  --c-secondary: #9b9cb0;
+  --c-on-secondary-container: #d8d9ea;
+  --c-on-primary-container: #b9ecee;
+  --c-outline: #8f908a;
+  --c-primary-dim: #6fa9ad;
+  --c-secondary-dim: #b0b2c4;
+  --c-error-container: #c2543c;
+  --c-secondary-container: #3d3e52;
+  --c-secondary-fixed: #3d3e52;
+  --c-secondary-fixed-dim: #52536a;
+  --c-background: #121211;
+  --c-surface: #121211;
+  --c-surface-container-lowest: #1c1c1a;
+  --c-surface-dim: #0e0e0d;
+  --c-primary-fixed: #2a4d50;
+  --c-surface-container-highest: #42423e;
+  --c-error: #f29a7f;
+  --c-error-dim: #ffb4a0;
+  --c-on-background: #e8e7e1;
+  --c-surface-variant: #3a3a36;
+  --c-on-secondary-fixed: #e1e1f5;
+  --c-on-error: #2c0e08;
+  --c-on-error-container: #ffdacf;
+  --c-on-primary: #0a1a1c;
+  --c-tertiary-dim: #c4a882;
+  --c-tertiary-container: #5c4a38;
+  --c-primary-container: #2d4f52;
+  --c-outline-variant: #6f6f68;
+  --c-on-tertiary: #1a1410;
+  --c-on-surface: #e8e7e1;
+  --c-inverse-surface: #e8e7e1;
+  --c-tertiary: #c4a882;
+  --c-primary-fixed-dim: #6a9ea2;
+  --c-on-tertiary-container: #f5e0c8;
+  --c-surface-tint: #8ecbce;
+  --c-on-surface-variant: #a4a39b;
+  --c-inverse-on-surface: #31332f;
+  --c-inverse-primary: #1a4a4d;
+  --c-on-tertiary-fixed: #f5e8d8;
+  --c-warm-surface: #2a1f1c;
+  --c-warm-muted: #4a2820;
+  --c-warm-border: #6b3d32;
+  --c-subtle-ink: #8f9088;
+  --c-sort-border: #4a4a44;
+  --c-chrome: #252524;
+  --c-on-chrome: #e8e7e1;
+  --c-disabled-fill: #4a4a46;
+  --c-disabled-on: #8f8f88;
+  --c-success-tint: #1a2c2e;
+  --c-locked-input: #33332f;
+  --c-label-muted: #7a7a72;
+  --c-overlay-scrim: rgb(0 0 0 / 0.55);
+  --c-paper-shadow: 0 12px 32px -4px rgb(0 0 0 / 0.45);
+  --c-ring-primary: rgb(142 203 206 / 0.35);
+  --c-ring-error: rgb(242 154 127 / 0.35);
+}
+
+@theme inline {
+  --color-surface-bright: var(--c-surface-bright);
+  --color-tertiary-fixed: var(--c-tertiary-fixed);
+  --color-on-primary-fixed: var(--c-on-primary-fixed);
+  --color-on-tertiary-fixed-variant: var(--c-on-tertiary-fixed-variant);
+  --color-tertiary-fixed-dim: var(--c-tertiary-fixed-dim);
+  --color-on-secondary-fixed-variant: var(--c-on-secondary-fixed-variant);
+  --color-primary: var(--c-primary);
+  --color-surface-container-high: var(--c-surface-container-high);
+  --color-surface-container: var(--c-surface-container);
+  --color-surface-container-low: var(--c-surface-container-low);
+  --color-secondary: var(--c-secondary);
+  --color-on-secondary-container: var(--c-on-secondary-container);
+  --color-on-primary-container: var(--c-on-primary-container);
+  --color-outline: var(--c-outline);
+  --color-primary-dim: var(--c-primary-dim);
+  --color-secondary-dim: var(--c-secondary-dim);
+  --color-error-container: var(--c-error-container);
+  --color-secondary-container: var(--c-secondary-container);
+  --color-secondary-fixed: var(--c-secondary-fixed);
+  --color-secondary-fixed-dim: var(--c-secondary-fixed-dim);
+  --color-background: var(--c-background);
+  --color-surface: var(--c-surface);
+  --color-surface-container-lowest: var(--c-surface-container-lowest);
+  --color-surface-dim: var(--c-surface-dim);
+  --color-primary-fixed: var(--c-primary-fixed);
+  --color-surface-container-highest: var(--c-surface-container-highest);
+  --color-error: var(--c-error);
+  --color-error-dim: var(--c-error-dim);
+  --color-on-background: var(--c-on-background);
+  --color-surface-variant: var(--c-surface-variant);
+  --color-on-secondary-fixed: var(--c-on-secondary-fixed);
+  --color-on-error: var(--c-on-error);
+  --color-on-error-container: var(--c-on-error-container);
+  --color-on-primary: var(--c-on-primary);
+  --color-tertiary-dim: var(--c-tertiary-dim);
+  --color-tertiary-container: var(--c-tertiary-container);
+  --color-primary-container: var(--c-primary-container);
+  --color-outline-variant: var(--c-outline-variant);
+  --color-on-tertiary: var(--c-on-tertiary);
+  --color-on-surface: var(--c-on-surface);
+  --color-inverse-surface: var(--c-inverse-surface);
+  --color-tertiary: var(--c-tertiary);
+  --color-primary-fixed-dim: var(--c-primary-fixed-dim);
+  --color-on-tertiary-container: var(--c-on-tertiary-container);
+  --color-surface-tint: var(--c-surface-tint);
+  --color-on-surface-variant: var(--c-on-surface-variant);
+  --color-inverse-on-surface: var(--c-inverse-on-surface);
+  --color-inverse-primary: var(--c-inverse-primary);
+  --color-on-tertiary-fixed: var(--c-on-tertiary-fixed);
+  --color-warm-surface: var(--c-warm-surface);
+  --color-warm-muted: var(--c-warm-muted);
+  --color-warm-border: var(--c-warm-border);
+  --color-subtle-ink: var(--c-subtle-ink);
+  --color-sort-border: var(--c-sort-border);
+  --color-chrome: var(--c-chrome);
+  --color-on-chrome: var(--c-on-chrome);
+  --color-disabled-fill: var(--c-disabled-fill);
+  --color-disabled-on: var(--c-disabled-on);
+  --color-success-tint: var(--c-success-tint);
+  --color-locked-input: var(--c-locked-input);
+  --color-label-muted: var(--c-label-muted);
+
   --font-headline: "Newsreader", serif;
   --font-body: "Work Sans", sans-serif;
   --font-label: "Work Sans", sans-serif;
 
-  /* Border radius — editorial "slightly softened" */
   --radius: 0.125rem;
   --radius-lg: 0.25rem;
   --radius-xl: 0.5rem;
@@ -67,8 +223,8 @@
 }
 
 :root {
-  --background: #fbf9f5;
-  --foreground: #31332f;
+  --background: var(--c-background);
+  --foreground: var(--c-on-background);
 }
 
 * {
@@ -77,17 +233,17 @@
 }
 
 body {
-  background-color: #fbf9f5;
-  color: #31332f;
+  background-color: var(--c-background);
+  color: var(--c-on-background);
   font-family: "Work Sans", sans-serif;
 }
 
 .paper-shadow {
-  box-shadow: 0 12px 32px -4px rgba(49, 51, 47, 0.06);
+  box-shadow: var(--c-paper-shadow);
 }
 
 .text-ink {
-  color: #31332f;
+  color: var(--c-on-background);
 }
 
 .material-symbols-outlined {
@@ -104,8 +260,8 @@ optgroup {
 
 option,
 optgroup {
-  background-color: #fbf9f5;
-  color: #31332f;
+  background-color: var(--c-background);
+  color: var(--c-on-background);
   border: 0;
 }
 

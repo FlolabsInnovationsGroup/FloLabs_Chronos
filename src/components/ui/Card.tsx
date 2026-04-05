@@ -12,7 +12,7 @@ interface CardProps {
 
 const variantStyles: Record<CardVariant, string> = {
   default: "bg-surface-container-lowest",
-  tonal: "bg-[#f5f4ef]",
+  tonal: "bg-surface-container-low",
 };
 
 export function Card({ variant = "default", className, children, onClick }: CardProps) {

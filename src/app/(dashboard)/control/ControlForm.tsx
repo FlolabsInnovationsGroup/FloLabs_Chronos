@@ -110,15 +110,15 @@ export function ControlForm() {
   return (
     <div className="bg-surface-container-lowest rounded-xl paper-shadow p-6 flex flex-col gap-6">
       {loading ? (
-        <div className="h-40 rounded-xl bg-[#f5f4ef] animate-pulse" />
+        <div className="h-40 rounded-xl bg-surface-container-low animate-pulse" />
       ) : (
         <>
-          {error && <p className="text-sm text-[#a73b21] bg-[#fff7f6] px-4 py-3 rounded-xl">{error}</p>}
-          {success && <p className="text-sm text-[#366769] bg-[#eef8f6] px-4 py-3 rounded-xl">{success}</p>}
+          {error && <p className="text-sm text-error bg-warm-surface px-4 py-3 rounded-xl">{error}</p>}
+          {success && <p className="text-sm text-primary bg-success-tint px-4 py-3 rounded-xl">{success}</p>}
 
           <form onSubmit={handleSave} className="flex flex-col gap-6">
             <div className="flex flex-col gap-4">
-              <h2 className="text-lg font-light italic text-[#31332f]" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Notion</h2>
+              <h2 className="text-lg font-light italic text-on-background" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Notion</h2>
               <Input label="Notion Integration Secret Key" type="password" value={notionApiKey} onChange={(e) => setNotionApiKey(e.target.value)} placeholder={apiKeyPresent ? "Saved in app config — leave empty to keep current key" : "ntn_..."} hint={apiKeyPresent && apiKeyMasked ? `Current key: ${apiKeyMasked}. Enter a new one only if you want to rotate it.` : "Stored in the app config store. Deployment env vars still take precedence if present."} />
               <Input label="Tasks Database ID" value={notionTasksDbId} onChange={(e) => setNotionTasksDbId(e.target.value)} placeholder="b5a15559fffc4a4f97161bf12e6fb400" />
               <Input label="Team Members Database ID" value={notionTeamMembersDbId} onChange={(e) => setNotionTeamMembersDbId(e.target.value)} placeholder="..." />
@@ -127,8 +127,8 @@ export function ControlForm() {
               <Input label="MasterClasses Index Database ID" value={notionMasterClassesIndexDbId} onChange={(e) => setNotionMasterClassesIndexDbId(e.target.value)} placeholder="286a1576955180488db8eb63daccc66c" hint="Database whose rows map teams to the target MasterClass databases." />
             </div>
 
-            <div className="border-t border-[#efeee9] pt-6 flex flex-col gap-4">
-              <h2 className="text-lg font-light italic text-[#31332f]" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Discord Bot Provisioning</h2>
+            <div className="border-t border-surface-container pt-6 flex flex-col gap-4">
+              <h2 className="text-lg font-light italic text-on-background" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Discord Bot Provisioning</h2>
               <Input label="Discord Bot Token" type="password" value={discordBotToken} onChange={(e) => setDiscordBotToken(e.target.value)} placeholder={discordBotTokenPresent ? "Saved in app config — leave empty to keep current token" : "Bot token"} hint={discordBotTokenPresent && discordBotTokenMasked ? `Current token: ${discordBotTokenMasked}. Enter a new one only if you want to rotate it.` : "Used to create member channels and webhooks automatically when a user joins."} />
               <Input label="Discord Guild ID" value={discordGuildId} onChange={(e) => setDiscordGuildId(e.target.value)} placeholder="Server / guild ID" />
               <Input label="Discord Category ID" value={discordCategoryId} onChange={(e) => setDiscordCategoryId(e.target.value)} placeholder="Optional category for member channels" />
@@ -140,12 +140,12 @@ export function ControlForm() {
             </div>
           </form>
 
-          <div className="border-t border-[#efeee9] pt-6 flex flex-col gap-4">
+          <div className="border-t border-surface-container pt-6 flex flex-col gap-4">
             <div>
-              <h2 className="text-lg font-light italic text-[#31332f]" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>
+              <h2 className="text-lg font-light italic text-on-background" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>
                 Search Notion databases
               </h2>
-              <p className="text-sm text-[#5e605b] mt-1" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+              <p className="text-sm text-on-surface-variant mt-1" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
                 Once the integration key is saved, search your connected Notion workspace and apply database IDs directly.
               </p>
             </div>
@@ -159,12 +159,12 @@ export function ControlForm() {
               </div>
             </div>
             {databases.length > 0 && (
-              <div className="rounded-xl border border-[#efeee9] overflow-hidden">
+              <div className="rounded-xl border border-surface-container overflow-hidden">
                 {databases.map((db) => (
-                  <div key={db.id} className="px-4 py-3 border-t first:border-t-0 border-[#efeee9] flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div key={db.id} className="px-4 py-3 border-t first:border-t-0 border-surface-container flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="text-sm text-[#31332f] font-medium">{db.title}</p>
-                      <p className="text-xs text-[#8f918b] break-all">{db.id}</p>
+                      <p className="text-sm text-on-background font-medium">{db.title}</p>
+                      <p className="text-xs text-subtle-ink break-all">{db.id}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button variant="ghost" size="sm" type="button" onClick={() => applyDatabase(db.id, "tasks")}>Use for Tasks</Button>

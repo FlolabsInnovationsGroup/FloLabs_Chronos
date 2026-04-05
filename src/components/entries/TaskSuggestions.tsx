@@ -51,9 +51,9 @@ export function TaskSuggestions({ query, open, onPick }: TaskSuggestionsProps) {
   if (!open || suggestions.length === 0) return null;
 
   return (
-    <div className="mt-2 rounded-xl border border-[#efeee9] bg-white shadow-lg overflow-hidden">
+    <div className="mt-2 rounded-xl border border-surface-container bg-surface-container-lowest shadow-lg overflow-hidden">
       <div
-        className="px-3 py-2 text-xs uppercase tracking-wide text-[#7a7c76] bg-[#fbf9f5]"
+        className="px-3 py-2 text-xs uppercase tracking-wide text-outline bg-background"
         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
       >
         Suggested from your last 2 weeks
@@ -65,22 +65,22 @@ export function TaskSuggestions({ query, open, onPick }: TaskSuggestionsProps) {
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onPick(suggestion)}
-            className="px-3 py-3 text-left hover:bg-[#f5f4ef] transition-colors border-t border-[#f5f4ef]"
+            className="px-3 py-3 text-left hover:bg-surface-container-low transition-colors border-t border-surface-container-low"
           >
             <div
-              className="text-sm text-[#31332f]"
+              className="text-sm text-on-background"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               {suggestion.description || "No description"}
             </div>
             <div
-              className="mt-1 text-xs text-[#5e605b] flex flex-wrap gap-x-1.5 gap-y-1"
+              className="mt-1 text-xs text-on-surface-variant flex flex-wrap gap-x-1.5 gap-y-1"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               <span>{suggestion.projectName}</span>
               {suggestion.tagNames.length > 0 && <span>· {suggestion.tagNames.join(", ")}</span>}
               {suggestion.notionTaskTitle && (
-                <span className="inline-flex items-center gap-1 text-[#366769]">
+                <span className="inline-flex items-center gap-1 text-primary">
                   ·
                   <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>
                     task

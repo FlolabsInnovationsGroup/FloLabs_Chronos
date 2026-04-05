@@ -271,11 +271,11 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
   if (loading) {
     return (
       <div className="flex flex-col gap-4 animate-pulse">
-        <div className="h-14 bg-[#f5f4ef] rounded-xl" />
-        <div className="h-11 bg-[#f5f4ef] rounded-xl" />
+        <div className="h-14 bg-surface-container-low rounded-xl" />
+        <div className="h-11 bg-surface-container-low rounded-xl" />
         <div className="flex gap-2">
-          <div className="h-9 w-32 bg-[#f5f4ef] rounded-full" />
-          <div className="h-9 w-24 bg-[#f5f4ef] rounded-full" />
+          <div className="h-9 w-32 bg-surface-container-low rounded-full" />
+          <div className="h-9 w-24 bg-surface-container-low rounded-full" />
         </div>
       </div>
     );
@@ -308,13 +308,13 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
             }
           }}
           placeholder="What are you working on?"
-          className="w-full min-w-0 bg-transparent text-xl sm:text-2xl italic text-[#31332f] placeholder:text-[#b2b2ad] outline-none py-2 border-b-2 border-[#efeee9] focus:border-[#366769] transition-colors"
+          className="w-full min-w-0 bg-transparent text-xl sm:text-2xl italic text-on-background placeholder:text-outline-variant outline-none py-2 border-b-2 border-surface-container focus:border-primary transition-colors"
           style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
         />
         <TaskSuggestions query={description} open={showSuggestions} onPick={applySuggestion} />
         {activeTimer && !stopValidation.canStop && (
           <p
-            className="text-xs text-[#a73b21]"
+            className="text-xs text-error"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {stopValidation.message}
@@ -322,7 +322,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
         )}
         {activeTimer && descriptionSaving && (
           <p
-            className="text-xs text-[#366769]"
+            className="text-xs text-primary"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Saving description…
@@ -341,14 +341,14 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
       {(activeTimer || selectedTask) && (
         <div className="flex flex-col gap-1 sm:-mt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <p
-            className="text-xs text-[#5e605b]"
+            className="text-xs text-on-surface-variant"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {selectedTask ? `Selected task: ${selectedTask.title}` : "No task selected"}
           </p>
           {taskSaving && (
             <span
-              className="text-xs text-[#366769]"
+              className="text-xs text-primary"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               Saving task…
@@ -364,11 +364,11 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
             onChange={setSelectedProjectId}
             placeholder="Select project (optional)"
             leadingIcon={selectedProject ? undefined : "folder_open"}
-            leadingIconColor="#366769"
+            leadingIconColor="var(--c-primary)"
             options={projects.map((p) => ({
               value: p.id,
               label: p.name,
-              color: p.color ?? "#366769",
+              color: p.color ?? "var(--c-primary)",
             }))}
             className="w-full min-w-0 sm:min-w-[160px]"
           />
@@ -389,14 +389,14 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-3">
               <p
-                className="text-xs uppercase tracking-wide text-[#5e605b] font-medium"
+                className="text-xs uppercase tracking-wide text-on-surface-variant font-medium"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 Project for current session
               </p>
               {projectSaving && (
                 <span
-                  className="text-xs text-[#366769]"
+                  className="text-xs text-primary"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
                   Saving…
@@ -408,11 +408,11 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
               onChange={(value) => void handleProjectChange(value)}
               placeholder="Select project (optional)"
               leadingIcon="folder_open"
-              leadingIconColor="#366769"
+              leadingIconColor="var(--c-primary)"
               options={projects.map((p) => ({
                 value: p.id,
                 label: p.name,
-                color: p.color ?? "#366769",
+                color: p.color ?? "var(--c-primary)",
               }))}
               className="w-full min-w-0 sm:min-w-[160px]"
               disabled={submitting || projectSaving}
@@ -422,14 +422,14 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-3">
               <p
-                className="text-xs uppercase tracking-wide text-[#5e605b] font-medium"
+                className="text-xs uppercase tracking-wide text-on-surface-variant font-medium"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 Tags for current session
               </p>
               {tagSaving && (
                 <span
-                  className="text-xs text-[#366769]"
+                  className="text-xs text-primary"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
                   Saving…
@@ -450,7 +450,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
       )}
 
       {activeTimer && !stopValidation.canStop && (
-        <div className="md:hidden rounded-xl border border-[#f4d5cc] bg-[#fff7f6] px-4 py-3 text-sm text-[#791903]">
+        <div className="md:hidden rounded-xl border border-warm-border bg-warm-surface px-4 py-3 text-sm text-error-dim">
           <div className="flex items-start gap-2">
             <span className="material-symbols-outlined shrink-0" style={{ fontSize: "18px" }}>
               info
@@ -464,7 +464,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
 
       {actionError && (
         <p
-          className="text-sm text-[#a73b21]"
+          className="text-sm text-error"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           {actionError}

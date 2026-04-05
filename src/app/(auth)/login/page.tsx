@@ -39,13 +39,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fbf9f5] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="text-center mb-10 flex flex-col items-center">
           <Image src="/flchron-logo.svg" alt="FloLabs Chronos" width={180} height={42} priority className="h-10 w-auto mb-4" />
           <p
-            className="text-sm text-[#5e605b]"
+            className="text-sm text-on-surface-variant"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Sign in to track your time
@@ -58,7 +58,7 @@ export default function LoginPage() {
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="email"
-                className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 Email
@@ -71,7 +71,7 @@ export default function LoginPage() {
                 placeholder="you@example.com"
                 required
                 autoFocus
-                className="w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
+                className="w-full px-3 py-2.5 text-sm text-on-background bg-surface-container-low rounded-lg outline-none placeholder:text-outline-variant focus:bg-background focus:ring-2 focus:ring-primary/20 transition-all"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               />
             </div>
@@ -79,7 +79,7 @@ export default function LoginPage() {
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="password"
-                className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 Password
@@ -91,14 +91,14 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full px-3 py-2.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
+                className="w-full px-3 py-2.5 text-sm text-on-background bg-surface-container-low rounded-lg outline-none placeholder:text-outline-variant focus:bg-background focus:ring-2 focus:ring-primary/20 transition-all"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               />
             </div>
 
             {error && (
               <p
-                className="text-sm text-[#a73b21] bg-[#fff7f6] px-3 py-2 rounded-lg"
+                className="text-sm text-error bg-warm-surface px-3 py-2 rounded-lg"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 {error}
@@ -108,7 +108,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 text-sm font-medium rounded-md bg-[#366769] text-[#e3feff] hover:bg-[#295a5d] active:bg-[#104648] disabled:opacity-50 transition-colors cursor-pointer"
+              className="w-full py-2.5 px-4 text-sm font-medium rounded-md bg-primary text-on-primary hover:bg-primary-dim active:brightness-95 disabled:opacity-50 transition-colors cursor-pointer"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               {loading ? "Signing in..." : "Sign In"}
@@ -116,7 +116,7 @@ export default function LoginPage() {
 
             <Link
               href="/register?forgot=1"
-              className="text-sm text-[#366769] hover:underline text-center"
+              className="text-sm text-primary hover:underline text-center"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               Forgot your password?
@@ -126,11 +126,11 @@ export default function LoginPage() {
 
         {/* Register link */}
         <p
-          className="text-center text-sm text-[#5e605b] mt-6"
+          className="text-center text-sm text-on-surface-variant mt-6"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="text-[#366769] hover:underline font-medium">
+          <Link href="/register" className="text-primary hover:underline font-medium">
             Register
           </Link>
         </p>

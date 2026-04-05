@@ -40,7 +40,7 @@ export function Select({
       {label && (
         <label
           htmlFor={labelId}
-          className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+          className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           {label}
@@ -52,11 +52,11 @@ export function Select({
         onChange={onChange}
         placeholder={placeholder}
         disabled={disabled}
-        buttonClassName={error ? "ring-2 ring-[#a73b21]/30 bg-[#fff7f6]" : undefined}
+        buttonClassName={error ? "ring-2 ring-error/30 bg-warm-surface" : undefined}
       />
       {error && (
         <p
-          className="text-xs text-[#a73b21]"
+          className="text-xs text-error"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           {error}

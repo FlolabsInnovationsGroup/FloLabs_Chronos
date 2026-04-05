@@ -49,7 +49,7 @@ function PasswordField({
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor={id}
-        className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+        className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
       >
         {label}
@@ -64,13 +64,13 @@ function PasswordField({
           required={required}
           minLength={minLength}
           autoFocus={autoFocus}
-          className="w-full px-3 py-2.5 pr-20 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20 transition-all"
+          className="w-full px-3 py-2.5 pr-20 text-sm text-on-background bg-surface-container-low rounded-lg outline-none placeholder:text-outline-variant focus:bg-background focus:ring-2 focus:ring-primary/20 transition-all"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         />
         <button
           type="button"
           onClick={() => setRevealed((current) => !current)}
-          className="absolute inset-y-1.5 right-1.5 inline-flex items-center rounded-md px-3 text-xs font-medium text-[#366769] hover:bg-[#efeee9]"
+          className="absolute inset-y-1.5 right-1.5 inline-flex items-center rounded-md px-3 text-xs font-medium text-primary hover:bg-surface-container"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           aria-label={revealed ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
           aria-pressed={revealed}
@@ -255,14 +255,14 @@ function RegisterForm() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fbf9f5] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
           <div className="flex justify-center mb-4">
             <Image src="/flchron-logo.svg" alt="FloLabs Chronos" width={180} height={42} priority className="h-10 w-auto" />
           </div>
           <p
-            className="text-sm text-[#5e605b] mt-2"
+            className="text-sm text-on-surface-variant mt-2"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {forgotMode
@@ -278,21 +278,21 @@ function RegisterForm() {
         <div className="bg-surface-container-lowest rounded-xl paper-shadow p-8">
           {loadingInvite ? (
             <div className="flex flex-col gap-3">
-              <div className="h-4 rounded bg-[#f5f4ef] animate-pulse" />
-              <div className="h-4 rounded bg-[#f5f4ef] animate-pulse w-4/5" />
-              <div className="h-10 rounded-xl bg-[#f5f4ef] animate-pulse mt-4" />
+              <div className="h-4 rounded bg-surface-container-low animate-pulse" />
+              <div className="h-4 rounded bg-surface-container-low animate-pulse w-4/5" />
+              <div className="h-10 rounded-xl bg-surface-container-low animate-pulse mt-4" />
             </div>
           ) : invitationRequired ? (
             <div className="flex flex-col gap-4">
               <p
-                className="text-sm text-[#5e605b]"
+                className="text-sm text-on-surface-variant"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 Chronos accounts are created from an invitation link. Ask an admin to invite you, or sign in if your account already exists.
               </p>
               {error && (
                 <p
-                  className="text-sm text-[#a73b21] bg-[#fff7f6] px-3 py-2 rounded-lg"
+                  className="text-sm text-error bg-warm-surface px-3 py-2 rounded-lg"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
                   {error}
@@ -300,7 +300,7 @@ function RegisterForm() {
               )}
               <Link
                 href="/login"
-                className="inline-flex items-center justify-center w-full py-2.5 px-4 text-sm font-medium rounded-md bg-[#366769] text-[#e3feff] hover:bg-[#295a5d] transition-colors"
+                className="inline-flex items-center justify-center w-full py-2.5 px-4 text-sm font-medium rounded-md bg-primary text-on-primary hover:bg-primary-dim transition-colors"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 Go to sign in
@@ -309,15 +309,15 @@ function RegisterForm() {
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               {!forgotMode && !resetToken && (
-                <div className="rounded-xl bg-[#f5f4ef] p-4">
+                <div className="rounded-xl bg-surface-container-low p-4">
                   <p
-                    className="text-xs font-medium uppercase tracking-wide text-[#5e605b]"
+                    className="text-xs font-medium uppercase tracking-wide text-on-surface-variant"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
                     Invitation
                   </p>
                   <p
-                    className="text-sm text-[#31332f] mt-1"
+                    className="text-sm text-on-background mt-1"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
                     {invitation?.team?.name ?? "Assigned team"} · {invitation?.role === "team_lead" ? "Team Lead" : "Member"}
@@ -329,7 +329,7 @@ function RegisterForm() {
                 <div className="flex flex-col gap-1.5">
                   <label
                     htmlFor="name"
-                    className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                    className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
                     Full Name
@@ -343,7 +343,7 @@ function RegisterForm() {
                     required
                     autoFocus
                     readOnly={Boolean(resetToken)}
-                    className={`w-full px-3 py-2.5 text-sm rounded-lg outline-none placeholder:text-[#b2b2ad] transition-all ${resetToken ? "text-[#5e605b] bg-[#efeee9]" : "text-[#31332f] bg-[#f5f4ef] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20"}`}
+                    className={`w-full px-3 py-2.5 text-sm rounded-lg outline-none placeholder:text-outline-variant transition-all ${resetToken ? "text-on-surface-variant bg-surface-container" : "text-on-background bg-surface-container-low focus:bg-background focus:ring-2 focus:ring-primary/20"}`}
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   />
                 </div>
@@ -352,7 +352,7 @@ function RegisterForm() {
               <div className="flex flex-col gap-1.5">
                 <label
                   htmlFor="email"
-                  className="text-xs font-medium text-[#5e605b] uppercase tracking-wide"
+                  className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
                   Email
@@ -365,7 +365,7 @@ function RegisterForm() {
                   readOnly={!forgotMode}
                   autoFocus={forgotMode}
                   placeholder="you@example.com"
-                  className={`w-full px-3 py-2.5 text-sm rounded-lg outline-none ${forgotMode ? "text-[#31332f] bg-[#f5f4ef] placeholder:text-[#b2b2ad] focus:bg-[#fbf9f5] focus:ring-2 focus:ring-[#366769]/20" : "text-[#5e605b] bg-[#efeee9]"}`}
+                  className={`w-full px-3 py-2.5 text-sm rounded-lg outline-none ${forgotMode ? "text-on-background bg-surface-container-low placeholder:text-outline-variant focus:bg-background focus:ring-2 focus:ring-primary/20" : "text-on-surface-variant bg-surface-container"}`}
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 />
               </div>
@@ -394,7 +394,7 @@ function RegisterForm() {
 
               {error && (
                 <p
-                  className="text-sm text-[#a73b21] bg-[#fff7f6] px-3 py-2 rounded-lg"
+                  className="text-sm text-error bg-warm-surface px-3 py-2 rounded-lg"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
                   {error}
@@ -403,7 +403,7 @@ function RegisterForm() {
 
               {statusMessage && (
                 <p
-                  className="text-sm text-[#366769] bg-[#eef9f9] px-3 py-2 rounded-lg"
+                  className="text-sm text-primary bg-success-tint px-3 py-2 rounded-lg"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
                   {statusMessage}
@@ -413,7 +413,7 @@ function RegisterForm() {
               <button
                 type="submit"
                 disabled={loading || (needsPasswordSetup && !passwordsReady && password.length > 0 && confirmPassword.length > 0)}
-                className="w-full py-2.5 px-4 text-sm font-medium rounded-md bg-[#366769] text-[#e3feff] hover:bg-[#295a5d] active:bg-[#104648] disabled:opacity-50 transition-colors cursor-pointer"
+                className="w-full py-2.5 px-4 text-sm font-medium rounded-md bg-primary text-on-primary hover:bg-primary-dim active:brightness-95 disabled:opacity-50 transition-colors cursor-pointer"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 {loading
@@ -433,11 +433,11 @@ function RegisterForm() {
         </div>
 
         <p
-          className="text-center text-sm text-[#5e605b] mt-6"
+          className="text-center text-sm text-on-surface-variant mt-6"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           Already have an account?{" "}
-          <Link href="/login" className="text-[#366769] hover:underline font-medium">
+          <Link href="/login" className="text-primary hover:underline font-medium">
             Sign in
           </Link>
         </p>
@@ -450,10 +450,10 @@ export default function RegisterPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#fbf9f5] flex items-center justify-center px-4">
+        <div className="min-h-screen bg-background flex items-center justify-center px-4">
           <div className="w-full max-w-sm flex flex-col gap-3">
-            <div className="h-4 rounded bg-[#f5f4ef] animate-pulse" />
-            <div className="h-4 rounded bg-[#f5f4ef] animate-pulse w-4/5" />
+            <div className="h-4 rounded bg-surface-container-low animate-pulse" />
+            <div className="h-4 rounded bg-surface-container-low animate-pulse w-4/5" />
           </div>
         </div>
       }

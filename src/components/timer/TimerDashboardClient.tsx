@@ -97,10 +97,10 @@ export function TimerDashboardClient({
 
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium text-[#31332f]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+          <h2 className="text-lg font-medium text-on-background" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             Recent Sessions
           </h2>
-          <span className="text-sm text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+          <span className="text-sm text-outline-variant" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             {recentEntries.length} entries
           </span>
         </div>

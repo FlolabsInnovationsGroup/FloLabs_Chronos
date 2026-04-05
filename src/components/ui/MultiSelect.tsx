@@ -63,24 +63,24 @@ export function MultiSelect({
     <div ref={rootRef} className={cn("relative", className)}>
       <div
         className={cn(
-          "min-h-9 flex flex-wrap items-center gap-1.5 rounded-xl bg-[#f5f4ef] px-3 py-1.5 cursor-text",
-          "focus-within:ring-2 focus-within:ring-[#366769]/20",
+          "min-h-9 flex flex-wrap items-center gap-1.5 rounded-xl bg-surface-container-low px-3 py-1.5 cursor-text",
+          "focus-within:ring-2 focus-within:ring-primary/20",
           disabled && "opacity-50 pointer-events-none"
         )}
         onClick={() => setOpen((v) => !v)}
       >
         {selected.length === 0 && (
-          <span className="text-sm text-[#b2b2ad]" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+          <span className="text-sm text-outline-variant" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             {placeholder}
           </span>
         )}
         {selected.map((item) => (
           <span
             key={item.id}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#e9e8e3] text-xs font-medium text-[#31332f]"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container-high text-xs font-medium text-on-background"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: "12px", color: "#5e605b" }}>
+            <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: "12px" }}>
               group
             </span>
             {item.name}
@@ -90,7 +90,7 @@ export function MultiSelect({
                 e.stopPropagation();
                 remove(item.id);
               }}
-              className="ml-0.5 text-[#5e605b] hover:text-[#a73b21] transition-colors"
+              className="ml-0.5 text-on-surface-variant hover:text-error transition-colors"
               aria-label={`Remove ${item.name}`}
             >
               <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
@@ -99,7 +99,7 @@ export function MultiSelect({
             </button>
           </span>
         ))}
-        <span className="material-symbols-outlined ml-auto shrink-0 text-[#5e605b]" style={{ fontSize: "18px" }}>
+        <span className="material-symbols-outlined ml-auto shrink-0 text-on-surface-variant" style={{ fontSize: "18px" }}>
           groups
         </span>
       </div>
@@ -118,7 +118,7 @@ export function MultiSelect({
               e.preventDefault();
               add(opt.id);
             }}
-            className="w-full rounded-xl px-3 py-2 text-left text-sm text-[#5e605b] hover:bg-[#f5f4ef] flex items-center gap-2 transition-colors"
+            className="w-full rounded-xl px-3 py-2 text-left text-sm text-on-surface-variant hover:bg-surface-container-low flex items-center gap-2 transition-colors"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>

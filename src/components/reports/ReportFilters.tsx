@@ -62,7 +62,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
       {/* Date range */}
       <div className="flex flex-wrap items-center gap-2">
         <span
-          className="text-xs text-[#5e605b] font-medium whitespace-nowrap"
+          className="text-xs text-on-surface-variant font-medium whitespace-nowrap"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           From
@@ -71,11 +71,11 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
           type="date"
           value={get("from")}
           onChange={(e) => update("from", e.target.value)}
-          className="px-2.5 py-1.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none focus:ring-2 focus:ring-[#366769]/20"
+          className="px-2.5 py-1.5 text-sm text-on-background bg-surface-container-low rounded-lg outline-none focus:ring-2 focus:ring-primary/20"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         />
         <span
-          className="text-xs text-[#5e605b] font-medium"
+          className="text-xs text-on-surface-variant font-medium"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           to
@@ -84,13 +84,13 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
           type="date"
           value={get("to")}
           onChange={(e) => update("to", e.target.value)}
-          className="px-2.5 py-1.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none focus:ring-2 focus:ring-[#366769]/20"
+          className="px-2.5 py-1.5 text-sm text-on-background bg-surface-container-low rounded-lg outline-none focus:ring-2 focus:ring-primary/20"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         />
       </div>
 
       {/* Divider */}
-      <div className="hidden sm:block w-px h-6 bg-[#efeee9]" />
+      <div className="hidden sm:block w-px h-6 bg-surface-container" />
 
       {/* User select (admin / team lead) */}
       {users.length > 0 && (
@@ -157,7 +157,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
       {/* Search (debounced 2s) */}
       <div className="flex-1 min-w-[160px] relative">
         <span
-          className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[#b2b2ad]"
+          className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-outline-variant"
           style={{ fontSize: "16px" }}
         >
           search
@@ -167,7 +167,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
           placeholder="Search entries..."
           value={searchInput}
           onChange={(e) => handleSearchChange(e.target.value)}
-          className="w-full pl-8 pr-3 py-1.5 text-sm text-[#31332f] bg-[#f5f4ef] rounded-lg outline-none focus:ring-2 focus:ring-[#366769]/20 placeholder:text-[#b2b2ad]"
+          className="w-full pl-8 pr-3 py-1.5 text-sm text-on-background bg-surface-container-low rounded-lg outline-none focus:ring-2 focus:ring-primary/20 placeholder:text-outline-variant"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         />
       </div>
@@ -176,7 +176,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
       {Array.from(searchParams.keys()).length > 0 && (
         <button
           onClick={() => router.push(pathname)}
-          className="text-xs text-[#a73b21] hover:underline px-1"
+          className="text-xs text-error hover:underline px-1"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           Clear filters

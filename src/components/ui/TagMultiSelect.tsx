@@ -121,8 +121,8 @@ export function TagMultiSelect({
       {/* Input box with chips */}
       <div
         className={cn(
-          "min-h-9 flex flex-wrap items-center gap-1.5 rounded-xl bg-[#f5f4ef] px-3 py-1.5 cursor-text",
-          "focus-within:ring-2 focus-within:ring-[#366769]/20",
+          "min-h-9 flex flex-wrap items-center gap-1.5 rounded-xl bg-surface-container-low px-3 py-1.5 cursor-text",
+          "focus-within:ring-2 focus-within:ring-primary/20",
           disabled && "opacity-50 pointer-events-none"
         )}
         onClick={() => {
@@ -134,10 +134,10 @@ export function TagMultiSelect({
         {selected.map((tag) => (
           <span
             key={tag.id}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#e9e8e3] text-xs font-medium text-[#31332f]"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container-high text-xs font-medium text-on-background"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: "12px", color: "#5e605b" }}>
+            <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: "12px" }}>
               label
             </span>
             {tag.name}
@@ -147,7 +147,7 @@ export function TagMultiSelect({
                 e.stopPropagation();
                 removeTag(tag.id);
               }}
-              className="ml-0.5 text-[#5e605b] hover:text-[#a73b21] transition-colors"
+              className="ml-0.5 text-on-surface-variant hover:text-error transition-colors"
               aria-label={`Remove ${tag.name}`}
             >
               <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
@@ -169,12 +169,12 @@ export function TagMultiSelect({
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={selected.length === 0 ? placeholder : ""}
-          className="flex-1 min-w-[80px] bg-transparent text-sm text-[#31332f] placeholder:text-[#b2b2ad] outline-none"
+          className="flex-1 min-w-[80px] bg-transparent text-sm text-on-background placeholder:text-outline-variant outline-none"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           disabled={disabled}
         />
 
-        <span className="material-symbols-outlined ml-auto shrink-0 text-[#5e605b]" style={{ fontSize: "18px" }}>
+        <span className="material-symbols-outlined ml-auto shrink-0 text-on-surface-variant" style={{ fontSize: "18px" }}>
           label
         </span>
       </div>
@@ -194,7 +194,7 @@ export function TagMultiSelect({
               e.preventDefault(); // prevent blur
               addTag(opt.id);
             }}
-            className="w-full rounded-xl px-3 py-2 text-left text-sm text-[#5e605b] hover:bg-[#f5f4ef] flex items-center gap-2 transition-colors"
+            className="w-full rounded-xl px-3 py-2 text-left text-sm text-on-surface-variant hover:bg-surface-container-low flex items-center gap-2 transition-colors"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
@@ -212,7 +212,7 @@ export function TagMultiSelect({
               void handleCreate();
             }}
             disabled={creating}
-            className="w-full rounded-xl px-3 py-2 text-left text-sm text-[#366769] hover:bg-[#f5f4ef] flex items-center gap-2 transition-colors font-medium"
+            className="w-full rounded-xl px-3 py-2 text-left text-sm text-primary hover:bg-surface-container-low flex items-center gap-2 transition-colors font-medium"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>

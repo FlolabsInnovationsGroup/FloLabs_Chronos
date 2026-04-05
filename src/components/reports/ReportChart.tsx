@@ -17,7 +17,7 @@ export function ReportChart({ data, title = "Past 7 Days" }: ReportChartProps) {
   return (
     <div className="bg-surface-container-lowest rounded-xl paper-shadow p-6">
       <h3
-        className="text-sm font-semibold text-[#31332f] mb-5"
+        className="text-sm font-semibold text-on-background mb-5"
         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
       >
         {title}
@@ -37,7 +37,7 @@ export function ReportChart({ data, title = "Past 7 Days" }: ReportChartProps) {
                   {/* Tooltip */}
                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                     <div
-                      className="bg-[#31332f] text-[#fbf9f5] text-xs px-2 py-1 rounded-lg whitespace-nowrap"
+                      className="bg-chrome text-background text-xs px-2 py-1 rounded-lg whitespace-nowrap"
                       style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                     >
                       {day.hours.toFixed(1)}h
@@ -50,12 +50,12 @@ export function ReportChart({ data, title = "Past 7 Days" }: ReportChartProps) {
                     style={{
                       height: `${Math.max(heightPct, day.hours > 0 ? 4 : 0)}%`,
                       minHeight: day.hours > 0 ? "4px" : "2px",
-                      backgroundColor: isToday ? "#366769" : "#abdddf",
+                      backgroundColor: isToday ? "var(--c-primary)" : "var(--c-primary-fixed-dim)",
                     }}
                   />
                   {/* Zero bar placeholder */}
                   {day.hours === 0 && (
-                    <div className="w-full h-0.5 bg-[#efeee9] rounded-full" />
+                    <div className="w-full h-0.5 bg-surface-container rounded-full" />
                   )}
                 </div>
               </div>
@@ -67,7 +67,7 @@ export function ReportChart({ data, title = "Past 7 Days" }: ReportChartProps) {
                   style={{
                     fontFamily: "var(--font-newsreader, 'Newsreader'), serif",
                     fontStyle: "italic",
-                    color: day.hours > 0 ? "#31332f" : "#b2b2ad",
+                    color: day.hours > 0 ? "var(--c-on-background)" : "var(--c-outline-variant)",
                   }}
                 >
                   {day.hours > 0 ? `${day.hours.toFixed(1)}` : "—"}
@@ -76,7 +76,7 @@ export function ReportChart({ data, title = "Past 7 Days" }: ReportChartProps) {
                   className="text-[10px] font-medium uppercase"
                   style={{
                     fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif",
-                    color: isToday ? "#366769" : "#b2b2ad",
+                    color: isToday ? "var(--c-primary)" : "var(--c-outline-variant)",
                     fontWeight: isToday ? 600 : 400,
                   }}
                 >

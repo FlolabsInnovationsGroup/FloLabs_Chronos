@@ -15,20 +15,20 @@ export default function DashboardError({
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
-      <div className="w-14 h-14 rounded-2xl bg-[#fff7f6] flex items-center justify-center">
-        <span className="material-symbols-outlined text-[#a73b21]" style={{ fontSize: "28px" }}>
+      <div className="w-14 h-14 rounded-2xl bg-warm-surface flex items-center justify-center">
+        <span className="material-symbols-outlined text-error" style={{ fontSize: "28px" }}>
           error
         </span>
       </div>
       <div className="text-center flex flex-col gap-2">
         <h2
-          className="text-xl font-light italic text-[#31332f]"
+          className="text-xl font-light italic text-on-background"
           style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
         >
           Something went wrong
         </h2>
         <p
-          className="text-sm text-[#5e605b] max-w-sm"
+          className="text-sm text-on-surface-variant max-w-sm"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           An unexpected error occurred. Your data is safe — please try again.
@@ -36,7 +36,7 @@ export default function DashboardError({
       </div>
       <button
         onClick={reset}
-        className="px-5 py-2.5 rounded-md bg-[#366769] text-[#e3feff] text-sm font-medium hover:bg-[#295a5d] transition-colors"
+        className="px-5 py-2.5 rounded-md bg-primary text-on-primary text-sm font-medium hover:bg-primary-dim transition-colors"
         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
       >
         Try Again

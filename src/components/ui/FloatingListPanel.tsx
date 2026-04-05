@@ -49,7 +49,10 @@ export const FloatingListPanel = forwardRef<HTMLDivElement, FloatingListPanelPro
     return createPortal(
       <div
         ref={ref}
-        className={cn("overflow-hidden rounded-2xl bg-[#fbf9f5] paper-shadow ring-1 ring-[#31332f]/6", shellClassName)}
+        className={cn(
+          "overflow-hidden rounded-2xl bg-surface-container-lowest paper-shadow ring-1 ring-on-background/10",
+          shellClassName
+        )}
         style={{
           position: "fixed",
           top: box.top,

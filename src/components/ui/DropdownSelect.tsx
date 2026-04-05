@@ -34,7 +34,7 @@ export function DropdownSelect({
   panelClassName,
   disabled,
   leadingIcon,
-  leadingIconColor = "#5e605b",
+  leadingIconColor = "var(--c-on-surface-variant)",
 }: DropdownSelectProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -84,8 +84,8 @@ export function DropdownSelect({
         disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          "w-full min-h-9 appearance-none rounded-xl border-0 bg-[#f5f4ef] px-3 py-1.5 text-sm text-[#31332f] shadow-none outline-none transition-all duration-150",
-          "focus:ring-2 focus:ring-[#366769]/20 disabled:opacity-50 disabled:cursor-not-allowed",
+          "w-full min-h-9 appearance-none rounded-xl border-0 bg-surface-container-low px-3 py-1.5 text-sm text-on-background shadow-none outline-none transition-all duration-150",
+          "focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed",
           "inline-flex items-center gap-2 cursor-pointer",
           buttonClassName
         )}
@@ -105,13 +105,13 @@ export function DropdownSelect({
         ) : null}
 
         {selected?.icon && (
-          <span className="material-symbols-outlined shrink-0" style={{ fontSize: "16px", color: selected.color ?? "#5e605b" }}>
+          <span className="material-symbols-outlined shrink-0" style={{ fontSize: "16px", color: selected.color ?? "var(--c-on-surface-variant)" }}>
             {selected.icon}
           </span>
         )}
 
-        <span className={cn("truncate text-left", !selected && "text-[#b2b2ad]")}>{selected?.label ?? placeholder}</span>
-        <span className="material-symbols-outlined ml-auto shrink-0 text-[#5e605b]" style={{ fontSize: "18px" }}>
+        <span className={cn("truncate text-left", !selected && "text-outline-variant")}>{selected?.label ?? placeholder}</span>
+        <span className="material-symbols-outlined ml-auto shrink-0 text-on-surface-variant" style={{ fontSize: "18px" }}>
           expand_more
         </span>
       </button>
@@ -132,7 +132,7 @@ export function DropdownSelect({
               onClick={() => selectOption(option.value)}
               className={cn(
                 "w-full rounded-xl px-3 py-2 text-left text-sm transition-colors flex items-center gap-2",
-                active ? "bg-[#e9e8e3] text-[#31332f]" : "text-[#5e605b] hover:bg-[#f5f4ef]"
+                active ? "bg-surface-container-high text-on-background" : "text-on-surface-variant hover:bg-surface-container-low"
               )}
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               role="option"
@@ -141,13 +141,13 @@ export function DropdownSelect({
               {option.color ? (
                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: option.color }} />
               ) : option.icon ? (
-                <span className="material-symbols-outlined shrink-0" style={{ fontSize: "16px", color: option.color ?? "#5e605b" }}>
+                <span className="material-symbols-outlined shrink-0" style={{ fontSize: "16px", color: option.color ?? "var(--c-on-surface-variant)" }}>
                   {option.icon}
                 </span>
               ) : null}
               <span className="truncate">{option.label}</span>
               {active && (
-                <span className="material-symbols-outlined ml-auto text-[#366769]" style={{ fontSize: "16px" }}>
+                <span className="material-symbols-outlined ml-auto text-primary" style={{ fontSize: "16px" }}>
                   check
                 </span>
               )}

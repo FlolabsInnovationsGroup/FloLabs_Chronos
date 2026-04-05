@@ -119,11 +119,11 @@ export function EntryList({
   if (entries.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <span className="material-symbols-outlined text-[#b2b2ad]" style={{ fontSize: "40px" }}>
+        <span className="material-symbols-outlined text-outline-variant" style={{ fontSize: "40px" }}>
           hourglass_empty
         </span>
         <p
-          className="text-sm text-[#b2b2ad] text-center max-w-xs"
+          className="text-sm text-outline-variant text-center max-w-xs"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           {emptyMessage}
@@ -139,23 +139,23 @@ export function EntryList({
   return (
     <>
       <div className="flex flex-col gap-6">
-        <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-[#f5f4ef]">
+        <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-surface-container-low">
           <label className="flex items-center gap-3 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={allSelected}
               onChange={() => (allSelected ? deselectAll() : selectAll())}
-              className="w-4 h-4 rounded accent-[#366769]"
+              className="w-4 h-4 rounded accent-primary"
             />
             <span
-              className="text-sm font-medium text-[#31332f]"
+              className="text-sm font-medium text-on-background"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               Select all entries
             </span>
           </label>
           <span
-            className="text-xs text-[#5e605b]"
+            className="text-xs text-on-surface-variant"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {selectedIds.size} selected
@@ -170,22 +170,22 @@ export function EntryList({
                 {/* Date group header */}
                 <div className="flex items-center justify-between px-4 py-2">
                   <div className="flex items-center gap-3">
-                    <div className="w-0.5 h-4 bg-[#abdddf] rounded-full" />
+                    <div className="w-0.5 h-4 bg-primary-fixed-dim rounded-full" />
                     <span
-                      className="text-sm font-semibold text-[#5e605b] uppercase tracking-wide"
+                      className="text-sm font-semibold text-on-surface-variant uppercase tracking-wide"
                       style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                     >
                       {group.label}
                     </span>
                     <span
-                      className="text-xs text-[#b2b2ad]"
+                      className="text-xs text-outline-variant"
                       style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                     >
                       {group.entries.length} {group.entries.length === 1 ? "entry" : "entries"}
                     </span>
                   </div>
                   <span
-                    className="text-sm font-light italic text-[#5e605b] tabular-nums"
+                    className="text-sm font-light italic text-on-surface-variant tabular-nums"
                     style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
                   >
                     {formatDuration(groupTotalMs)}
@@ -227,39 +227,39 @@ export function EntryList({
 
       {/* Floating bulk action bar */}
       {anySelected && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-[#31332f] rounded-2xl shadow-2xl">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-chrome rounded-2xl shadow-2xl">
           <span
-            className="text-sm font-medium text-[#e3feff]"
+            className="text-sm font-medium text-on-chrome"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {selectedIds.size} selected
           </span>
-          <div className="w-px h-4 bg-[#e3feff]/20" />
+          <div className="w-px h-4 bg-on-chrome/25" />
           <button
             onClick={allSelected ? deselectAll : selectAll}
-            className="text-sm text-[#abdddf] hover:text-[#e3feff] transition-colors"
+            className="text-sm text-on-chrome/75 hover:text-on-chrome transition-colors"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {allSelected ? "Deselect all" : "Select all"}
           </button>
-          <div className="w-px h-4 bg-[#e3feff]/20" />
+          <div className="w-px h-4 bg-on-chrome/25" />
           <button
             onClick={openChangeProject}
-            className="text-sm text-[#abdddf] hover:text-[#e3feff] transition-colors"
+            className="text-sm text-on-chrome/75 hover:text-on-chrome transition-colors"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Change project
           </button>
           <button
             onClick={() => setBulkDeleteConfirm(true)}
-            className="text-sm text-[#f09b84] hover:text-[#fde0d9] transition-colors"
+            className="text-sm text-error hover:text-warm-muted transition-colors"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Delete ({selectedIds.size})
           </button>
           <button
             onClick={deselectAll}
-            className="p-1 rounded text-[#e3feff]/50 hover:text-[#e3feff] transition-colors"
+            className="p-1 rounded text-on-chrome/45 hover:text-on-chrome transition-colors"
             aria-label="Clear selection"
           >
             <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
@@ -278,7 +278,7 @@ export function EntryList({
       >
         <div className="flex flex-col gap-4">
           <p
-            className="text-sm text-[#5e605b]"
+            className="text-sm text-on-surface-variant"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             Delete {selectedIds.size} {selectedIds.size === 1 ? "entry" : "entries"}? This cannot be

@@ -47,7 +47,7 @@ export function Modal({ open, onClose, title, children, className, size = "md" }
     <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain">
       {/* Backdrop: fixed so it always covers the viewport while the sheet scrolls */}
       <div
-        className="fixed inset-0 bg-[#31332f]/20 backdrop-blur-sm"
+        className="fixed inset-0 backdrop-blur-sm bg-[color:var(--c-overlay-scrim)]"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -65,17 +65,17 @@ export function Modal({ open, onClose, title, children, className, size = "md" }
           aria-labelledby={title ? "modal-title" : undefined}
         >
           {title && (
-            <div className="flex items-center justify-between px-6 py-5 bg-[#f5f4ef] shrink-0">
+            <div className="flex items-center justify-between px-6 py-5 bg-surface-container-low shrink-0">
               <h2
                 id="modal-title"
-                className="text-lg font-medium text-[#31332f]"
+                className="text-lg font-medium text-on-background"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 {title}
               </h2>
               <button
                 onClick={onClose}
-                className="p-1.5 rounded-lg text-[#5e605b] hover:bg-[#f5f4ef] hover:text-[#31332f] transition-colors"
+                className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-background transition-colors"
                 aria-label="Close modal"
               >
                 <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>

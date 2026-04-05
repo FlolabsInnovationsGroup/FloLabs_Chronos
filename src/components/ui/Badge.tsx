@@ -12,9 +12,9 @@ interface BadgeProps {
 }
 
 const colorStyles: Record<BadgeColor, string> = {
-  primary: "bg-[#b9ecee] text-[#104648]",
-  secondary: "bg-[#e1e1f5] text-[#3d3e4e]",
-  tertiary: "bg-[#fed9b8] text-[#503921]",
+  primary: "bg-primary-container text-on-primary-fixed",
+  secondary: "bg-secondary-fixed text-on-secondary-fixed",
+  tertiary: "bg-tertiary-container text-on-tertiary-fixed",
   custom: "",
 };
 

@@ -56,7 +56,7 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
     return (
       <div className="bg-surface-container-lowest rounded-xl paper-shadow p-6">
         <p
-          className="text-sm text-[#b2b2ad] text-center py-8"
+          className="text-sm text-outline-variant text-center py-8"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           No data for the selected filters.
@@ -74,9 +74,9 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
 
   return (
     <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-hidden">
-      <div className="px-6 py-4 bg-[#f5f4ef]">
+      <div className="px-6 py-4 bg-surface-container-low">
         <h3
-          className="text-sm font-semibold text-[#31332f]"
+          className="text-sm font-semibold text-on-background"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
           {title}
@@ -88,17 +88,17 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
           const pct = totalMs > 0 ? Math.round((row.totalMs / totalMs) * 100) : 0;
 
           return (
-            <div key={`${row.label}-${row.sortDate ?? "na"}`} className="rounded-xl bg-[#fbf9f5] p-4 flex flex-col gap-3">
+            <div key={`${row.label}-${row.sortDate ?? "na"}`} className="rounded-xl bg-background p-4 flex flex-col gap-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p
-                    className="text-xs uppercase tracking-wide text-[#5e605b]"
+                    className="text-xs uppercase tracking-wide text-on-surface-variant"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
                     Label
                   </p>
                   <p
-                    className="text-sm font-medium text-[#31332f] mt-1"
+                    className="text-sm font-medium text-on-background mt-1"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
                     {row.label}
@@ -106,13 +106,13 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
                 </div>
                 <div className="text-right shrink-0">
                   <p
-                    className="text-xs uppercase tracking-wide text-[#5e605b]"
+                    className="text-xs uppercase tracking-wide text-on-surface-variant"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
                     Share
                   </p>
                   <p
-                    className="text-sm font-medium text-[#31332f] mt-1 tabular-nums"
+                    className="text-sm font-medium text-on-background mt-1 tabular-nums"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
                     {pct}%
@@ -121,29 +121,29 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg bg-white/70 px-3 py-2">
+                <div className="rounded-lg bg-surface-container-lowest/70 px-3 py-2">
                   <p
-                    className="text-xs uppercase tracking-wide text-[#5e605b]"
+                    className="text-xs uppercase tracking-wide text-on-surface-variant"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
                     Entries
                   </p>
                   <p
-                    className="text-sm text-[#31332f] mt-1 tabular-nums"
+                    className="text-sm text-on-background mt-1 tabular-nums"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
                     {row.entryCount}
                   </p>
                 </div>
-                <div className="rounded-lg bg-white/70 px-3 py-2">
+                <div className="rounded-lg bg-surface-container-lowest/70 px-3 py-2">
                   <p
-                    className="text-xs uppercase tracking-wide text-[#5e605b]"
+                    className="text-xs uppercase tracking-wide text-on-surface-variant"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
                     Total Time
                   </p>
                   <p
-                    className="text-sm font-medium italic text-[#31332f] mt-1 tabular-nums"
+                    className="text-sm font-medium italic text-on-background mt-1 tabular-nums"
                     style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
                   >
                     {formatDurationHuman(row.totalMs)}
@@ -152,11 +152,11 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="flex-1 h-1.5 bg-[#efeee9] rounded-full overflow-hidden">
-                  <div className="h-full bg-[#366769] rounded-full transition-all" style={{ width: `${pct}%` }} />
+                <div className="flex-1 h-1.5 bg-surface-container rounded-full overflow-hidden">
+                  <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
                 </div>
                 <span
-                  className="text-xs text-[#5e605b] tabular-nums w-8 text-right"
+                  className="text-xs text-on-surface-variant tabular-nums w-8 text-right"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
                   {pct}%
@@ -166,16 +166,16 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
           );
         })}
 
-        <div className="rounded-xl bg-[#f5f4ef] p-4 grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-surface-container-low p-4 grid grid-cols-2 gap-3">
           <div>
             <p
-              className="text-xs uppercase tracking-wide text-[#5e605b]"
+              className="text-xs uppercase tracking-wide text-on-surface-variant"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               Total Entries
             </p>
             <p
-              className="text-sm font-semibold text-[#31332f] mt-1 tabular-nums"
+              className="text-sm font-semibold text-on-background mt-1 tabular-nums"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               {rows.reduce((s, r) => s + r.entryCount, 0)}
@@ -183,13 +183,13 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
           </div>
           <div>
             <p
-              className="text-xs uppercase tracking-wide text-[#5e605b]"
+              className="text-xs uppercase tracking-wide text-on-surface-variant"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
               Total Time
             </p>
             <p
-              className="text-sm font-semibold italic text-[#31332f] mt-1 tabular-nums"
+              className="text-sm font-semibold italic text-on-background mt-1 tabular-nums"
               style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
             >
               {formatDurationHuman(totalMs)}
@@ -200,12 +200,12 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
 
       <table className="hidden md:table w-full">
         <thead>
-          <tr className="bg-[#f5f4ef]">
+          <tr className="bg-surface-container-low">
             {columns.map((column) => (
               <th
                 key={column.key}
                 onClick={() => handleSort(column.key)}
-                className={`px-4 py-3 text-xs font-semibold text-[#5e605b] uppercase tracking-wide cursor-pointer select-none hover:text-[#31332f] ${
+                className={`px-4 py-3 text-xs font-semibold text-on-surface-variant uppercase tracking-wide cursor-pointer select-none hover:text-on-background ${
                   column.align === "right" ? "text-right" : "text-left"
                 } ${column.key === "label" ? "px-6" : ""} ${column.key === "share" ? "w-48 px-6" : ""}`}
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -230,11 +230,11 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
             return (
               <tr
                 key={`${row.label}-${row.sortDate ?? "na"}`}
-                className={`${isEven ? "" : "bg-[#fbf9f5]"} hover:bg-[#f5f4ef] transition-colors`}
+                className={`${isEven ? "" : "bg-background"} hover:bg-surface-container-low transition-colors`}
               >
                 <td className="px-6 py-3.5">
                   <span
-                    className="text-sm font-medium text-[#31332f]"
+                    className="text-sm font-medium text-on-background"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
                     {row.label}
@@ -242,7 +242,7 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
                 </td>
                 <td className="px-4 py-3.5 text-right">
                   <span
-                    className="text-sm text-[#5e605b] tabular-nums"
+                    className="text-sm text-on-surface-variant tabular-nums"
                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                   >
                     {row.entryCount}
@@ -250,7 +250,7 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
                 </td>
                 <td className="px-4 py-3.5 text-right">
                   <span
-                    className="text-sm font-medium italic text-[#31332f] tabular-nums"
+                    className="text-sm font-medium italic text-on-background tabular-nums"
                     style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
                   >
                     {formatDurationHuman(row.totalMs)}
@@ -258,14 +258,14 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
                 </td>
                 <td className="px-6 py-3.5">
                   <div className="flex items-center gap-3 justify-end">
-                    <div className="flex-1 max-w-28 h-1.5 bg-[#efeee9] rounded-full overflow-hidden">
+                    <div className="flex-1 max-w-28 h-1.5 bg-surface-container rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-[#366769] rounded-full transition-all"
+                        className="h-full bg-primary rounded-full transition-all"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
                     <span
-                      className="text-xs text-[#5e605b] tabular-nums w-8 text-right"
+                      className="text-xs text-on-surface-variant tabular-nums w-8 text-right"
                       style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                     >
                       {pct}%
@@ -277,10 +277,10 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
           })}
         </tbody>
         <tfoot>
-          <tr className="bg-[#f5f4ef]">
+          <tr className="bg-surface-container-low">
             <td className="px-6 py-3">
               <span
-                className="text-sm font-semibold text-[#31332f]"
+                className="text-sm font-semibold text-on-background"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 Total
@@ -288,7 +288,7 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
             </td>
             <td className="px-4 py-3 text-right">
               <span
-                className="text-sm font-semibold text-[#31332f] tabular-nums"
+                className="text-sm font-semibold text-on-background tabular-nums"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
                 {rows.reduce((s, r) => s + r.entryCount, 0)}
@@ -296,7 +296,7 @@ export function ReportTable({ rows, title = "Breakdown" }: ReportTableProps) {
             </td>
             <td className="px-4 py-3 text-right">
               <span
-                className="text-sm font-semibold italic text-[#31332f] tabular-nums"
+                className="text-sm font-semibold italic text-on-background tabular-nums"
                 style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
               >
                 {formatDurationHuman(totalMs)}

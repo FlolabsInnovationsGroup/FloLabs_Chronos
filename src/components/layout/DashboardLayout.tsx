@@ -28,7 +28,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [mobileNavOpen]);
 
   return (
-    <div className="min-h-screen bg-[#fbf9f5]">
+    <div className="min-h-screen bg-background">
       {/* Fixed left sidebar — hidden on mobile */}
       <div className="hidden md:block">
         <Sidebar />

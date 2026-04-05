@@ -71,6 +71,20 @@ function getLiveDuration(startedAt?: number | null, now = Date.now()) {
   return Math.max(0, now - startedAt);
 }
 
+/**
+ * Gradient strip anchored to the left edge of the sticky Actions cell. Paints above earlier columns
+ * while horizontal scrolling — unlike box-shadow on table cells, which browsers suppress under
+ * default border-collapse: collapse.
+ */
+function ActionsColumnScrollVeil() {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute top-0 bottom-0 right-full z-[3] hidden w-14 bg-gradient-to-l from-black/30 via-black/12 to-transparent md:block dark:from-white/20 dark:via-white/10 dark:to-transparent"
+    />
+  );
+}
+
 export default function TeamPage() {
   const { data: session } = useSession();
   const role = session?.user.role;
@@ -487,12 +501,10 @@ export default function TeamPage() {
     "px-3 sm:px-4 lg:px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-on-surface-variant";
   const compactBodyCellClass = "px-3 sm:px-4 lg:px-5 py-4 align-top";
   const compactEmptyCellClass = "px-3 sm:px-4 lg:px-5 py-10 text-center text-sm text-outline-variant";
-  /** Left-projected shadow (negative X) so the Actions rail reads as floating over columns to the left. */
-  const tableActionsShadowClass =
-    "md:[box-shadow:-4px_0_0_0_rgb(0_0_0_/_0.08),-10px_0_24px_6px_rgb(0_0_0_/_0.26),_-28px_0_52px_16px_rgb(0_0_0_/_0.18),_-52px_0_80px_28px_rgb(0_0_0_/_0.10)]";
-  const tableActionsHeadClass = `md:sticky md:right-0 md:z-[2] md:border-l md:border-outline-variant/30 md:bg-surface-container-low md:whitespace-nowrap ${tableActionsShadowClass}`;
+  const tableActionsHeadClass =
+    "md:sticky md:right-0 md:z-[2] md:relative md:overflow-visible md:border-l md:border-outline-variant/30 md:bg-surface-container-low md:whitespace-nowrap";
   const tableActionsCellClass = (stripedRow: boolean) =>
-    `md:sticky md:right-0 md:z-[1] md:border-l md:border-outline-variant/30 md:whitespace-nowrap ${tableActionsShadowClass} ${stripedRow ? "md:bg-background" : "md:bg-surface-container-lowest"}`;
+    `md:sticky md:right-0 md:z-[1] md:relative md:overflow-visible md:border-l md:border-outline-variant/30 md:whitespace-nowrap ${stripedRow ? "md:bg-background" : "md:bg-surface-container-lowest"}`;
 
   return (
     <div className="flex flex-col gap-8 max-w-[90rem] mx-auto">
@@ -655,8 +667,8 @@ export default function TeamPage() {
 
       {activeTab === "users" && (
           <>
-            <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto">
-              <table className="w-full min-w-[880px] lg:min-w-[960px]">
+            <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto overflow-y-visible">
+              <table className="w-full min-w-[880px] border-separate border-spacing-0 lg:min-w-[960px]">
                 <thead>
                   <tr className="bg-surface-container-low">
                     {userColumns.map((column) => (
@@ -666,7 +678,10 @@ export default function TeamPage() {
                         className={`${compactHeadCellClass} select-none ${column.key ? "cursor-pointer hover:text-on-background" : ""} ${column.label === "Actions" ? tableActionsHeadClass : ""}`}
                         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                       >
-                        <span className="inline-flex items-center gap-1">
+                        {column.label === "Actions" && <ActionsColumnScrollVeil />}
+                        <span
+                          className={`inline-flex items-center gap-1 ${column.label === "Actions" ? "relative z-[4]" : ""}`}
+                        >
                           {column.label}
                           {column.key && sortKey === column.key && (
                             <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
@@ -827,7 +842,8 @@ export default function TeamPage() {
                             <td
                               className={`${compactBodyCellClass} ${tableActionsCellClass(index % 2 !== 0)}`}
                             >
-                              <div className="flex gap-0.5 sm:gap-1 md:flex-nowrap md:justify-end">
+                              <ActionsColumnScrollVeil />
+                              <div className="relative z-[4] flex gap-0.5 sm:gap-1 md:flex-nowrap md:justify-end">
                                 {(role === "admin" || role === "team_lead") && (
                                   <>
                                     <Tooltip label="Edit member">
@@ -881,8 +897,8 @@ export default function TeamPage() {
             </div>
 
             {role === "admin" && (
-              <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto">
-                <table className="w-full min-w-[680px] lg:min-w-[760px]">
+              <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto overflow-y-visible">
+                <table className="w-full min-w-[680px] border-separate border-spacing-0 lg:min-w-[760px]">
                   <thead>
                     <tr className="bg-surface-container-low">
                       {["Invitee", "Role", "Teams", "Expires", "Actions"].map((heading) => (
@@ -891,7 +907,8 @@ export default function TeamPage() {
                           className={`${compactHeadCellClass} ${heading === "Actions" ? tableActionsHeadClass : ""}`}
                           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                         >
-                          {heading}
+                          {heading === "Actions" && <ActionsColumnScrollVeil />}
+                          <span className={heading === "Actions" ? "relative z-[4]" : undefined}>{heading}</span>
                         </th>
                       ))}
                     </tr>
@@ -950,7 +967,8 @@ export default function TeamPage() {
                             </span>
                           </td>
                           <td className={`${compactBodyCellClass} ${tableActionsCellClass(index % 2 !== 0)}`}>
-                            <div className="flex gap-2 flex-wrap md:flex-nowrap md:justify-end">
+                            <ActionsColumnScrollVeil />
+                            <div className="relative z-[4] flex gap-2 flex-wrap md:flex-nowrap md:justify-end">
                               <Button variant="ghost" size="sm" onClick={() => void handleCopyInvite(invite.inviteUrl)}>
                                 Copy Link
                               </Button>

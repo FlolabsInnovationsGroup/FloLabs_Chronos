@@ -702,14 +702,33 @@ export default function TeamPage() {
                                     {user.activeTimer.description}
                                   </p>
                                 )}
-                                {user.activeTimer?.notionTaskTitle && (
-                                  <p
-                                    className="text-xs text-[#755a40]"
-                                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                                  >
-                                    Task: {user.activeTimer.notionTaskTitle}
-                                  </p>
-                                )}
+                                {user.activeTimer?.notionTaskTitle &&
+                                  (user.activeTimer.notionTaskPageId ? (
+                                    <a
+                                      href={`https://www.notion.so/${user.activeTimer.notionTaskPageId.replace(/-/g, "")}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex max-w-full"
+                                    >
+                                      <Badge color="secondary" className="max-w-full min-w-0">
+                                        <span className="material-symbols-outlined mr-0.5 shrink-0" style={{ fontSize: "11px" }}>
+                                          task
+                                        </span>
+                                        <span className="truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                                          {user.activeTimer.notionTaskTitle}
+                                        </span>
+                                      </Badge>
+                                    </a>
+                                  ) : (
+                                    <Badge color="secondary" className="max-w-full min-w-0">
+                                      <span className="material-symbols-outlined mr-0.5 shrink-0" style={{ fontSize: "11px" }}>
+                                        task
+                                      </span>
+                                      <span className="truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                                        {user.activeTimer.notionTaskTitle}
+                                      </span>
+                                    </Badge>
+                                  ))}
                               </div>
                             ) : (
                               <span

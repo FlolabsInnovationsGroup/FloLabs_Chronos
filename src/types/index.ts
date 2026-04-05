@@ -16,6 +16,7 @@ export interface User {
     startedAt: number;
     description: string;
     projectId: string | null;
+    notionTaskPageId?: string | null;
     notionTaskTitle?: string | null;
   } | null;
 }

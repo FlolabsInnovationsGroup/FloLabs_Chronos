@@ -23,6 +23,7 @@ export async function GET() {
             startedAt: activeTimer.startedAt,
             description: activeTimer.description,
             projectId: activeTimer.projectId,
+            notionTaskPageId: activeTimer.notionTaskPageId ?? null,
             notionTaskTitle: activeTimer.notionTaskTitle ?? null,
           }
         : null,

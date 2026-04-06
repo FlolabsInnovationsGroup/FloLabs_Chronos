@@ -16,7 +16,7 @@ The current product model is:
 - Time entries can optionally link to a Notion Task page explicitly via stored task relation metadata.
 - PostgreSQL is the application source of truth for Chronos data; Notion is the external operations mirror / integration layer.
 - Discord webhooks are used for branded notifications about time-entry lifecycle events.
-- The dashboard supports **light and dark** appearance from the same components, driven by shared **`--c-*`** CSS variables on `:root` and `html.dark`.
+- The dashboard supports **light**, **dark**, and **system (OS)** appearance from the same components, driven by shared **`--c-*`** CSS variables on `:root` and `html.dark`.
 
 ---
 
@@ -222,6 +222,7 @@ The entry-list edit experience must be considered authoritative for user-facing 
 7. API removes the active timer from Redis.
 8. API broadcasts a stop event.
 9. Completed entries can then be synced to Notion and notified to Discord.
+10. **Linked Notion task status (best-effort):** when a `notionTaskPageId` is present on the stopped timer, Chronos asynchronously attempts to set the corresponding row in the **Notion Tasks** database to **In progress** on a **Status** (or workflow-like **Select**) column, matching the option name case-insensitively. Failures do not block the stop. The same hook runs when a **completed** entry is created via `POST /api/entries` with a linked task.
 
 ### Visibility Rules
 - Admins can inspect all active timers.
@@ -416,11 +417,17 @@ This queries the Notion Tasks database and returns task candidates for UI select
 2. If neither is set: load the Time Entries database (`NOTION_DATABASE_ID`), read the **`Task`** relation property schema, and use **`relation.database_id`** (single-property relations only; dual-property / multi-database relations are not resolved here).
 
 ### Search behavior
-- the API detects and uses the Tasks DB schema dynamically (including `title` or `rich_text` name columns)
-- **Notion 2025-09-03+**: query uses `POST /v1/data_sources/{id}/query` when the Tasks database exposes a data source (migrated workspaces); otherwise it uses legacy `POST /v1/databases/{id}/query`
-- it supports short queries such as `F`
-- it falls back to a broader scan/filter path if the filtered Notion query is empty
-- it can surface configuration errors in the response metadata for debugging
+Implementation lives primarily in `src/lib/notion.ts` (`searchTasks`).
+
+- **Workspace title search (primary):** `POST /v1/search` ([Notion Search API](https://developers.notion.com/reference/post-search)) finds pages whose titles match the query; results are filtered to rows whose parent is the configured Tasks database (`database_id` or `data_source_id`). This is faster and more reliable than scanning arbitrary database query sort order for deep rows.
+- **Database query (secondary):** loads schema, resolves **data source** vs legacy **`POST /v1/databases/{id}/query`** when needed, applies `title` / `rich_text` **`contains`** filters only when the schema confirms that property type (avoids invalid filters when the retrieve-database payload omits usable title metadata).
+- **Client-side matching:** `matchesTaskQuery` supports substring match, camelCase tokenization (e.g. `FloLabs` vs `Flo Labs`), and a compact alphanumeric fallback so UI filtering stays usable when Notion’s literal `contains` differs from user typing.
+- **Fallback scan:** paginated unfiltered (or loosely filtered) queries walk additional pages when search + primary query return no matches.
+- **Configuration:** `GET /api/tasks` exposes `meta.taskSearchConfigured` when an API key and tasks DB id (or derivable `NOTION_DATABASE_ID` path) are present; the UI must not treat “unconfigured” as overriding non-empty `tasks` after a successful response.
+
+### Tooling
+- **`pnpm run test:task-search`** — `scripts/test-task-search-integration.ts` loads `.env.local`, calls `searchTasks`, and prints `probeTaskSearchConfig()` diagnostics (unfiltered first page, resolved titles).
+- **`pnpm test:e2e`** — Playwright (`e2e/task-search.spec.ts`): login, open task picker, assert `/api/tasks` JSON matches visible UI. `playwright.config.ts` uses `http://localhost:3000` to align with `NEXTAUTH_URL` (avoid `127.0.0.1` cookie issues); webServer readiness uses `/login` (200), not `/` (redirect).
 
 ### Implemented UI surfaces
 - timer UI task picker
@@ -511,8 +518,9 @@ PostgreSQL is authoritative for Chronos. Notion is an integration target, not th
 - creating or updating Notion pages for time entries
 - matching/syncing Team Member relations
 - handling edited and deleted entries
-- searching the Notion Tasks database for task selection
+- searching the Notion Tasks database for task selection (workspace search + query + fallbacks)
 - writing the `Task` relation directly when `notionTaskPageId` is present
+- best-effort patch of linked task **Status** / workflow **Select** to **In progress** after a stopped timer or manual completed entry with a linked task (`setNotionLinkedTaskInProgressOnStop` in `src/lib/notion.ts`)
 
 ### Edited-entry behavior
 For completed entries edited through the API:
@@ -587,17 +595,20 @@ Depending on actual database schema detection, Chronos maps:
 - Destructive actions use confirmation modals where **Cancel is visually primary** and the destructive action is danger-styled.
 - Modals are fixed full-viewport overlays: the **outer layer** scrolls (`overflow-y-auto` on the overlay) so tall content is not trapped in a short inner body; the dialog panel stays centered and grows with content.
 
-### Light and dark theme
+### Light, dark, and system theme
 
-Chronos ships a **dual palette** driven by CSS custom properties, not duplicate component trees.
+Chronos ships a **dual palette** driven by CSS custom properties, not duplicate component trees. The user-facing mode is **light**, **dark**, or **system** (follow `prefers-color-scheme`).
 
 - **Class hook:** `html.dark` toggles dark appearance. Tailwind’s `dark:` variant is wired with `@custom-variant dark (&:where(html.dark, html.dark *));` so utilities like `dark:bg-surface` resolve against the dark tree.
 - **Token source:** `src/app/globals.css` defines every semantic color twice: under `:root` (light) and `html.dark` (dark). Examples: light primary `#366769`, dark primary `#8ecbce`; backgrounds move from cream paper (`#fbf9f5`) to near-black (`#121211`) with elevated surfaces on `surface-container-*` steps.
 - **Tailwind bridge:** `@theme inline` maps `--color-*` entries to `var(--c-*)`, so classes such as `bg-background`, `text-on-background`, `bg-primary`, and `border-surface-container-highest` follow the active theme automatically.
-- **Persistence and FOUC avoidance:** `ThemeScript` (`next/script`, `strategy="beforeInteractive"`) reads `localStorage` key `chronos-theme` (`"dark"` | `"light"`). If unset, it follows `prefers-color-scheme: dark`. It adds or removes `dark` on `<html>` before paint. `ThemeToggle` updates the class and writes the same key.
+- **Persistence and FOUC avoidance:** `ThemeScript` (`next/script`, `strategy="beforeInteractive"`) reads `localStorage` key `chronos-theme`. Stored values: **`"light"`**, **`"dark"`**, **`"system"`**. Missing or legacy values behave like **system** (use `prefers-color-scheme: dark` to choose class). It adds or removes `dark` on `<html>` before paint.
+- **Runtime sync:** `ChronosThemeProvider` wraps the app in `src/app/layout.tsx`; it reapplies the class when the mode changes, when **system** preference changes (`matchMedia` listener), and when `storage` fires (other tabs). Same-tab updates use a `chronos-theme` window event.
+- **Shared helpers:** `src/lib/chronos-theme.ts` — `parseChronosThemeMode`, `applyChronosThemeToDocument`, `resolveDarkFromMode`.
+- **Chrome:** `TopBar` uses `ThemeToggle` — a **`DropdownSelect`** with **`hideTriggerLabel`** so the closed control shows only the **mode icon + chevron**; tooltip and `aria-label` describe the effective appearance (including “system → dark/light”).
+- **Settings:** Settings → **Appearance** uses **`Select`** with three labeled options: **System (match device)**, **Light**, **Dark**.
+- **`DropdownSelect`:** optional **`hideTriggerLabel`** / **`buttonAriaLabel`** for compact triggers (theme picker); list options still show icon + label.
 - **Surfaces:** `body` uses `var(--c-background)` and `var(--c-on-background)`. Shared extras include `--c-overlay-scrim`, `--c-paper-shadow`, and focus rings (`--c-ring-primary`, `--c-ring-error`) with distinct light/dark values.
-- **Settings:** Settings → **Appearance** exposes the same toggle (`ThemeToggle`) with copy that themes are per device.
-- **Chrome:** `TopBar` includes `ThemeToggle` (desktop and mobile breakpoints).
 - **Brand mark:** The app chrome mark (`FlolabsMark` in `src/components/brand/FlolabsMark.tsx`) uses `fill="var(--c-primary)"` so the logo matches the theme primary in light and dark. Auth pages that still use `/flchron-logo.svg` as a static image keep a fixed fill inside the SVG file.
 - **Migration aid:** `scripts/apply-semantic-theme-classes.mjs` can help replace legacy hard-coded hex Tailwind classes with semantic tokens.
 
@@ -627,8 +638,12 @@ FloLabs_Chronos/
 ├── ARCHITECTURE.md
 ├── CLAUDE.md
 ├── GAME_MASTER.md
+├── e2e/
+│   └── task-search.spec.ts
+├── playwright.config.ts
 ├── scripts/
 │   ├── apply-semantic-theme-classes.mjs
+│   ├── test-task-search-integration.ts
 │   ├── migrate-tags.ts
 │   ├── migrate-edited-field.ts
 │   ├── migrate-entry-tasks.ts
@@ -656,12 +671,16 @@ FloLabs_Chronos/
 │   │   ├── layout/
 │   │   ├── reports/
 │   │   ├── theme/
+│   │   │   ├── ChronosThemeProvider.tsx
+│   │   │   ├── ThemeScript.tsx
+│   │   │   └── ThemeToggle.tsx
 │   │   ├── timer/
 │   │   └── ui/
 │   ├── hooks/
 │   ├── lib/
 │   │   ├── db/
 │   │   ├── auth.ts
+│   │   ├── chronos-theme.ts
 │   │   ├── permissions.ts
 │   │   ├── notion.ts
 │   │   ├── redis.ts

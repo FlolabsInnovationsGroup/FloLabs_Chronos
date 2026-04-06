@@ -159,6 +159,10 @@ When you stop a running timer:
 - syncs it to Notion
 - may send a Discord notification
 
+If you had a **Notion task** linked to that session, Chronos also tries (in the background) to set that task’s **Status** in Notion to **In progress**, when your Tasks database uses a matching status option. This does not block stopping the timer if Notion is slow or the status column differs.
+
+The same status update is attempted when you **add a completed entry manually** (not only when stopping the live timer), as long as a task is linked.
+
 ---
 
 # 5. Tasks and Notion task linking
@@ -169,10 +173,12 @@ Chronos supports **native task selection**.
 When creating or editing an entry, you can search the Notion Tasks database directly.
 
 Chronos will:
-- search tasks by title/name
+- search tasks by title/name (using Notion workspace search plus database queries so deep rows still appear)
 - let you pick the right task
 - store the task locally on the time entry
 - sync that task to the Notion Time Entries database as a relation
+
+Typing works best when it matches words in the task title; very short queries may return many results until you narrow them down.
 
 ## Task suggestions
 Chronos can also suggest likely matches based on your recent work.
@@ -449,6 +455,14 @@ Each user can access **Settings** to manage their own account details.
 
 This is personal account configuration, separate from admin controls.
 
+## Appearance
+Under **Appearance**, you can choose how Chronos looks on **this device**:
+- **System (match device)** — light or dark follows your operating system setting
+- **Light** — always use the light palette
+- **Dark** — always use the dark palette
+
+Your choice is remembered in the browser. The top bar also has a compact theme control (icon menu) for quick changes.
+
 ---
 
 # 16. Common workflows
@@ -496,6 +510,9 @@ Make sure the running timer has a description.
 Use the built-in task picker.
 If the issue persists, ask an admin to verify the Notion integration settings in **Control**.
 
+## Task search shows no results
+Confirm the Tasks database is configured in **Control** and that your search words appear in the task title in Notion. If admins recently changed database structure, a refresh or retry after a moment sometimes helps.
+
 ## A Discord notification didn’t arrive
 Possible reasons:
 - no webhook available yet
@@ -504,6 +521,9 @@ Possible reasons:
 
 ## Invitation creation fails for Team Members sync
 This usually means one or more selected teams are not properly linked to Notion team pages yet.
+
+## Theme looks wrong or flashes on load
+Try picking **Light** or **Dark** explicitly in **Settings → Appearance** instead of **System**, or ensure your browser allows the site to read the saved preference. A brief flash can still happen on very slow loads before the saved theme applies.
 
 ---
 

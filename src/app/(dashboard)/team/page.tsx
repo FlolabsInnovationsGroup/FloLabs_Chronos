@@ -36,6 +36,11 @@ const EDIT_ROLES = [
   { value: "admin", label: "Admin" },
 ];
 
+const TEAM_MEMBER_DELETE_EXIT_OPTIONS = [
+  { value: "terminated", label: "Terminated" },
+  { value: "graduated", label: "Graduated" },
+];
+
 /** Re-fetch users/teams (and invites for admins) without blocking the UI — SSE, polling, tab focus. */
 const USERS_TEAMS_POLL_MS = 20_000;
 
@@ -84,15 +89,15 @@ function getLiveDuration(startedAt?: number | null, now = Date.now()) {
 }
 
 /**
- * Gradient strip anchored to the left edge of the sticky Actions cell. Paints above earlier columns
- * while horizontal scrolling — unlike box-shadow on table cells, which browsers suppress under
- * default border-collapse: collapse.
+ * Strip anchored to the left edge of the sticky Actions cell (same `paper-shadow` token as Card /
+ * Daily Momentum). Paints above earlier columns while horizontal scrolling — unlike box-shadow on
+ * table cells, which browsers suppress under default border-collapse: collapse.
  */
 function ActionsColumnScrollVeil() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute top-0 bottom-0 right-full z-[3] hidden w-14 bg-gradient-to-l from-black/[0.15] via-black/[0.06] to-transparent md:block dark:from-white/10 dark:via-white/5 dark:to-transparent"
+      className="pointer-events-none absolute top-0 bottom-0 right-full z-[3] hidden w-8 bg-surface-container-lowest paper-shadow md:block"
     />
   );
 }
@@ -115,6 +120,7 @@ export default function TeamPage() {
   const [editingUser, setEditingUser] = useState<TeamUser | null>(null);
   const [editingInvite, setEditingInvite] = useState<TeamInvitation | null>(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<TeamUser | null>(null);
+  const [deleteUserNotionExitStatus, setDeleteUserNotionExitStatus] = useState<"terminated" | "graduated" | "">("");
   const [confirmDisableInvite, setConfirmDisableInvite] = useState<TeamInvitation | null>(null);
   const [confirmDeleteInvite, setConfirmDeleteInvite] = useState<TeamInvitation | null>(null);
 
@@ -461,10 +467,24 @@ export default function TeamPage() {
 
   async function handleDeleteUser() {
     if (!confirmDeleteUser) return;
+    const linkedNotion = Boolean(confirmDeleteUser.notionTeamMemberId?.trim());
+    if (linkedNotion && deleteUserNotionExitStatus !== "terminated" && deleteUserNotionExitStatus !== "graduated") {
+      setError("Choose whether the Notion Team Member row should be set to Terminated or Graduated.");
+      return;
+    }
     setSaving(true);
     try {
-      await readJson(await fetch(`/api/users/${confirmDeleteUser.id}`, { method: "DELETE" }));
+      await readJson(
+        await fetch(`/api/users/${confirmDeleteUser.id}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            linkedNotion ? { notionExitStatus: deleteUserNotionExitStatus } : {}
+          ),
+        })
+      );
       setConfirmDeleteUser(null);
+      setDeleteUserNotionExitStatus("");
       await refresh({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete user.");
@@ -890,7 +910,10 @@ export default function TeamPage() {
                                       <Tooltip label="Delete member">
                                         <button
                                           type="button"
-                                          onClick={() => setConfirmDeleteUser(user)}
+                                          onClick={() => {
+                                            setConfirmDeleteUser(user);
+                                            setDeleteUserNotionExitStatus("");
+                                          }}
                                           className="p-1.5 rounded-lg text-on-surface-variant hover:bg-warm-surface hover:text-error"
                                         >
                                           <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
@@ -1168,19 +1191,66 @@ export default function TeamPage() {
         </form>
       </Modal>
 
-      <Modal open={!!confirmDeleteUser} onClose={() => setConfirmDeleteUser(null)} title="Delete member" size="sm">
+      <Modal
+        open={!!confirmDeleteUser}
+        onClose={() => {
+          setConfirmDeleteUser(null);
+          setDeleteUserNotionExitStatus("");
+        }}
+        title="Delete member"
+        size="sm"
+      >
         <div className="flex flex-col gap-4">
           <p
             className="text-sm text-on-surface-variant"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
-            Delete {confirmDeleteUser?.name}? This permanently removes the member account if it has no time entries.
+            Delete {confirmDeleteUser?.name}? This permanently removes the Chronos account if they have no time entries.
+            Chronos does not delete their Notion time entries or other pages.
           </p>
+          {confirmDeleteUser?.notionTeamMemberId?.trim() ? (
+            <>
+              <p
+                className="text-sm text-on-surface-variant"
+                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+              >
+                Their linked Team Member row in Notion will only be updated: set the status for that row before
+                removing the account.
+              </p>
+              <Select
+                label="Team Member status in Notion"
+                placeholder="Choose…"
+                options={TEAM_MEMBER_DELETE_EXIT_OPTIONS}
+                value={deleteUserNotionExitStatus}
+                onChange={(v) => {
+                  if (v === "terminated" || v === "graduated") setDeleteUserNotionExitStatus(v);
+                  else setDeleteUserNotionExitStatus("");
+                }}
+              />
+            </>
+          ) : null}
           <div className="flex justify-end gap-3">
-            <Button variant="primary" type="button" onClick={() => setConfirmDeleteUser(null)}>
+            <Button
+              variant="primary"
+              type="button"
+              onClick={() => {
+                setConfirmDeleteUser(null);
+                setDeleteUserNotionExitStatus("");
+              }}
+            >
               Cancel
             </Button>
-            <Button variant="danger" type="button" onClick={() => void handleDeleteUser()} loading={saving}>
+            <Button
+              variant="danger"
+              type="button"
+              onClick={() => void handleDeleteUser()}
+              loading={saving}
+              disabled={
+                Boolean(confirmDeleteUser?.notionTeamMemberId?.trim()) &&
+                deleteUserNotionExitStatus !== "terminated" &&
+                deleteUserNotionExitStatus !== "graduated"
+              }
+            >
               Delete member
             </Button>
           </div>

@@ -68,13 +68,29 @@ export async function getNotionConfig() {
     APP_CONFIG_KEYS.notionMasterClassesIndexDbId,
   ]);
 
+  const notionApiKey = process.env.NOTION_API_KEY || map.get(APP_CONFIG_KEYS.notionApiKey) || null;
+
+  let notionTasksDbId = process.env.NOTION_TASKS_DB_ID || null;
+  let notionTeamMembersDbId = process.env.NOTION_TEAM_MEMBERS_DB_ID || null;
+
+  if (notionApiKey && process.env.NOTION_DATABASE_ID) {
+    try {
+      const { resolveTimeEntriesRelationDatabaseIds } = await import("@/lib/notion");
+      const derived = await resolveTimeEntriesRelationDatabaseIds(notionApiKey);
+      if (!notionTasksDbId) notionTasksDbId = derived.tasksDbId;
+      if (!notionTeamMembersDbId) notionTeamMembersDbId = derived.teamMembersDbId;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (!notionTasksDbId) notionTasksDbId = map.get(APP_CONFIG_KEYS.notionTasksDbId) || null;
+  if (!notionTeamMembersDbId) notionTeamMembersDbId = map.get(APP_CONFIG_KEYS.notionTeamMembersDbId) || null;
+
   return {
-    notionApiKey: process.env.NOTION_API_KEY || map.get(APP_CONFIG_KEYS.notionApiKey) || null,
-    notionTasksDbId: process.env.NOTION_TASKS_DB_ID || map.get(APP_CONFIG_KEYS.notionTasksDbId) || null,
-    notionTeamMembersDbId:
-      process.env.NOTION_TEAM_MEMBERS_DB_ID ||
-      map.get(APP_CONFIG_KEYS.notionTeamMembersDbId) ||
-      null,
+    notionApiKey,
+    notionTasksDbId,
+    notionTeamMembersDbId,
     notionOnboardingsDbId:
       process.env.NOTION_ONBOARDINGS_DB_ID ||
       map.get(APP_CONFIG_KEYS.notionOnboardingsDbId) ||

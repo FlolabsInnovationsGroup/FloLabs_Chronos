@@ -207,11 +207,7 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
   const { notionApiKey, notionTasksDbId } = await getNotionConfig();
   if (!notionApiKey) return [];
 
-  let dbId = notionTasksDbId;
-  if (!dbId) {
-    const entriesSchema = await loadTimeEntriesDatabaseSchema(notionApiKey);
-    dbId = entriesSchema ? getTasksDatabaseIdFromTimeEntriesSchema(entriesSchema) : null;
-  }
+  const dbId = notionTasksDbId;
   if (!dbId) return [];
 
   const trimmedQuery = query.trim();
@@ -219,9 +215,9 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
   try {
     let schema: NotionDatabaseResponse;
     try {
-      schema = await getDatabaseSchema(dbId, NOTION_VERSION, notionApiKey);
-    } catch {
       schema = await getDatabaseSchema(dbId, NOTION_TEMPLATE_VERSION, notionApiKey);
+    } catch {
+      schema = await getDatabaseSchema(dbId, NOTION_VERSION, notionApiKey);
     }
 
     const titleProperty = findPropertyName(schema.properties, ["Name", "Title", "Task", "Task Name"], ["title", "rich_text"]);
@@ -283,14 +279,39 @@ async function getDatabaseSchema(databaseId: string, version = NOTION_VERSION, a
   return promise;
 }
 
-/**
- * Time Entries DB `Task` relation (single-database) exposes `relation.database_id` — the linked Tasks database.
- * Dual / multi relations are not supported here.
- */
+function getRelationDatabaseIdFromProperty(property: NotionDatabaseProperty | undefined): string | null {
+  if (!property || property.type !== "relation") return null;
+  const r = property.relation as { database_id?: string } | undefined;
+  if (r?.database_id && typeof r.database_id === "string" && r.database_id.length > 0) return r.database_id;
+  return null;
+}
+
+/** Linked Tasks database from Time Entries relation properties (`relation.database_id`). */
 function getTasksDatabaseIdFromTimeEntriesSchema(schema: NotionDatabaseResponse): string | null {
-  const task = schema.properties["Task"];
-  if (task?.type === "relation" && task.relation?.database_id) {
-    return task.relation.database_id;
+  for (const name of ["Task", "Tasks", "task"]) {
+    const id = getRelationDatabaseIdFromProperty(schema.properties[name]);
+    if (id) return id;
+  }
+  for (const [name, prop] of Object.entries(schema.properties)) {
+    if (prop.type !== "relation") continue;
+    if (!/^tasks?$/i.test(name.trim())) continue;
+    const id = getRelationDatabaseIdFromProperty(prop);
+    if (id) return id;
+  }
+  return null;
+}
+
+/** Linked Team Members database from Time Entries relation properties. */
+function getTeamMembersDatabaseIdFromTimeEntriesSchema(schema: NotionDatabaseResponse): string | null {
+  for (const name of ["Team Member", "Team Members", "TeamMember", "TeamMembers"]) {
+    const id = getRelationDatabaseIdFromProperty(schema.properties[name]);
+    if (id) return id;
+  }
+  for (const [name, prop] of Object.entries(schema.properties)) {
+    if (prop.type !== "relation") continue;
+    if (!/^team\s*members?$/i.test(name.trim())) continue;
+    const id = getRelationDatabaseIdFromProperty(prop);
+    if (id) return id;
   }
   return null;
 }
@@ -299,14 +320,27 @@ async function loadTimeEntriesDatabaseSchema(notionApiKey: string): Promise<Noti
   const entriesDbId = process.env.NOTION_DATABASE_ID;
   if (!entriesDbId) return null;
   try {
-    return await getDatabaseSchema(entriesDbId, NOTION_VERSION, notionApiKey);
+    return await getDatabaseSchema(entriesDbId, NOTION_TEMPLATE_VERSION, notionApiKey);
   } catch {
     try {
-      return await getDatabaseSchema(entriesDbId, NOTION_TEMPLATE_VERSION, notionApiKey);
+      return await getDatabaseSchema(entriesDbId, NOTION_VERSION, notionApiKey);
     } catch {
       return null;
     }
   }
+}
+
+/** Resolves Tasks and Team Members database IDs from the Time Entries DB schema (relation properties). */
+export async function resolveTimeEntriesRelationDatabaseIds(notionApiKey: string): Promise<{
+  tasksDbId: string | null;
+  teamMembersDbId: string | null;
+}> {
+  const schema = await loadTimeEntriesDatabaseSchema(notionApiKey);
+  if (!schema) return { tasksDbId: null, teamMembersDbId: null };
+  return {
+    tasksDbId: getTasksDatabaseIdFromTimeEntriesSchema(schema),
+    teamMembersDbId: getTeamMembersDatabaseIdFromTimeEntriesSchema(schema),
+  };
 }
 
 async function queryAllDatabasePages(databaseId: string, notionApiKey: string): Promise<NotionPageResult[]> {
@@ -1150,6 +1184,70 @@ async function patchPageProperties(params: {
     const err = await res.text().catch(() => "");
     throw new Error(`Notion update failed: ${err || res.statusText}`);
   }
+}
+
+function findTeamMembersStatusPropertyName(properties: Record<string, NotionDatabaseProperty>): string | null {
+  const candidates = ["Status", "Member Status"];
+  for (const name of candidates) {
+    const p = properties[name];
+    if (p && p.type === "status") return name;
+  }
+  return Object.entries(properties).find(([, p]) => p.type === "status")?.[0] ?? null;
+}
+
+/**
+ * Sets the Team Members database **status** column to Terminated or Graduated (must match a Notion option name).
+ * Does not archive the page or touch other Notion databases.
+ */
+export async function setTeamMemberExitStatusInNotion(
+  notionPageId: string,
+  exitKind: "terminated" | "graduated"
+): Promise<void> {
+  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
+  if (!notionApiKey || !notionTeamMembersDbId) {
+    throw new Error("Notion Team Members database is not configured.");
+  }
+
+  let schema: NotionDatabaseResponse;
+  try {
+    schema = await getDatabaseSchema(notionTeamMembersDbId, NOTION_TEMPLATE_VERSION, notionApiKey);
+  } catch {
+    schema = await getDatabaseSchema(notionTeamMembersDbId, NOTION_VERSION, notionApiKey);
+  }
+
+  const propName = findTeamMembersStatusPropertyName(schema.properties);
+  if (!propName) {
+    throw new Error('The Team Members database has no status column. Add a status property or name it "Status".');
+  }
+
+  const raw = schema.properties[propName] as NotionDatabaseProperty & {
+    status?: { options?: Array<{ name: string }> };
+  };
+  if (raw.type !== "status") {
+    throw new Error(`Team Members property "${propName}" is not a status column.`);
+  }
+
+  const optionNames = (raw.status?.options ?? []).map((o) => o.name).filter(Boolean);
+  const tryNames =
+    exitKind === "terminated"
+      ? ["Terminated", "terminated", "TERMINATED"]
+      : ["Graduated", "graduated", "GRADUATED"];
+
+  const matched =
+    tryNames.find((c) => optionNames.includes(c)) ??
+    optionNames.find((n) => n.replace(/\s+/g, " ").trim().toLowerCase() === exitKind);
+
+  if (!matched) {
+    throw new Error(
+      `Notion Team Members status has no "${exitKind === "terminated" ? "Terminated" : "Graduated"}" option. Add matching options in Notion.`
+    );
+  }
+
+  await patchPageProperties({
+    pageId: notionPageId,
+    notionApiKey,
+    properties: { [propName]: { status: { name: matched } } },
+  });
 }
 
 async function updateExistingTeamMemberPage(params: {

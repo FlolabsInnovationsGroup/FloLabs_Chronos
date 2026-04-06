@@ -26,6 +26,7 @@ export function ControlForm() {
   const [notionApiKey, setNotionApiKey] = useState("");
   const [notionTasksDbId, setNotionTasksDbId] = useState("");
   const [notionTeamMembersDbId, setNotionTeamMembersDbId] = useState("");
+  const [timeEntriesDatabaseIdConfigured, setTimeEntriesDatabaseIdConfigured] = useState(false);
   const [notionOnboardingsDbId, setNotionOnboardingsDbId] = useState("");
   const [notionTeamsDbId, setNotionTeamsDbId] = useState("");
   const [notionMasterClassesIndexDbId, setNotionMasterClassesIndexDbId] = useState("");
@@ -48,6 +49,7 @@ export function ControlForm() {
         setApiKeyMasked(data.config?.notionApiKeyMasked ?? "");
         setNotionTasksDbId(data.config?.notionTasksDbId ?? "");
         setNotionTeamMembersDbId(data.config?.notionTeamMembersDbId ?? "");
+        setTimeEntriesDatabaseIdConfigured(Boolean(data.config?.timeEntriesDatabaseIdConfigured));
         setNotionOnboardingsDbId(data.config?.notionOnboardingsDbId ?? "");
         setNotionTeamsDbId(data.config?.notionTeamsDbId ?? "");
         setNotionMasterClassesIndexDbId(data.config?.notionMasterClassesIndexDbId ?? "");
@@ -73,7 +75,7 @@ export function ControlForm() {
       await readJson(await fetch("/api/control", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notionApiKey, notionTasksDbId, notionTeamMembersDbId, notionOnboardingsDbId, notionTeamsDbId, notionMasterClassesIndexDbId, discordBotToken, discordGuildId, discordCategoryId, discordChannelPrefix }),
+        body: JSON.stringify({ notionApiKey, notionOnboardingsDbId, notionTeamsDbId, notionMasterClassesIndexDbId, discordBotToken, discordGuildId, discordCategoryId, discordChannelPrefix }),
       }));
       setSuccess("Control settings saved.");
       setApiKeyPresent(true);
@@ -100,9 +102,7 @@ export function ControlForm() {
     }
   }
 
-  function applyDatabase(id: string, target: "tasks" | "teamMembers" | "onboardings" | "teams") {
-    if (target === "tasks") setNotionTasksDbId(id);
-    if (target === "teamMembers") setNotionTeamMembersDbId(id);
+  function applyDatabase(id: string, target: "onboardings" | "teams") {
     if (target === "onboardings") setNotionOnboardingsDbId(id);
     if (target === "teams") setNotionTeamsDbId(id);
   }
@@ -120,8 +120,25 @@ export function ControlForm() {
             <div className="flex flex-col gap-4">
               <h2 className="text-lg font-light italic text-on-background" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Notion</h2>
               <Input label="Notion Integration Secret Key" type="password" value={notionApiKey} onChange={(e) => setNotionApiKey(e.target.value)} placeholder={apiKeyPresent ? "Saved in app config — leave empty to keep current key" : "ntn_..."} hint={apiKeyPresent && apiKeyMasked ? `Current key: ${apiKeyMasked}. Enter a new one only if you want to rotate it.` : "Stored in the app config store. Deployment env vars still take precedence if present."} />
-              <Input label="Tasks Database ID" value={notionTasksDbId} onChange={(e) => setNotionTasksDbId(e.target.value)} placeholder="b5a15559fffc4a4f97161bf12e6fb400" />
-              <Input label="Team Members Database ID" value={notionTeamMembersDbId} onChange={(e) => setNotionTeamMembersDbId(e.target.value)} placeholder="..." />
+              <div className="rounded-xl border border-surface-container bg-surface-container-low px-4 py-3 flex flex-col gap-2">
+                <p className="text-sm text-on-background font-medium">Tasks and Team Members (Notion)</p>
+                <p className="text-sm text-on-surface-variant">
+                  Database IDs are read from the Time Entries database relations (<span className="font-medium text-on-background">Task</span>,{" "}
+                  <span className="font-medium text-on-background">Team Member</span>) when{" "}
+                  <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">NOTION_DATABASE_ID</code> is set. Optional env overrides:{" "}
+                  <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">NOTION_TASKS_DB_ID</code>,{" "}
+                  <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">NOTION_TEAM_MEMBERS_DB_ID</code>.
+                </p>
+                {!timeEntriesDatabaseIdConfigured && (
+                  <p className="text-sm text-error">Set NOTION_DATABASE_ID in the deployment environment so the Time Entries schema can be loaded.</p>
+                )}
+                {timeEntriesDatabaseIdConfigured && (
+                  <div className="text-xs font-mono text-on-surface-variant break-all space-y-1">
+                    {notionTasksDbId ? <p>Tasks DB: {notionTasksDbId}</p> : <p className="text-subtle-ink">Tasks DB: not resolved (check Task relation on Time Entries)</p>}
+                    {notionTeamMembersDbId ? <p>Team Members DB: {notionTeamMembersDbId}</p> : <p className="text-subtle-ink">Team Members DB: not resolved (check Team Member relation)</p>}
+                  </div>
+                )}
+              </div>
               <Input label="Onboarding Database ID" value={notionOnboardingsDbId} onChange={(e) => setNotionOnboardingsDbId(e.target.value)} placeholder="a1a106fab63548089279dc54d63eab89" />
               <Input label="Teams Database ID" value={notionTeamsDbId} onChange={(e) => setNotionTeamsDbId(e.target.value)} placeholder="..." />
               <Input label="MasterClasses Index Database ID" value={notionMasterClassesIndexDbId} onChange={(e) => setNotionMasterClassesIndexDbId(e.target.value)} placeholder="286a1576955180488db8eb63daccc66c" hint="Database whose rows map teams to the target MasterClass databases." />
@@ -146,7 +163,7 @@ export function ControlForm() {
                 Search Notion databases
               </h2>
               <p className="text-sm text-on-surface-variant mt-1" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
-                Once the integration key is saved, search your connected Notion workspace and apply database IDs directly.
+                Once the integration key is saved, search your connected Notion workspace and apply database IDs for Onboarding and Teams.
               </p>
             </div>
             <div className="flex gap-3">
@@ -167,8 +184,6 @@ export function ControlForm() {
                       <p className="text-xs text-subtle-ink break-all">{db.id}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="ghost" size="sm" type="button" onClick={() => applyDatabase(db.id, "tasks")}>Use for Tasks</Button>
-                      <Button variant="ghost" size="sm" type="button" onClick={() => applyDatabase(db.id, "teamMembers")}>Use for Team Members</Button>
                       <Button variant="ghost" size="sm" type="button" onClick={() => applyDatabase(db.id, "onboardings")}>Use for Onboarding</Button>
                       <Button variant="ghost" size="sm" type="button" onClick={() => applyDatabase(db.id, "teams")}>Use for Teams</Button>
                     </div>

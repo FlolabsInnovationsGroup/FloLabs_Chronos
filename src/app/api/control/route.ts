@@ -6,8 +6,6 @@ import { APP_CONFIG_KEYS, getNotionConfig, setAppConfigValues } from "@/lib/app-
 
 const controlSchema = z.object({
   notionApiKey: z.string().optional().default(""),
-  notionTasksDbId: z.string().min(1),
-  notionTeamMembersDbId: z.string().min(1),
   notionOnboardingsDbId: z.string().min(1),
   notionTeamsDbId: z.string().min(1),
   notionMasterClassesIndexDbId: z.string().min(1),
@@ -35,6 +33,7 @@ export async function GET() {
       notionApiKeyMasked: config.notionApiKey ? `${config.notionApiKey.slice(0, 6)}••••••${config.notionApiKey.slice(-4)}` : "",
       notionTasksDbId: config.notionTasksDbId ?? "",
       notionTeamMembersDbId: config.notionTeamMembersDbId ?? "",
+      timeEntriesDatabaseIdConfigured: Boolean(process.env.NOTION_DATABASE_ID),
       notionOnboardingsDbId: config.notionOnboardingsDbId ?? "",
       notionTeamsDbId: config.notionTeamsDbId ?? "",
       notionMasterClassesIndexDbId: config.notionMasterClassesIndexDbId ?? "",
@@ -60,8 +59,6 @@ export async function POST(req: Request) {
   }
 
   const values: Array<{ key: (typeof APP_CONFIG_KEYS)[keyof typeof APP_CONFIG_KEYS]; value: string; isSecret?: boolean; updatedBy?: string }> = [
-    { key: APP_CONFIG_KEYS.notionTasksDbId, value: parsed.data.notionTasksDbId, updatedBy: session.user.id },
-    { key: APP_CONFIG_KEYS.notionTeamMembersDbId, value: parsed.data.notionTeamMembersDbId, updatedBy: session.user.id },
     { key: APP_CONFIG_KEYS.notionOnboardingsDbId, value: parsed.data.notionOnboardingsDbId, updatedBy: session.user.id },
     { key: APP_CONFIG_KEYS.notionTeamsDbId, value: parsed.data.notionTeamsDbId, updatedBy: session.user.id },
     { key: APP_CONFIG_KEYS.notionMasterClassesIndexDbId, value: parsed.data.notionMasterClassesIndexDbId, updatedBy: session.user.id },

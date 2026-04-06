@@ -15,11 +15,16 @@ import {
 } from "@/lib/permissions";
 import { broadcastDataChange } from "@/lib/realtime";
 import {
+  setTeamMemberExitStatusInNotion,
   updateTeamMemberName,
   updateTeamMemberRoleInNotion,
   updateTeamMemberTimeCommitment,
   verifyNotionTeamMemberPageRow,
 } from "@/lib/notion";
+
+const deleteUserBodySchema = z.object({
+  notionExitStatus: z.enum(["terminated", "graduated"]).optional(),
+});
 
 const updateSchema = z.object({
   role: z.enum(["admin", "team_lead", "member"]).optional(),
@@ -196,7 +201,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
@@ -210,14 +215,38 @@ export async function DELETE(
     return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 });
   }
 
+  let body: unknown = {};
+  try {
+    const text = await req.text();
+    if (text) body = JSON.parse(text) as unknown;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const parsedBody = deleteUserBodySchema.safeParse(body);
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+  }
+
   const [existingUser] = await db
-    .select({ id: users.id })
+    .select({ id: users.id, notionTeamMemberId: users.notionTeamMemberId })
     .from(users)
     .where(eq(users.id, id))
     .limit(1);
 
   if (!existingUser) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const notionTeamMemberId = existingUser.notionTeamMemberId?.trim() || null;
+  if (notionTeamMemberId && !parsedBody.data.notionExitStatus) {
+    return NextResponse.json(
+      {
+        error:
+          "This member is linked to a Notion Team Member page. Choose Terminated or Graduated for that row before deleting the account.",
+      },
+      { status: 400 }
+    );
   }
 
   const [entry] = await db
@@ -231,6 +260,17 @@ export async function DELETE(
       { error: "This member has time entries and cannot be deleted. Deactivate the account instead." },
       { status: 409 }
     );
+  }
+
+  if (notionTeamMemberId && parsedBody.data.notionExitStatus) {
+    try {
+      await setTeamMemberExitStatusInNotion(notionTeamMemberId, parsedBody.data.notionExitStatus);
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "Could not update the Team Member status in Notion." },
+        { status: 502 }
+      );
+    }
   }
 
   await db.delete(tags).where(eq(tags.userId, id));

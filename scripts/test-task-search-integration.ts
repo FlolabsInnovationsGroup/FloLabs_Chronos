@@ -27,9 +27,10 @@ try {
 async function main() {
   const q = process.argv[2] ?? "a";
   const { getNotionConfig } = await import("../src/lib/app-config");
-  const { searchTasks } = await import("../src/lib/notion");
+  const { probeTaskSearchConfig, searchTasks } = await import("../src/lib/notion");
   const config = await getNotionConfig().catch(() => null);
   const hasKey = Boolean(config?.notionApiKey ?? process.env.NOTION_API_KEY);
+  const probe = await probeTaskSearchConfig();
   const tasks = await searchTasks(q);
   console.log(
     JSON.stringify(
@@ -38,6 +39,11 @@ async function main() {
         hasNotionApiKey: hasKey,
         notionTasksDbIdSet: Boolean(config?.notionTasksDbId),
         envNotionDatabaseId: Boolean(process.env.NOTION_DATABASE_ID),
+        probe: {
+          tasksDbId: probe.tasksDbId,
+          titleProperty: probe.titleProperty,
+          unfiltered: probe.unfilteredQuery,
+        },
         count: tasks.length,
         sample: tasks.slice(0, 5),
       },

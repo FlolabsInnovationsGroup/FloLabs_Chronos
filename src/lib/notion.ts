@@ -56,8 +56,31 @@ function richTextFragmentsPlain(fragments: NotionTitleFragment[] | undefined): s
     .trim();
 }
 
-function getPageTitle(page: NotionPageResult): string {
+function getPageTitle(page: NotionPageResult, preferredPropertyName?: string | null): string {
   const props = page.properties ?? {};
+  if (preferredPropertyName) {
+    const p = props[preferredPropertyName];
+    if (p?.type === "title") {
+      const t = richTextFragmentsPlain(p.title);
+      if (t) return t;
+    }
+    if (p?.type === "rich_text") {
+      const t = richTextFragmentsPlain(p.rich_text);
+      if (t) return t;
+    }
+    if (p?.type === "select") {
+      const name = (p as { select?: { name?: string | null } }).select?.name;
+      if (name) return name;
+    }
+    if (p?.type === "status") {
+      const name = (p as { status?: { name?: string | null } }).status?.name;
+      if (name) return name;
+    }
+    if (p?.type === "formula") {
+      const f = (p as { formula?: { type?: string; string?: string } }).formula;
+      if (f?.type === "string" && f.string) return f.string;
+    }
+  }
   const titleProp = Object.values(props).find((prop) => prop.type === "title");
   if (titleProp?.type === "title") {
     const title = richTextFragmentsPlain(titleProp.title);
@@ -71,11 +94,32 @@ function getPageTitle(page: NotionPageResult): string {
   return "Untitled task";
 }
 
+/** Splits camelCase / digit boundaries so "FloLabs" → ["flo", "labs"] for cross-matching "Flo Labs". */
+function queryMatchTokens(query: string): string[] {
+  const spaced = query.trim().replace(/([a-z\d])([A-Z])/g, "$1 $2");
+  return spaced
+    .toLowerCase()
+    .split(/[\s\-_]+/)
+    .filter((t) => t.length > 0);
+}
+
 function matchesTaskQuery(title: string, query: string) {
-  if (!query) return true;
+  if (!query.trim()) return true;
   const normalizedTitle = title.toLowerCase();
   const normalizedQuery = normalizeTaskQuery(query);
-  return normalizedTitle.includes(normalizedQuery);
+  if (normalizedTitle.includes(normalizedQuery)) return true;
+
+  const tokens = queryMatchTokens(query);
+  if (tokens.length > 1) {
+    return tokens.every((tok) => normalizedTitle.includes(tok));
+  }
+
+  const compact = (s: string) => s.replace(/[^a-z0-9]/gi, "");
+  const q = compact(normalizedQuery);
+  const t = compact(normalizedTitle);
+  if (q.length >= 2 && t.includes(q)) return true;
+
+  return false;
 }
 
 /** Notion 2025-09-03+ uses data sources; `POST /databases/{id}/query` is deprecated for migrated DBs. */
@@ -146,7 +190,11 @@ async function queryTaskPages(params: {
     body.start_cursor = startCursor;
   }
 
-  if (trimmedQuery && filterPropertyName) {
+  if (
+    trimmedQuery &&
+    filterPropertyName &&
+    (titlePropertyType === "title" || titlePropertyType === "rich_text")
+  ) {
     const valueFilter =
       titlePropertyType === "rich_text"
         ? { rich_text: { contains: trimmedQuery } }
@@ -285,14 +333,17 @@ async function fallbackTaskSearch(
   databaseId: string,
   query: string,
   apiKey: string,
-  responsePropertyNames: string[]
+  responsePropertyNames: string[],
+  titlePropertyName: string | null
 ): Promise<{ id: string; title: string }[]> {
   const normalizedQuery = normalizeTaskQuery(query);
   const matches: { id: string; title: string }[] = [];
   const seen = new Set<string>();
   let cursor: string | undefined;
   let pagesScanned = 0;
-  const maxPagesToScan = normalizedQuery.length <= 1 ? 8 : 4;
+  const tokenCount = queryMatchTokens(query).length;
+  const maxPagesToScan =
+    tokenCount > 1 ? 12 : normalizedQuery.length <= 1 ? 8 : 4;
 
   do {
     const response = await queryTaskPages({
@@ -306,7 +357,7 @@ async function fallbackTaskSearch(
     if (!response.ok || !response.data) break;
 
     for (const page of response.data.results) {
-      const title = getPageTitle(page);
+      const title = getPageTitle(page, titlePropertyName);
       if (!matchesTaskQuery(title, normalizedQuery)) continue;
       if (seen.has(page.id)) continue;
       seen.add(page.id);
@@ -349,21 +400,29 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
     const titleProperty = findTaskDatabaseTitlePropertyName(schema.properties);
     const responsePropertyNames = getTaskSearchResponsePropertyNames(schema.properties);
     const propType = titleProperty ? schema.properties[titleProperty]?.type : undefined;
-    const titlePropertyType = propType === "rich_text" ? "rich_text" : titleProperty ? "title" : null;
+    const titlePropertyType: "title" | "rich_text" | null =
+      propType === "rich_text" ? "rich_text" : propType === "title" ? "title" : null;
+
+    const tokens = queryMatchTokens(trimmedQuery);
+    /** Notion `contains` is literal; multi-token (e.g. camelCase "FloLabs") often matches no row while "Flo Labs" exists — use a shorter `contains` and filter in app. */
+    const notionContainsQuery =
+      tokens.length > 1
+        ? (tokens.find((t) => t.length >= 2) ?? tokens[0])!
+        : trimmedQuery;
 
     const primary = await queryTaskPages({
       databaseId: dbId,
       apiKey: notionApiKey,
-      pageSize: 10,
+      pageSize: 50,
       filterPropertyName: titleProperty ?? null,
-      query: trimmedQuery,
+      query: notionContainsQuery,
       titlePropertyType,
       responsePropertyNames,
     });
 
     if (primary.ok && primary.data) {
       const mapped = primary.data.results
-        .map((page) => ({ id: page.id, title: getPageTitle(page) }))
+        .map((page) => ({ id: page.id, title: getPageTitle(page, titleProperty) }))
         .filter((task) => matchesTaskQuery(task.title, trimmedQuery));
 
       if (mapped.length > 0) {
@@ -371,10 +430,106 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
       }
     }
 
-    return await fallbackTaskSearch(dbId, trimmedQuery, notionApiKey, responsePropertyNames);
-  } catch {
+    return await fallbackTaskSearch(
+      dbId,
+      trimmedQuery,
+      notionApiKey,
+      responsePropertyNames,
+      titleProperty
+    );
+  } catch (e) {
+    console.error("[searchTasks]", e);
     return [];
   }
+}
+
+/** Unfiltered first page + resolved titles — for debugging env/DB access (see `scripts/test-task-search-integration.ts`). */
+export async function probeTaskSearchConfig(): Promise<{
+  tasksDbId: string | null;
+  titleProperty: string | null;
+  unfilteredQuery: {
+    ok: boolean;
+    status: number;
+    errorText: string;
+    rawResultCount: number;
+    resolvedTitles: string[];
+  };
+}> {
+  const { notionApiKey, notionTasksDbId } = await getNotionConfig();
+  if (!notionApiKey) {
+    return {
+      tasksDbId: null,
+      titleProperty: null,
+      unfilteredQuery: {
+        ok: false,
+        status: 0,
+        errorText: "Missing Notion API key",
+        rawResultCount: 0,
+        resolvedTitles: [],
+      },
+    };
+  }
+
+  let dbId: string | null = notionTasksDbId;
+  if (!dbId && process.env.NOTION_DATABASE_ID) {
+    try {
+      const derived = await resolveNotionDatabaseIdsFromRelations(notionApiKey);
+      dbId = derived.tasksDbId;
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!dbId) {
+    return {
+      tasksDbId: null,
+      titleProperty: null,
+      unfilteredQuery: {
+        ok: false,
+        status: 0,
+        errorText: "No tasks database id",
+        rawResultCount: 0,
+        resolvedTitles: [],
+      },
+    };
+  }
+
+  let schema: NotionDatabaseResponse;
+  try {
+    schema = await getDatabaseSchema(dbId, NOTION_TEMPLATE_VERSION, notionApiKey);
+  } catch {
+    schema = await getDatabaseSchema(dbId, NOTION_VERSION, notionApiKey);
+  }
+
+  const titleProperty = findTaskDatabaseTitlePropertyName(schema.properties);
+  const responsePropertyNames = getTaskSearchResponsePropertyNames(schema.properties);
+  const propType = titleProperty ? schema.properties[titleProperty]?.type : undefined;
+  const titlePropertyType = propType === "rich_text" ? "rich_text" : titleProperty ? "title" : null;
+
+  const r = await queryTaskPages({
+    databaseId: dbId,
+    apiKey: notionApiKey,
+    pageSize: 10,
+    filterPropertyName: null,
+    query: undefined,
+    titlePropertyType,
+    responsePropertyNames,
+  });
+
+  const rawResultCount = r.ok && r.data ? r.data.results.length : 0;
+  const resolvedTitles =
+    r.ok && r.data ? r.data.results.map((page) => getPageTitle(page, titleProperty)) : [];
+
+  return {
+    tasksDbId: dbId,
+    titleProperty,
+    unfilteredQuery: {
+      ok: r.ok,
+      status: r.status,
+      errorText: r.errorText,
+      rawResultCount,
+      resolvedTitles,
+    },
+  };
 }
 
 const databaseSchemaPromises = new Map<string, Promise<NotionDatabaseResponse>>();
@@ -618,7 +773,8 @@ function findPropertyName(
 }
 
 /** Title column for task search — avoid picking unrelated `title` columns like "User Key". */
-function findTaskDatabaseTitlePropertyName(properties: Record<string, NotionDatabaseProperty>): string | null {
+function findTaskDatabaseTitlePropertyName(properties: Record<string, NotionDatabaseProperty> | undefined): string | null {
+  if (!properties || typeof properties !== "object") return null;
   const preferredNames = ["Name", "Title", "Task", "Task Name"];
   const acceptedTypes = ["title", "rich_text"];
   for (const name of preferredNames) {
@@ -639,7 +795,8 @@ function findTaskDatabaseTitlePropertyName(properties: Record<string, NotionData
 }
 
 /** Property names to request on data-source queries so rows are not returned as id-only partial pages. */
-function getTaskSearchResponsePropertyNames(properties: Record<string, NotionDatabaseProperty>): string[] {
+function getTaskSearchResponsePropertyNames(properties: Record<string, NotionDatabaseProperty> | undefined): string[] {
+  if (!properties) return [];
   const title = findTaskDatabaseTitlePropertyName(properties);
   if (title) return [title];
   const firstTitle = Object.entries(properties).find(([, p]) => p.type === "title")?.[0];

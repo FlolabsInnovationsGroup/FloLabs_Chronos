@@ -5,7 +5,9 @@ import { signOut } from "next-auth/react";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { Select } from "@/components/ui/Select";
+import { useChronosTheme } from "@/components/theme/ChronosThemeProvider";
+import type { ChronosThemeMode } from "@/lib/chronos-theme";
 
 interface SettingsFormProps {
   user: {
@@ -15,7 +17,14 @@ interface SettingsFormProps {
   };
 }
 
+const THEME_SELECT_OPTIONS = [
+  { value: "system", label: "System (match device)" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+] as const;
+
 export function SettingsForm({ user }: SettingsFormProps) {
+  const { mode, setMode, mounted: themeMounted } = useChronosTheme();
   const [name, setName] = useState(user.name);
   const [nameLoading, setNameLoading] = useState(false);
   const [nameSuccess, setNameSuccess] = useState(false);
@@ -87,8 +96,8 @@ export function SettingsForm({ user }: SettingsFormProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card className="p-6 flex flex-row flex-wrap items-center justify-between gap-4">
-        <div>
+      <Card className="p-6 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+        <div className="min-w-0 flex-1">
           <h2
             className="text-base font-medium text-on-background"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -99,10 +108,20 @@ export function SettingsForm({ user }: SettingsFormProps) {
             className="text-sm text-on-surface-variant mt-0.5"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
-            Light or dark theme (saved on this device)
+            Light, dark, or match your device. Saved only on this browser.
           </p>
         </div>
-        <ThemeToggle />
+        <div className="w-full sm:w-64 shrink-0">
+          <Select
+            id="settings-appearance-theme"
+            label="Theme"
+            options={[...THEME_SELECT_OPTIONS]}
+            value={themeMounted ? mode : undefined}
+            onChange={(v) => setMode(v as ChronosThemeMode)}
+            placeholder={themeMounted ? undefined : "Loading…"}
+            disabled={!themeMounted}
+          />
+        </div>
       </Card>
 
       {/* Profile info */}

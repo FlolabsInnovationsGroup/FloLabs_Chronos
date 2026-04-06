@@ -106,8 +106,8 @@ Chronos uses **one component tree** and **two palettes** defined in `src/app/glo
 ### How the active theme is chosen
 
 1. **`ThemeScript`** (`src/components/theme/ThemeScript.tsx`) runs with Next.js `Script` **`strategy="beforeInteractive"`** so it executes before hydration.
-2. It reads **`localStorage`** key **`chronos-theme`**. Values: `"dark"` or `"light"`.
-3. If the key is missing or invalid, it uses **`window.matchMedia("(prefers-color-scheme: dark)")`**.
+2. It reads **`localStorage`** key **`chronos-theme`**. Values: **`"light"`**, **`"dark"`**, or **`"system"`** (match OS).
+3. If the key is missing or any other value, behavior matches **system** (uses **`window.matchMedia("(prefers-color-scheme: dark)")`**).
 4. It adds **`class="dark"`** on **`<html>`** when dark should apply, otherwise removes it. This prevents a light flash when the user prefers or saved dark mode.
 
 ### CSS and Tailwind wiring
@@ -119,7 +119,9 @@ Chronos uses **one component tree** and **two palettes** defined in `src/app/glo
 
 ### User controls
 
-- **`ThemeToggle`** (`src/components/theme/ThemeToggle.tsx`): toggles **`html.dark`**, writes **`chronos-theme`** to **`localStorage`**, shows sun/moon icon with tooltip. Used in **`TopBar`** and Settings (**Appearance** card in `SettingsForm.tsx`).
+- **`ChronosThemeProvider`** (`src/components/theme/ChronosThemeProvider.tsx`): wraps the app in **`layout.tsx`**; keeps **`html.dark`**, **`localStorage`**, and **`prefers-color-scheme`** in sync when mode is **system**.
+- **`ThemeToggle`** (`src/components/theme/ThemeToggle.tsx`): **`DropdownSelect`** for Light / Dark / System in **`TopBar`** (tooltip shows effective appearance when using System).
+- **Settings → Appearance** (`SettingsForm.tsx`): same three-way **`Select`**.
 
 ### Brand and assets
 

@@ -1,56 +1,53 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMemo } from "react";
+import { DropdownSelect } from "@/components/ui/DropdownSelect";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { cn } from "@/lib/utils";
+import type { ChronosThemeMode } from "@/lib/chronos-theme";
+import { useChronosTheme } from "@/components/theme/ChronosThemeProvider";
 
-const STORAGE_KEY = "chronos-theme";
-
-function readTheme(): boolean {
-  if (typeof document === "undefined") return false;
-  return document.documentElement.classList.contains("dark");
-}
+const THEME_OPTIONS: Array<{
+  value: ChronosThemeMode;
+  label: string;
+  icon: string;
+}> = [
+  { value: "system", label: "System", icon: "brightness_auto" },
+  { value: "light", label: "Light", icon: "light_mode" },
+  { value: "dark", label: "Dark", icon: "dark_mode" },
+];
 
 export function ThemeToggle({ className }: { className?: string }) {
-  const [dark, setDark] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const { mode, setMode, mounted, effectiveDark } = useChronosTheme();
 
-  useEffect(() => {
-    setMounted(true);
-    setDark(readTheme());
-  }, []);
-
-  const toggle = useCallback(() => {
-    const next = !document.documentElement.classList.contains("dark");
-    document.documentElement.classList.toggle("dark", next);
-    localStorage.setItem(STORAGE_KEY, next ? "dark" : "light");
-    setDark(next);
-  }, []);
+  const summary = useMemo(() => {
+    if (mode === "system") {
+      return effectiveDark ? "Dark (system)" : "Light (system)";
+    }
+    return mode === "dark" ? "Dark" : "Light";
+  }, [mode, effectiveDark]);
 
   if (!mounted) {
     return (
       <span
-        className={cn("inline-flex h-8 w-8 shrink-0 rounded-full bg-surface-container-low", className)}
+        className={cn("inline-flex h-8 w-[7.25rem] shrink-0 rounded-full bg-surface-container-low", className)}
         aria-hidden
       />
     );
   }
 
   return (
-    <Tooltip label={dark ? "Switch to light theme" : "Switch to dark theme"} delayMs={300}>
-      <button
-        type="button"
-        onClick={toggle}
-        className={cn(
-          "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-surface-container-highest bg-surface-container-low text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-background",
-          className
-        )}
-        aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
-      >
-        <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
-          {dark ? "light_mode" : "dark_mode"}
-        </span>
-      </button>
+    <Tooltip label={`Theme: ${summary}`} delayMs={300}>
+      <div className={cn("shrink-0", className)}>
+        <DropdownSelect
+          options={THEME_OPTIONS}
+          value={mode}
+          onChange={(v) => setMode(v as ChronosThemeMode)}
+          placeholder="Theme"
+          buttonClassName="min-h-8 rounded-full border border-surface-container-highest bg-surface-container-low py-1 pl-2 pr-2 text-on-surface-variant hover:bg-surface-container hover:text-on-background"
+          className="w-[7.25rem]"
+        />
+      </div>
     </Tooltip>
   );
 }

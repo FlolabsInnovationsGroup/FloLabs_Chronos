@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Newsreader, Work_Sans } from "next/font/google";
 import { ThemeScript } from "@/components/theme/ThemeScript";
+import { ChronosThemeProvider } from "@/components/theme/ChronosThemeProvider";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -45,7 +46,7 @@ export default function RootLayout({
         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
       >
         <ThemeScript />
-        {children}
+        <ChronosThemeProvider>{children}</ChronosThemeProvider>
       </body>
     </html>
   );

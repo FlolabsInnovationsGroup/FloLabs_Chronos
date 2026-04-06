@@ -36,8 +36,9 @@ interface NotionPagePropertyValue {
 
 interface NotionPageResult {
   id: string;
+  object?: string;
   archived?: boolean;
-  parent?: { type?: string; database_id?: string };
+  parent?: { type?: string; database_id?: string; data_source_id?: string };
   properties?: Record<string, NotionPagePropertyValue>;
 }
 
@@ -120,6 +121,92 @@ function matchesTaskQuery(title: string, query: string) {
   if (q.length >= 2 && t.includes(q)) return true;
 
   return false;
+}
+
+function pageBelongsToTasksDatabase(
+  page: NotionPageResult,
+  tasksDatabaseId: string,
+  dataSourceId: string | null
+): boolean {
+  const parent = page.parent;
+  if (!parent?.type) return false;
+  const nDb = normalizeNotionId(tasksDatabaseId);
+  if (parent.type === "database_id" && parent.database_id) {
+    return normalizeNotionId(parent.database_id) === nDb;
+  }
+  if (parent.type === "data_source_id" && parent.data_source_id && dataSourceId) {
+    return normalizeNotionId(parent.data_source_id) === normalizeNotionId(dataSourceId);
+  }
+  return false;
+}
+
+/**
+ * Notion [POST /search](https://developers.notion.com/reference/post-search) matches by title across
+ * the workspace — faster and more reliable than scanning database query pages in arbitrary sort order.
+ */
+async function workspaceSearchTaskPagesInDatabase(params: {
+  apiKey: string;
+  tasksDatabaseId: string;
+  dataSourceId: string | null;
+  searchQueries: string[];
+  titlePropertyName: string | null;
+  matchQuery: string;
+}): Promise<{ id: string; title: string }[]> {
+  const { apiKey, tasksDatabaseId, dataSourceId, searchQueries, titlePropertyName, matchQuery } = params;
+  const seen = new Set<string>();
+  const out: { id: string; title: string }[] = [];
+
+  for (const searchQuery of searchQueries) {
+    const q = searchQuery.trim();
+    if (!q || out.length >= 10) break;
+
+    let cursor: string | undefined;
+    for (let page = 0; page < 6 && out.length < 10; page++) {
+      const body: Record<string, unknown> = {
+        query: q,
+        filter: { property: "object", value: "page" },
+        page_size: 20,
+      };
+      if (cursor) body.start_cursor = cursor;
+
+      let res = await fetch(`${NOTION_API_BASE}/search`, {
+        method: "POST",
+        headers: notionHeaders(NOTION_TEMPLATE_VERSION, apiKey),
+        body: JSON.stringify(body),
+      });
+      if (!res.ok && res.status === 400) {
+        res = await fetch(`${NOTION_API_BASE}/search`, {
+          method: "POST",
+          headers: notionHeaders(NOTION_VERSION, apiKey),
+          body: JSON.stringify(body),
+        });
+      }
+      if (!res.ok) break;
+
+      const json = (await res.json()) as {
+        results?: unknown[];
+        has_more?: boolean;
+        next_cursor?: string | null;
+      };
+      const rows = Array.isArray(json.results) ? json.results : [];
+      for (const item of rows) {
+        if (!item || typeof item !== "object") continue;
+        const o = item as NotionPageResult;
+        if (o.object !== "page") continue;
+        if (!pageBelongsToTasksDatabase(o, tasksDatabaseId, dataSourceId)) continue;
+        const title = getPageTitle(o, titlePropertyName);
+        if (!matchesTaskQuery(title, matchQuery)) continue;
+        if (seen.has(o.id)) continue;
+        seen.add(o.id);
+        out.push({ id: o.id, title });
+        if (out.length >= 10) return out;
+      }
+      if (!json.has_more || !json.next_cursor) break;
+      cursor = json.next_cursor ?? undefined;
+    }
+  }
+
+  return out;
 }
 
 /** Notion 2025-09-03+ uses data sources; `POST /databases/{id}/query` is deprecated for migrated DBs. */
@@ -391,12 +478,16 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
   const trimmedQuery = query.trim();
 
   try {
-    let schema: NotionDatabaseResponse;
-    try {
-      schema = await getDatabaseSchema(dbId, NOTION_TEMPLATE_VERSION, notionApiKey);
-    } catch {
-      schema = await getDatabaseSchema(dbId, NOTION_VERSION, notionApiKey);
-    }
+    const [schema, dataSourceId] = await Promise.all([
+      (async () => {
+        try {
+          return await getDatabaseSchema(dbId, NOTION_TEMPLATE_VERSION, notionApiKey);
+        } catch {
+          return await getDatabaseSchema(dbId, NOTION_VERSION, notionApiKey);
+        }
+      })(),
+      getDatabaseDataSourceId(dbId, notionApiKey),
+    ]);
 
     const titleProperty = findTaskDatabaseTitlePropertyName(schema.properties);
     const responsePropertyNames = getTaskSearchResponsePropertyNames(schema.properties);
@@ -410,6 +501,23 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
       tokens.length > 1
         ? (tokens.find((t) => t.length >= 2) ?? tokens[0])!
         : trimmedQuery;
+
+    if (trimmedQuery.length > 0) {
+      const searchQueries = Array.from(
+        new Set([trimmedQuery, notionContainsQuery].filter((q) => q.trim().length > 0))
+      );
+      const workspaceHits = await workspaceSearchTaskPagesInDatabase({
+        apiKey: notionApiKey,
+        tasksDatabaseId: dbId,
+        dataSourceId,
+        searchQueries,
+        titlePropertyName: titleProperty,
+        matchQuery: trimmedQuery,
+      });
+      if (workspaceHits.length > 0) {
+        return workspaceHits.slice(0, 10);
+      }
+    }
 
     const primary = await queryTaskPages({
       databaseId: dbId,

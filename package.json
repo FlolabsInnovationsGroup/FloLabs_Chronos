@@ -10,6 +10,8 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "test:e2e": "playwright test",
+    "test:task-search": "tsx scripts/test-task-search-integration.ts",
     "seed": "tsx scripts/seed.ts",
     "db:migrate:invitations-notion": "tsx scripts/migrate-invitations-notion-team-member-id.ts"
   },
@@ -27,6 +29,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20",

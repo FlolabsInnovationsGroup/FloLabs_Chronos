@@ -102,8 +102,14 @@ async function queryTaskPages(params: {
   /** When the name column is rich_text, Notion requires `rich_text.contains`, not `title.contains`. */
   titlePropertyType?: "title" | "rich_text" | null;
   startCursor?: string;
+  /**
+   * Property names to include on each row. Required for `POST /data_sources/.../query`: Notion returns
+   * partial pages (id only) unless you request properties via `filter_properties[]` on the URL.
+   */
+  responsePropertyNames?: string[];
 }) {
-  const { databaseId, apiKey, pageSize, filterPropertyName, query, titlePropertyType, startCursor } = params;
+  const { databaseId, apiKey, pageSize, filterPropertyName, query, titlePropertyType, startCursor, responsePropertyNames } =
+    params;
   if (!apiKey) {
     return {
       ok: false as const,
@@ -114,9 +120,25 @@ async function queryTaskPages(params: {
   }
   const trimmedQuery = query?.trim() ?? "";
 
+  const { url: baseUrl, version } = await getTaskDatabaseQueryEndpoint(databaseId, apiKey);
+  const isDataSourceQuery = baseUrl.includes("/data_sources/");
+
+  let requestUrl = baseUrl;
+  if (isDataSourceQuery && responsePropertyNames && responsePropertyNames.length > 0) {
+    const u = new URL(requestUrl);
+    for (const name of responsePropertyNames) {
+      u.searchParams.append("filter_properties[]", name);
+    }
+    requestUrl = u.toString();
+  }
+
   const body: Record<string, unknown> = {
     page_size: pageSize,
   };
+
+  if (isDataSourceQuery) {
+    body.result_type = "page";
+  }
 
   if (startCursor) {
     body.start_cursor = startCursor;
@@ -133,9 +155,7 @@ async function queryTaskPages(params: {
     };
   }
 
-  const { url, version } = await getTaskDatabaseQueryEndpoint(databaseId, apiKey);
-
-  const res = await fetch(url, {
+  const res = await fetch(requestUrl, {
     method: "POST",
     headers: notionHeaders(version, apiKey),
     body: JSON.stringify(body),
@@ -188,7 +208,8 @@ function normalizeNotionQueryResults(results: unknown): NotionPageResult[] {
 async function fallbackTaskSearch(
   databaseId: string,
   query: string,
-  apiKey: string
+  apiKey: string,
+  responsePropertyNames: string[]
 ): Promise<{ id: string; title: string }[]> {
   const normalizedQuery = normalizeTaskQuery(query);
   const matches: { id: string; title: string }[] = [];
@@ -203,6 +224,7 @@ async function fallbackTaskSearch(
       apiKey,
       pageSize: 100,
       startCursor: cursor,
+      responsePropertyNames,
     });
 
     if (!response.ok || !response.data) break;
@@ -241,6 +263,7 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
     }
 
     const titleProperty = findTaskDatabaseTitlePropertyName(schema.properties);
+    const responsePropertyNames = getTaskSearchResponsePropertyNames(schema.properties);
     const propType = titleProperty ? schema.properties[titleProperty]?.type : undefined;
     const titlePropertyType = propType === "rich_text" ? "rich_text" : titleProperty ? "title" : null;
 
@@ -251,6 +274,7 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
       filterPropertyName: titleProperty ?? null,
       query: trimmedQuery,
       titlePropertyType,
+      responsePropertyNames,
     });
 
     if (primary.ok && primary.data) {
@@ -263,7 +287,7 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
       }
     }
 
-    return await fallbackTaskSearch(dbId, trimmedQuery, notionApiKey);
+    return await fallbackTaskSearch(dbId, trimmedQuery, notionApiKey, responsePropertyNames);
   } catch {
     return [];
   }
@@ -528,6 +552,16 @@ function findTaskDatabaseTitlePropertyName(properties: Record<string, NotionData
     if (acceptedTypes.includes(property.type)) return name;
   }
   return null;
+}
+
+/** Property names to request on data-source queries so rows are not returned as id-only partial pages. */
+function getTaskSearchResponsePropertyNames(properties: Record<string, NotionDatabaseProperty>): string[] {
+  const title = findTaskDatabaseTitlePropertyName(properties);
+  if (title) return [title];
+  const firstTitle = Object.entries(properties).find(([, p]) => p.type === "title")?.[0];
+  if (firstTitle) return [firstTitle];
+  const firstRich = Object.entries(properties).find(([, p]) => p.type === "rich_text")?.[0];
+  return firstRich ? [firstRich] : [];
 }
 
 function buildTitleValue(content: string) {

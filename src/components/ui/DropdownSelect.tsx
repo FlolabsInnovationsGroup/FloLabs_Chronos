@@ -22,6 +22,10 @@ interface DropdownSelectProps {
   disabled?: boolean;
   leadingIcon?: string;
   leadingIconColor?: string;
+  /** Hide the selected label in the trigger (icon + chevron only). Use `buttonAriaLabel` for accessibility. */
+  hideTriggerLabel?: boolean;
+  /** Shown as `aria-label` on the trigger when the label is hidden. */
+  buttonAriaLabel?: string;
 }
 
 export function DropdownSelect({
@@ -35,6 +39,8 @@ export function DropdownSelect({
   disabled,
   leadingIcon,
   leadingIconColor = "var(--c-on-surface-variant)",
+  hideTriggerLabel,
+  buttonAriaLabel,
 }: DropdownSelectProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -84,7 +90,8 @@ export function DropdownSelect({
         disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          "w-full min-h-9 appearance-none rounded-xl border-0 bg-surface-container-low px-3 py-1.5 text-sm text-on-background shadow-none outline-none transition-all duration-150",
+          !hideTriggerLabel && "w-full",
+          "min-h-9 appearance-none rounded-xl border-0 bg-surface-container-low px-3 py-1.5 text-sm text-on-background shadow-none outline-none transition-all duration-150",
           "focus:ring-2 focus:ring-inset focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed",
           "inline-flex items-center gap-2 cursor-pointer",
           buttonClassName
@@ -92,6 +99,7 @@ export function DropdownSelect({
         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-label={hideTriggerLabel ? buttonAriaLabel : undefined}
       >
         {selected?.color ? (
           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: selected.color }} />
@@ -110,8 +118,17 @@ export function DropdownSelect({
           </span>
         )}
 
-        <span className={cn("truncate text-left", !selected && "text-outline-variant")}>{selected?.label ?? placeholder}</span>
-        <span className="material-symbols-outlined ml-auto shrink-0 text-on-surface-variant" style={{ fontSize: "18px" }}>
+        {!hideTriggerLabel && (
+          <span className={cn("truncate text-left", !selected && "text-outline-variant")}>{selected?.label ?? placeholder}</span>
+        )}
+        <span
+          className={cn(
+            "material-symbols-outlined shrink-0 text-on-surface-variant",
+            !hideTriggerLabel && "ml-auto"
+          )}
+          style={{ fontSize: "18px" }}
+          aria-hidden
+        >
           expand_more
         </span>
       </button>

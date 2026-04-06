@@ -30,7 +30,7 @@ export function ThemeToggle({ className }: { className?: string }) {
   if (!mounted) {
     return (
       <span
-        className={cn("inline-flex h-8 w-[7.25rem] shrink-0 rounded-full bg-surface-container-low", className)}
+        className={cn("inline-flex h-8 w-[4.25rem] shrink-0 rounded-full bg-surface-container-low", className)}
         aria-hidden
       />
     );
@@ -43,9 +43,10 @@ export function ThemeToggle({ className }: { className?: string }) {
           options={THEME_OPTIONS}
           value={mode}
           onChange={(v) => setMode(v as ChronosThemeMode)}
-          placeholder="Theme"
-          buttonClassName="min-h-8 rounded-full border border-surface-container-highest bg-surface-container-low py-1 pl-2 pr-2 text-on-surface-variant hover:bg-surface-container hover:text-on-background"
-          className="w-[7.25rem]"
+          hideTriggerLabel
+          buttonAriaLabel={`Theme: ${summary}. Open menu to choose light, dark, or system.`}
+          buttonClassName="min-h-8 h-8 w-auto rounded-full border border-surface-container-highest bg-surface-container-low px-1.5 py-0 text-on-surface-variant hover:bg-surface-container hover:text-on-background gap-1 justify-center"
+          className="w-auto"
         />
       </div>
     </Tooltip>

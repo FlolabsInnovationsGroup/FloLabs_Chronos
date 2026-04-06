@@ -123,15 +123,6 @@ async function queryTaskPages(params: {
   const { url: baseUrl, version } = await getTaskDatabaseQueryEndpoint(databaseId, apiKey);
   const isDataSourceQuery = baseUrl.includes("/data_sources/");
 
-  let requestUrl = baseUrl;
-  if (isDataSourceQuery && responsePropertyNames && responsePropertyNames.length > 0) {
-    const u = new URL(requestUrl);
-    for (const name of responsePropertyNames) {
-      u.searchParams.append("filter_properties[]", name);
-    }
-    requestUrl = u.toString();
-  }
-
   const body: Record<string, unknown> = {
     page_size: pageSize,
   };
@@ -155,11 +146,39 @@ async function queryTaskPages(params: {
     };
   }
 
-  const res = await fetch(requestUrl, {
+  /** OpenAPI: query param `filter_properties` (array) — repeat the name; not `filter_properties[]`. */
+  function buildDataSourceQueryUrl(includePropertyFilter: boolean): string {
+    if (!isDataSourceQuery || !includePropertyFilter || !responsePropertyNames?.length) return baseUrl;
+    const u = new URL(baseUrl);
+    for (const name of responsePropertyNames) {
+      u.searchParams.append("filter_properties", name);
+    }
+    return u.toString();
+  }
+
+  let res = await fetch(buildDataSourceQueryUrl(true), {
     method: "POST",
     headers: notionHeaders(version, apiKey),
     body: JSON.stringify(body),
   });
+
+  if (!res.ok && isDataSourceQuery && responsePropertyNames && responsePropertyNames.length > 0) {
+    res = await fetch(buildDataSourceQueryUrl(false), {
+      method: "POST",
+      headers: notionHeaders(version, apiKey),
+      body: JSON.stringify(body),
+    });
+  }
+
+  if (!res.ok && isDataSourceQuery) {
+    const legacyBody = { ...body };
+    delete legacyBody.result_type;
+    res = await fetch(`${NOTION_API_BASE}/databases/${databaseId}/query`, {
+      method: "POST",
+      headers: notionHeaders(NOTION_VERSION, apiKey),
+      body: JSON.stringify(legacyBody),
+    });
+  }
 
   if (!res.ok) {
     const errorText = await res.text().catch(() => "");
@@ -177,8 +196,11 @@ async function queryTaskPages(params: {
     next_cursor?: string | null;
   };
 
+  let results = normalizeNotionQueryResults(raw.results);
+  results = await hydrateTaskPagesForSearch(results, apiKey);
+
   const data = {
-    results: normalizeNotionQueryResults(raw.results),
+    results,
     has_more: raw.has_more,
     next_cursor: raw.next_cursor,
   };
@@ -189,6 +211,46 @@ async function queryTaskPages(params: {
     errorText: "",
     data,
   };
+}
+
+function taskPageNeedsTitleHydration(page: NotionPageResult): boolean {
+  const props = page.properties;
+  if (!props || typeof props !== "object") return true;
+  return !Object.values(props).some(
+    (prop) =>
+      prop &&
+      ((prop.type === "title" && prop.title && prop.title.length > 0) ||
+        (prop.type === "rich_text" && prop.rich_text && prop.rich_text.length > 0))
+  );
+}
+
+async function retrieveNotionPageForTaskSearch(pageId: string, apiKey: string): Promise<NotionPageResult | null> {
+  for (const ver of [NOTION_TEMPLATE_VERSION, NOTION_VERSION]) {
+    const res = await fetch(`${NOTION_API_BASE}/pages/${pageId}`, {
+      headers: notionHeaders(ver, apiKey),
+    });
+    if (res.ok) {
+      return (await res.json()) as NotionPageResult;
+    }
+  }
+  return null;
+}
+
+/** Data-source queries often return id-only rows; load full page so `getPageTitle` works. */
+async function hydrateTaskPagesForSearch(pages: NotionPageResult[], apiKey: string): Promise<NotionPageResult[]> {
+  const need = pages.filter((p) => taskPageNeedsTitleHydration(p));
+  if (need.length === 0) return pages;
+
+  const byId = new Map(pages.map((p) => [p.id, p]));
+  const max = Math.min(need.length, 15);
+  await Promise.all(
+    need.slice(0, max).map(async (p) => {
+      const full = await retrieveNotionPageForTaskSearch(p.id, apiKey);
+      if (full) byId.set(p.id, full);
+    })
+  );
+
+  return pages.map((p) => byId.get(p.id) ?? p);
 }
 
 /** Data-source queries may return only `object: "page"` rows; filter out non-page entries. */

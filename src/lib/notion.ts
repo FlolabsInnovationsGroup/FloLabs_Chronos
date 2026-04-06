@@ -31,6 +31,7 @@ interface NotionPagePropertyValue {
   email?: string | null;
   relation?: Array<{ id: string }>;
   status?: { name?: string | null };
+  select?: { name?: string | null };
   number?: number | null;
 }
 
@@ -1704,8 +1705,30 @@ function findTaskDatabaseStatusLikeProperty(
   }
   const statusEntry = Object.entries(properties).find(([, p]) => p.type === "status");
   if (statusEntry) return { name: statusEntry[0], kind: "status" };
-  const selectEntry = Object.entries(properties).find(([, p]) => p.type === "select");
-  if (selectEntry) return { name: selectEntry[0], kind: "select" };
+  for (const [name, p] of Object.entries(properties)) {
+    if (p.type !== "select") continue;
+    if (/status|state|stage|progress|workflow/i.test(name)) return { name, kind: "select" };
+  }
+  return null;
+}
+
+/** Prefer reading the real column from the task row (schema retrieve often omits status/select option lists). */
+function findTaskStatusLikePropertyOnPage(page: NotionPageResult): TaskStatusLikeProperty | null {
+  const props = page.properties ?? {};
+  const candidates = ["Status", "Task status", "State", "Stage"];
+  for (const name of candidates) {
+    const p = props[name];
+    if (p?.type === "status") return { name, kind: "status" };
+    if (p?.type === "select") return { name, kind: "select" };
+  }
+  for (const [name, p] of Object.entries(props)) {
+    if (p.type === "status") return { name, kind: "status" };
+  }
+  for (const [name, p] of Object.entries(props)) {
+    if (p.type === "select" && /status|state|stage|progress|workflow/i.test(name)) {
+      return { name, kind: "select" };
+    }
+  }
   return null;
 }
 
@@ -1733,9 +1756,61 @@ function matchNotionOptionName(optionNames: string[], desiredLabel: string): str
   );
 }
 
+function buildInProgressValueCandidates(
+  schemaProp: NotionDatabaseProperty | undefined,
+  kind: "status" | "select"
+): string[] {
+  if (!schemaProp) return [];
+  const opts = notionOptionNamesForProperty(schemaProp, kind);
+  const exact = matchNotionOptionName(opts, "In progress");
+  if (exact) return [exact];
+  const loose = opts.filter((o) => {
+    const n = o.replace(/\s+/g, " ").trim().toLowerCase();
+    return n.includes("progress") && /\b(in|on)\b/.test(n);
+  });
+  if (loose.length > 0) return loose;
+  return [];
+}
+
+async function tryPatchPageStatusOrSelectValue(
+  pageId: string,
+  notionApiKey: string,
+  propName: string,
+  kind: "status" | "select",
+  valueName: string
+): Promise<boolean> {
+  const properties =
+    kind === "status"
+      ? { [propName]: { status: { name: valueName } } }
+      : { [propName]: { select: { name: valueName } } };
+  for (const ver of [NOTION_VERSION, NOTION_TEMPLATE_VERSION]) {
+    const res = await fetch(`${NOTION_API_BASE}/pages/${pageId}`, {
+      method: "PATCH",
+      headers: notionHeaders(ver, notionApiKey),
+      body: JSON.stringify({ properties }),
+    });
+    if (res.ok) return true;
+  }
+  return false;
+}
+
+async function retrieveTaskPageForPropertyDiscovery(
+  pageId: string,
+  notionApiKey: string
+): Promise<NotionPageResult | null> {
+  for (const ver of [NOTION_TEMPLATE_VERSION, NOTION_VERSION]) {
+    const res = await fetch(`${NOTION_API_BASE}/pages/${pageId}`, {
+      headers: notionHeaders(ver, notionApiKey),
+    });
+    if (res.ok) return (await res.json()) as NotionPageResult;
+  }
+  return null;
+}
+
 /**
- * After a stopped time entry is saved, set the linked Tasks DB row to **In progress** (status or select),
- * if the Tasks database schema has a matching option. Best-effort: failures are swallowed.
+ * After a stopped time entry is saved, set the linked Tasks DB row to **In progress** (status or select).
+ * Uses the task page to find the Status column when the database schema omits option lists (common on newer APIs).
+ * Best-effort: failures are swallowed (see server logs if you add logging).
  */
 export async function setNotionLinkedTaskInProgressOnStop(notionTaskPageId: string | null | undefined): Promise<void> {
   const id = notionTaskPageId?.trim();
@@ -1745,37 +1820,50 @@ export async function setNotionLinkedTaskInProgressOnStop(notionTaskPageId: stri
     const { notionApiKey, notionTasksDbId } = await getNotionConfig();
     if (!notionApiKey || !notionTasksDbId) return;
 
-    let schema: NotionDatabaseResponse;
+    const page = await retrieveTaskPageForPropertyDiscovery(id, notionApiKey);
+    const fromPage = page ? findTaskStatusLikePropertyOnPage(page) : null;
+
+    let schema: NotionDatabaseResponse | null = null;
     try {
       schema = await getDatabaseSchema(notionTasksDbId, NOTION_TEMPLATE_VERSION, notionApiKey);
     } catch {
-      schema = await getDatabaseSchema(notionTasksDbId, NOTION_VERSION, notionApiKey);
+      try {
+        schema = await getDatabaseSchema(notionTasksDbId, NOTION_VERSION, notionApiKey);
+      } catch {
+        schema = null;
+      }
     }
 
-    const prop = findTaskDatabaseStatusLikeProperty(schema.properties);
-    if (!prop) return;
+    const fromSchema = schema ? findTaskDatabaseStatusLikeProperty(schema.properties) : null;
 
-    const rawProp = schema.properties[prop.name];
-    if (!rawProp) return;
+    const propQueue: TaskStatusLikeProperty[] = [];
+    const pushProp = (p: TaskStatusLikeProperty | null) => {
+      if (!p) return;
+      if (!propQueue.some((x) => x.name === p.name && x.kind === p.kind)) propQueue.push(p);
+    };
+    pushProp(fromPage);
+    pushProp(fromSchema);
 
-    const optionNames = notionOptionNamesForProperty(rawProp, prop.kind);
-    const matched = matchNotionOptionName(optionNames, "In progress");
-    if (!matched) return;
+    if (propQueue.length === 0) return;
 
-    const properties =
-      prop.kind === "status"
-        ? { [prop.name]: { status: { name: matched } } }
-        : { [prop.name]: { select: { name: matched } } };
+    const valueTryList: string[] = [];
+    const addVals = (names: string[]) => {
+      for (const n of names) {
+        const t = n.trim();
+        if (t && !valueTryList.includes(t)) valueTryList.push(t);
+      }
+    };
 
-    try {
-      await patchPageProperties({ pageId: id, notionApiKey, properties });
-    } catch {
-      const res = await fetch(`${NOTION_API_BASE}/pages/${id}`, {
-        method: "PATCH",
-        headers: notionHeaders(NOTION_TEMPLATE_VERSION, notionApiKey),
-        body: JSON.stringify({ properties }),
-      });
-      if (!res.ok) return;
+    for (const prop of propQueue) {
+      const schemaProp = schema?.properties?.[prop.name];
+      addVals(buildInProgressValueCandidates(schemaProp, prop.kind));
+    }
+    addVals(["In progress", "In Progress", "IN PROGRESS", "In-progress"]);
+
+    for (const prop of propQueue) {
+      for (const val of valueTryList) {
+        if (await tryPatchPageStatusOrSelectValue(id, notionApiKey, prop.name, prop.kind, val)) return;
+      }
     }
   } catch {
     /* best-effort */

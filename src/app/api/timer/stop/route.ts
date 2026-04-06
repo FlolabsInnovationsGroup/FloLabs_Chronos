@@ -7,6 +7,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { sendDiscordEmbed, buildTimerStopEmbed } from "@/lib/discord";
 import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
+import { setNotionLinkedTaskInProgressOnStop } from "@/lib/notion";
 import { getTimerStopValidation } from "@/lib/timer-rules";
 
 const stopSchema = z.object({ discard: z.boolean().optional() });
@@ -88,6 +89,10 @@ export async function POST(req: Request) {
 
     if (updated[0]?.id) {
       await syncAndNotifyEntry(updated[0].id).catch(() => {});
+    }
+    const linkedTaskId = timer.notionTaskPageId?.trim();
+    if (linkedTaskId) {
+      void setNotionLinkedTaskInProgressOnStop(linkedTaskId).catch(() => {});
     }
   } else if (db && discard) {
     await db

@@ -1690,6 +1690,98 @@ function findTeamMembersStatusPropertyName(properties: Record<string, NotionData
   return Object.entries(properties).find(([, p]) => p.type === "status")?.[0] ?? null;
 }
 
+type TaskStatusLikeProperty = { name: string; kind: "status" | "select" };
+
+function findTaskDatabaseStatusLikeProperty(
+  properties: Record<string, NotionDatabaseProperty> | undefined
+): TaskStatusLikeProperty | null {
+  if (!properties) return null;
+  const candidates = ["Status", "Task status", "State", "Stage"];
+  for (const name of candidates) {
+    const p = properties[name];
+    if (p?.type === "status") return { name, kind: "status" };
+    if (p?.type === "select") return { name, kind: "select" };
+  }
+  const statusEntry = Object.entries(properties).find(([, p]) => p.type === "status");
+  if (statusEntry) return { name: statusEntry[0], kind: "status" };
+  const selectEntry = Object.entries(properties).find(([, p]) => p.type === "select");
+  if (selectEntry) return { name: selectEntry[0], kind: "select" };
+  return null;
+}
+
+function notionOptionNamesForProperty(
+  prop: NotionDatabaseProperty,
+  kind: "status" | "select"
+): string[] {
+  const raw = prop as NotionDatabaseProperty & {
+    status?: { options?: Array<{ name: string }> };
+    select?: { options?: Array<{ name: string }> };
+  };
+  if (kind === "status") {
+    return (raw.status?.options ?? []).map((o) => o.name).filter(Boolean);
+  }
+  return (raw.select?.options ?? []).map((o) => o.name).filter(Boolean);
+}
+
+function matchNotionOptionName(optionNames: string[], desiredLabel: string): string | null {
+  const normalizedDesired = desiredLabel.replace(/\s+/g, " ").trim().toLowerCase();
+  const compactDesired = normalizedDesired.replace(/\s+/g, "");
+  return (
+    optionNames.find((n) => n.replace(/\s+/g, " ").trim().toLowerCase() === normalizedDesired) ??
+    optionNames.find((n) => n.toLowerCase().replace(/\s+/g, "") === compactDesired) ??
+    null
+  );
+}
+
+/**
+ * After a stopped time entry is saved, set the linked Tasks DB row to **In progress** (status or select),
+ * if the Tasks database schema has a matching option. Best-effort: failures are swallowed.
+ */
+export async function setNotionLinkedTaskInProgressOnStop(notionTaskPageId: string | null | undefined): Promise<void> {
+  const id = notionTaskPageId?.trim();
+  if (!id) return;
+
+  try {
+    const { notionApiKey, notionTasksDbId } = await getNotionConfig();
+    if (!notionApiKey || !notionTasksDbId) return;
+
+    let schema: NotionDatabaseResponse;
+    try {
+      schema = await getDatabaseSchema(notionTasksDbId, NOTION_TEMPLATE_VERSION, notionApiKey);
+    } catch {
+      schema = await getDatabaseSchema(notionTasksDbId, NOTION_VERSION, notionApiKey);
+    }
+
+    const prop = findTaskDatabaseStatusLikeProperty(schema.properties);
+    if (!prop) return;
+
+    const rawProp = schema.properties[prop.name];
+    if (!rawProp) return;
+
+    const optionNames = notionOptionNamesForProperty(rawProp, prop.kind);
+    const matched = matchNotionOptionName(optionNames, "In progress");
+    if (!matched) return;
+
+    const properties =
+      prop.kind === "status"
+        ? { [prop.name]: { status: { name: matched } } }
+        : { [prop.name]: { select: { name: matched } } };
+
+    try {
+      await patchPageProperties({ pageId: id, notionApiKey, properties });
+    } catch {
+      const res = await fetch(`${NOTION_API_BASE}/pages/${id}`, {
+        method: "PATCH",
+        headers: notionHeaders(NOTION_TEMPLATE_VERSION, notionApiKey),
+        body: JSON.stringify({ properties }),
+      });
+      if (!res.ok) return;
+    }
+  } catch {
+    /* best-effort */
+  }
+}
+
 /**
  * Sets the Team Members database **status** column to Terminated or Graduated (must match a Notion option name).
  * Does not archive the page or touch other Notion databases.

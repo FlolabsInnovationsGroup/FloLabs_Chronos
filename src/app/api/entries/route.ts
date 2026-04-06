@@ -6,6 +6,7 @@ import { eq, and, gte, lte, desc, inArray, isNotNull, type SQL } from "drizzle-o
 import { z } from "zod";
 import { getAccessibleUserIds } from "@/lib/permissions";
 import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
+import { setNotionLinkedTaskInProgressOnStop } from "@/lib/notion";
 
 async function attachTags(
   entryRows: { id: string }[]
@@ -131,6 +132,9 @@ export async function POST(req: Request) {
 
   if (entry.stoppedAt) {
     await syncAndNotifyEntry(entry.id).catch(() => {});
+  }
+  if (entry.notionTaskPageId?.trim()) {
+    void setNotionLinkedTaskInProgressOnStop(entry.notionTaskPageId).catch(() => {});
   }
 
   return NextResponse.json({ entry: { ...entry, tags: createdTags } }, { status: 201 });

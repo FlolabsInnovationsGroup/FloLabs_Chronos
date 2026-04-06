@@ -358,7 +358,8 @@ async function fallbackTaskSearch(
 
     for (const page of response.data.results) {
       const title = getPageTitle(page, titlePropertyName);
-      if (!matchesTaskQuery(title, normalizedQuery)) continue;
+      /** Must pass original `query` (casing preserved) so `queryMatchTokens` can split camelCase (e.g. FloLabs → flo + labs). */
+      if (!matchesTaskQuery(title, query)) continue;
       if (seen.has(page.id)) continue;
       seen.add(page.id);
       matches.push({ id: page.id, title });

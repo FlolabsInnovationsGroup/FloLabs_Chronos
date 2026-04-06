@@ -72,13 +72,17 @@ export async function getNotionConfig() {
 
   let notionTasksDbId = process.env.NOTION_TASKS_DB_ID || null;
   let notionTeamMembersDbId = process.env.NOTION_TEAM_MEMBERS_DB_ID || null;
+  let notionTeamsDbId = process.env.NOTION_TEAMS_DB_ID || null;
+  let notionOnboardingsDbId = process.env.NOTION_ONBOARDINGS_DB_ID || null;
 
   if (notionApiKey && process.env.NOTION_DATABASE_ID) {
     try {
-      const { resolveTimeEntriesRelationDatabaseIds } = await import("@/lib/notion");
-      const derived = await resolveTimeEntriesRelationDatabaseIds(notionApiKey);
+      const { resolveNotionDatabaseIdsFromRelations } = await import("@/lib/notion");
+      const derived = await resolveNotionDatabaseIdsFromRelations(notionApiKey);
       if (!notionTasksDbId) notionTasksDbId = derived.tasksDbId;
       if (!notionTeamMembersDbId) notionTeamMembersDbId = derived.teamMembersDbId;
+      if (!notionTeamsDbId) notionTeamsDbId = derived.teamsDbId;
+      if (!notionOnboardingsDbId) notionOnboardingsDbId = derived.onboardingsDbId;
     } catch {
       /* ignore */
     }
@@ -86,16 +90,15 @@ export async function getNotionConfig() {
 
   if (!notionTasksDbId) notionTasksDbId = map.get(APP_CONFIG_KEYS.notionTasksDbId) || null;
   if (!notionTeamMembersDbId) notionTeamMembersDbId = map.get(APP_CONFIG_KEYS.notionTeamMembersDbId) || null;
+  if (!notionTeamsDbId) notionTeamsDbId = map.get(APP_CONFIG_KEYS.notionTeamsDbId) || null;
+  if (!notionOnboardingsDbId) notionOnboardingsDbId = map.get(APP_CONFIG_KEYS.notionOnboardingsDbId) || null;
 
   return {
     notionApiKey,
     notionTasksDbId,
     notionTeamMembersDbId,
-    notionOnboardingsDbId:
-      process.env.NOTION_ONBOARDINGS_DB_ID ||
-      map.get(APP_CONFIG_KEYS.notionOnboardingsDbId) ||
-      null,
-    notionTeamsDbId: process.env.NOTION_TEAMS_DB_ID || map.get(APP_CONFIG_KEYS.notionTeamsDbId) || null,
+    notionOnboardingsDbId,
+    notionTeamsDbId,
     notionMasterClassesIndexDbId:
       process.env.NOTION_MASTERCLASSES_INDEX_DB_ID ||
       map.get(APP_CONFIG_KEYS.notionMasterClassesIndexDbId) ||

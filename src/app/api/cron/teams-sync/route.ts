@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { teamMemberships, teams, users } from "@/lib/db/schema";
 import { and, eq, isNotNull, notInArray } from "drizzle-orm";
 import { createTeamSlug } from "@/lib/invitations";
+import { getNotionConfig } from "@/lib/app-config";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -10,9 +11,9 @@ export const maxDuration = 60;
 const NOTION_API_BASE = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
 
-function notionHeaders() {
+function notionHeaders(apiKey: string) {
   return {
-    Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
+    Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
     "Notion-Version": NOTION_VERSION,
   };
@@ -33,7 +34,7 @@ interface NotionPage {
   properties: Record<string, NotionProperty>;
 }
 
-async function queryAllPages(databaseId: string): Promise<NotionPage[]> {
+async function queryAllPages(databaseId: string, apiKey: string): Promise<NotionPage[]> {
   const results: NotionPage[] = [];
   let cursor: string | undefined;
   do {
@@ -41,7 +42,7 @@ async function queryAllPages(databaseId: string): Promise<NotionPage[]> {
     if (cursor) body.start_cursor = cursor;
     const res = await fetch(`${NOTION_API_BASE}/databases/${databaseId}/query`, {
       method: "POST",
-      headers: notionHeaders(),
+      headers: notionHeaders(apiKey),
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`Notion query failed for ${databaseId}: ${res.status}`);
@@ -63,9 +64,6 @@ export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
-  if (!process.env.NOTION_API_KEY || !process.env.NOTION_TEAMS_DB_ID || !process.env.NOTION_TEAM_MEMBERS_DB_ID) {
-    return NextResponse.json({ error: "Notion Teams DB not configured" }, { status: 503 });
-  }
 
   let upserted = 0;
   let deactivated = 0;
@@ -76,9 +74,17 @@ export async function GET(req: Request) {
   const seenNotionPageIds: string[] = [];
 
   try {
+    const config = await getNotionConfig();
+    const notionApiKey = process.env.NOTION_API_KEY || config.notionApiKey;
+    const teamsDbId = process.env.NOTION_TEAMS_DB_ID || config.notionTeamsDbId;
+    const teamMembersDbId = process.env.NOTION_TEAM_MEMBERS_DB_ID || config.notionTeamMembersDbId;
+    if (!notionApiKey || !teamsDbId || !teamMembersDbId) {
+      return NextResponse.json({ error: "Notion Teams DB not configured" }, { status: 503 });
+    }
+
     const [teamPages, memberPages, userRows] = await Promise.all([
-      queryAllPages(process.env.NOTION_TEAMS_DB_ID),
-      queryAllPages(process.env.NOTION_TEAM_MEMBERS_DB_ID),
+      queryAllPages(teamsDbId, notionApiKey),
+      queryAllPages(teamMembersDbId, notionApiKey),
       db.select({ id: users.id, email: users.email, notionTeamMemberId: users.notionTeamMemberId }).from(users),
     ]);
 

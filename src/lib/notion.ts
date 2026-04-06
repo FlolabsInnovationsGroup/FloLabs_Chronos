@@ -151,10 +151,16 @@ async function queryTaskPages(params: {
     };
   }
 
-  const data = (await res.json()) as {
-    results: NotionPageResult[];
+  const raw = (await res.json()) as {
+    results?: unknown[];
     has_more?: boolean;
     next_cursor?: string | null;
+  };
+
+  const data = {
+    results: normalizeNotionQueryResults(raw.results),
+    has_more: raw.has_more,
+    next_cursor: raw.next_cursor,
   };
 
   return {
@@ -163,6 +169,20 @@ async function queryTaskPages(params: {
     errorText: "",
     data,
   };
+}
+
+/** Data-source queries may return only `object: "page"` rows; filter out non-page entries. */
+function normalizeNotionQueryResults(results: unknown): NotionPageResult[] {
+  if (!Array.isArray(results)) return [];
+  const out: NotionPageResult[] = [];
+  for (const item of results) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as { object?: string; properties?: unknown };
+    if (o.object === "page" || (o.properties && typeof o.properties === "object")) {
+      out.push(item as NotionPageResult);
+    }
+  }
+  return out;
 }
 
 async function fallbackTaskSearch(
@@ -220,7 +240,7 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
       schema = await getDatabaseSchema(dbId, NOTION_VERSION, notionApiKey);
     }
 
-    const titleProperty = findPropertyName(schema.properties, ["Name", "Title", "Task", "Task Name"], ["title", "rich_text"]);
+    const titleProperty = findTaskDatabaseTitlePropertyName(schema.properties);
     const propType = titleProperty ? schema.properties[titleProperty]?.type : undefined;
     const titlePropertyType = propType === "rich_text" ? "rich_text" : titleProperty ? "title" : null;
 
@@ -238,7 +258,7 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
         .map((page) => ({ id: page.id, title: getPageTitle(page) }))
         .filter((task) => matchesTaskQuery(task.title, trimmedQuery));
 
-      if (mapped.length > 0 || !trimmedQuery) {
+      if (mapped.length > 0) {
         return mapped.slice(0, 10);
       }
     }
@@ -281,8 +301,12 @@ async function getDatabaseSchema(databaseId: string, version = NOTION_VERSION, a
 
 function getRelationDatabaseIdFromProperty(property: NotionDatabaseProperty | undefined): string | null {
   if (!property || property.type !== "relation") return null;
-  const r = property.relation as { database_id?: string } | undefined;
-  if (r?.database_id && typeof r.database_id === "string" && r.database_id.length > 0) return r.database_id;
+  const r = property.relation as Record<string, unknown> | undefined;
+  if (!r) return null;
+  const direct = r.database_id;
+  if (typeof direct === "string" && direct.length > 0) return direct;
+  const sp = r.single_property as { database_id?: string } | undefined;
+  if (typeof sp?.database_id === "string" && sp.database_id.length > 0) return sp.database_id;
   return null;
 }
 
@@ -316,6 +340,48 @@ function getTeamMembersDatabaseIdFromTimeEntriesSchema(schema: NotionDatabaseRes
   return null;
 }
 
+/** Teams database from Team Members `Team` relation (`relation.database_id`). */
+function getTeamsDatabaseIdFromTeamMembersSchema(schema: NotionDatabaseResponse): string | null {
+  for (const name of ["Team", "Teams"]) {
+    const id = getRelationDatabaseIdFromProperty(schema.properties[name]);
+    if (id) return id;
+  }
+  for (const [name, prop] of Object.entries(schema.properties)) {
+    if (prop.type !== "relation") continue;
+    if (!/^teams?$/i.test(name.trim())) continue;
+    const id = getRelationDatabaseIdFromProperty(prop);
+    if (id) return id;
+  }
+  return null;
+}
+
+/** Onboardings database from Team Members `Onboarding` relation. */
+function getOnboardingsDatabaseIdFromTeamMembersSchema(schema: NotionDatabaseResponse): string | null {
+  for (const name of ["Onboarding", "Onboardings"]) {
+    const id = getRelationDatabaseIdFromProperty(schema.properties[name]);
+    if (id) return id;
+  }
+  for (const [name, prop] of Object.entries(schema.properties)) {
+    if (prop.type !== "relation") continue;
+    if (!/^onboardings?$/i.test(name.trim())) continue;
+    const id = getRelationDatabaseIdFromProperty(prop);
+    if (id) return id;
+  }
+  return null;
+}
+
+async function loadDatabaseSchemaById(notionApiKey: string, databaseId: string): Promise<NotionDatabaseResponse | null> {
+  try {
+    return await getDatabaseSchema(databaseId, NOTION_TEMPLATE_VERSION, notionApiKey);
+  } catch {
+    try {
+      return await getDatabaseSchema(databaseId, NOTION_VERSION, notionApiKey);
+    } catch {
+      return null;
+    }
+  }
+}
+
 async function loadTimeEntriesDatabaseSchema(notionApiKey: string): Promise<NotionDatabaseResponse | null> {
   const entriesDbId = process.env.NOTION_DATABASE_ID;
   if (!entriesDbId) return null;
@@ -330,17 +396,41 @@ async function loadTimeEntriesDatabaseSchema(notionApiKey: string): Promise<Noti
   }
 }
 
-/** Resolves Tasks and Team Members database IDs from the Time Entries DB schema (relation properties). */
+/**
+ * Resolves Tasks and Team Members DB IDs from Time Entries relations, and Teams / Onboardings from
+ * Team Members relations (Team → Teams DB, Onboarding → Onboardings DB).
+ */
+export async function resolveNotionDatabaseIdsFromRelations(notionApiKey: string): Promise<{
+  tasksDbId: string | null;
+  teamMembersDbId: string | null;
+  teamsDbId: string | null;
+  onboardingsDbId: string | null;
+}> {
+  const schema = await loadTimeEntriesDatabaseSchema(notionApiKey);
+  if (!schema) {
+    return { tasksDbId: null, teamMembersDbId: null, teamsDbId: null, onboardingsDbId: null };
+  }
+  const tasksDbId = getTasksDatabaseIdFromTimeEntriesSchema(schema);
+  const teamMembersDbId = getTeamMembersDatabaseIdFromTimeEntriesSchema(schema);
+  let teamsDbId: string | null = null;
+  let onboardingsDbId: string | null = null;
+  if (teamMembersDbId) {
+    const tmSchema = await loadDatabaseSchemaById(notionApiKey, teamMembersDbId);
+    if (tmSchema) {
+      teamsDbId = getTeamsDatabaseIdFromTeamMembersSchema(tmSchema);
+      onboardingsDbId = getOnboardingsDatabaseIdFromTeamMembersSchema(tmSchema);
+    }
+  }
+  return { tasksDbId, teamMembersDbId, teamsDbId, onboardingsDbId };
+}
+
+/** @deprecated Prefer resolveNotionDatabaseIdsFromRelations */
 export async function resolveTimeEntriesRelationDatabaseIds(notionApiKey: string): Promise<{
   tasksDbId: string | null;
   teamMembersDbId: string | null;
 }> {
-  const schema = await loadTimeEntriesDatabaseSchema(notionApiKey);
-  if (!schema) return { tasksDbId: null, teamMembersDbId: null };
-  return {
-    tasksDbId: getTasksDatabaseIdFromTimeEntriesSchema(schema),
-    teamMembersDbId: getTeamMembersDatabaseIdFromTimeEntriesSchema(schema),
-  };
+  const r = await resolveNotionDatabaseIdsFromRelations(notionApiKey);
+  return { tasksDbId: r.tasksDbId, teamMembersDbId: r.teamMembersDbId };
 }
 
 async function queryAllDatabasePages(databaseId: string, notionApiKey: string): Promise<NotionPageResult[]> {
@@ -417,6 +507,27 @@ function findPropertyName(
   }
 
   return Object.entries(properties).find(([, property]) => acceptedTypes.includes(property.type))?.[0];
+}
+
+/** Title column for task search — avoid picking unrelated `title` columns like "User Key". */
+function findTaskDatabaseTitlePropertyName(properties: Record<string, NotionDatabaseProperty>): string | null {
+  const preferredNames = ["Name", "Title", "Task", "Task Name"];
+  const acceptedTypes = ["title", "rich_text"];
+  for (const name of preferredNames) {
+    const property = properties[name];
+    if (property && acceptedTypes.includes(property.type)) return name;
+  }
+  const skipName = /^(User Key|Entry ID)$/i;
+  for (const [name, property] of Object.entries(properties)) {
+    if (skipName.test(name.trim())) continue;
+    if (!acceptedTypes.includes(property.type)) continue;
+    if (/task|name/i.test(name)) return name;
+  }
+  for (const [name, property] of Object.entries(properties)) {
+    if (skipName.test(name.trim())) continue;
+    if (acceptedTypes.includes(property.type)) return name;
+  }
+  return null;
 }
 
 function buildTitleValue(content: string) {

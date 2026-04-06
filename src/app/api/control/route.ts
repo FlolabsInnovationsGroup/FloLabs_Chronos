@@ -6,8 +6,6 @@ import { APP_CONFIG_KEYS, getNotionConfig, setAppConfigValues } from "@/lib/app-
 
 const controlSchema = z.object({
   notionApiKey: z.string().optional().default(""),
-  notionOnboardingsDbId: z.string().min(1),
-  notionTeamsDbId: z.string().min(1),
   notionMasterClassesIndexDbId: z.string().min(1),
   discordBotToken: z.string().optional().default(""),
   discordGuildId: z.string().optional().default(""),
@@ -59,8 +57,6 @@ export async function POST(req: Request) {
   }
 
   const values: Array<{ key: (typeof APP_CONFIG_KEYS)[keyof typeof APP_CONFIG_KEYS]; value: string; isSecret?: boolean; updatedBy?: string }> = [
-    { key: APP_CONFIG_KEYS.notionOnboardingsDbId, value: parsed.data.notionOnboardingsDbId, updatedBy: session.user.id },
-    { key: APP_CONFIG_KEYS.notionTeamsDbId, value: parsed.data.notionTeamsDbId, updatedBy: session.user.id },
     { key: APP_CONFIG_KEYS.notionMasterClassesIndexDbId, value: parsed.data.notionMasterClassesIndexDbId, updatedBy: session.user.id },
   ];
   if (parsed.data.notionApiKey.trim()) {

@@ -75,7 +75,7 @@ export function ControlForm() {
       await readJson(await fetch("/api/control", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notionApiKey, notionOnboardingsDbId, notionTeamsDbId, notionMasterClassesIndexDbId, discordBotToken, discordGuildId, discordCategoryId, discordChannelPrefix }),
+        body: JSON.stringify({ notionApiKey, notionMasterClassesIndexDbId, discordBotToken, discordGuildId, discordCategoryId, discordChannelPrefix }),
       }));
       setSuccess("Control settings saved.");
       setApiKeyPresent(true);
@@ -102,11 +102,6 @@ export function ControlForm() {
     }
   }
 
-  function applyDatabase(id: string, target: "onboardings" | "teams") {
-    if (target === "onboardings") setNotionOnboardingsDbId(id);
-    if (target === "teams") setNotionTeamsDbId(id);
-  }
-
   return (
     <div className="bg-surface-container-lowest rounded-xl paper-shadow p-6 flex flex-col gap-6">
       {loading ? (
@@ -121,26 +116,28 @@ export function ControlForm() {
               <h2 className="text-lg font-light italic text-on-background" style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}>Notion</h2>
               <Input label="Notion Integration Secret Key" type="password" value={notionApiKey} onChange={(e) => setNotionApiKey(e.target.value)} placeholder={apiKeyPresent ? "Saved in app config — leave empty to keep current key" : "ntn_..."} hint={apiKeyPresent && apiKeyMasked ? `Current key: ${apiKeyMasked}. Enter a new one only if you want to rotate it.` : "Stored in the app config store. Deployment env vars still take precedence if present."} />
               <div className="rounded-xl border border-surface-container bg-surface-container-low px-4 py-3 flex flex-col gap-2">
-                <p className="text-sm text-on-background font-medium">Tasks and Team Members (Notion)</p>
+                <p className="text-sm text-on-background font-medium">Notion database IDs in use</p>
                 <p className="text-sm text-on-surface-variant">
-                  Database IDs are read from the Time Entries database relations (<span className="font-medium text-on-background">Task</span>,{" "}
-                  <span className="font-medium text-on-background">Team Member</span>) when{" "}
-                  <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">NOTION_DATABASE_ID</code> is set. Optional env overrides:{" "}
+                  Tasks and Team Members come from Time Entries relations (<span className="font-medium text-on-background">Task</span>,{" "}
+                  <span className="font-medium text-on-background">Team Member</span>). Teams and Onboardings come from Team Members relations (
+                  <span className="font-medium text-on-background">Team</span>, <span className="font-medium text-on-background">Onboarding</span>) after the Team Members database is known. Env overrides (when set) take precedence:{" "}
                   <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">NOTION_TASKS_DB_ID</code>,{" "}
-                  <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">NOTION_TEAM_MEMBERS_DB_ID</code>.
+                  <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">NOTION_TEAM_MEMBERS_DB_ID</code>,{" "}
+                  <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">NOTION_TEAMS_DB_ID</code>,{" "}
+                  <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">NOTION_ONBOARDINGS_DB_ID</code>.
                 </p>
                 {!timeEntriesDatabaseIdConfigured && (
                   <p className="text-sm text-error">Set NOTION_DATABASE_ID in the deployment environment so the Time Entries schema can be loaded.</p>
                 )}
                 {timeEntriesDatabaseIdConfigured && (
                   <div className="text-xs font-mono text-on-surface-variant break-all space-y-1">
-                    {notionTasksDbId ? <p>Tasks DB: {notionTasksDbId}</p> : <p className="text-subtle-ink">Tasks DB: not resolved (check Task relation on Time Entries)</p>}
-                    {notionTeamMembersDbId ? <p>Team Members DB: {notionTeamMembersDbId}</p> : <p className="text-subtle-ink">Team Members DB: not resolved (check Team Member relation)</p>}
+                    {notionTasksDbId ? <p>Tasks: {notionTasksDbId}</p> : <p className="text-subtle-ink">Tasks: not resolved</p>}
+                    {notionTeamMembersDbId ? <p>Team Members: {notionTeamMembersDbId}</p> : <p className="text-subtle-ink">Team Members: not resolved</p>}
+                    {notionTeamsDbId ? <p>Teams: {notionTeamsDbId}</p> : <p className="text-subtle-ink">Teams: not resolved</p>}
+                    {notionOnboardingsDbId ? <p>Onboardings: {notionOnboardingsDbId}</p> : <p className="text-subtle-ink">Onboardings: not resolved</p>}
                   </div>
                 )}
               </div>
-              <Input label="Onboarding Database ID" value={notionOnboardingsDbId} onChange={(e) => setNotionOnboardingsDbId(e.target.value)} placeholder="a1a106fab63548089279dc54d63eab89" />
-              <Input label="Teams Database ID" value={notionTeamsDbId} onChange={(e) => setNotionTeamsDbId(e.target.value)} placeholder="..." />
               <Input label="MasterClasses Index Database ID" value={notionMasterClassesIndexDbId} onChange={(e) => setNotionMasterClassesIndexDbId(e.target.value)} placeholder="286a1576955180488db8eb63daccc66c" hint="Database whose rows map teams to the target MasterClass databases." />
             </div>
 
@@ -163,12 +160,12 @@ export function ControlForm() {
                 Search Notion databases
               </h2>
               <p className="text-sm text-on-surface-variant mt-1" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
-                Once the integration key is saved, search your connected Notion workspace and apply database IDs for Onboarding and Teams.
+                Search your workspace to find a database ID when you need to paste the MasterClasses index manually above.
               </p>
             </div>
             <div className="flex gap-3">
               <div className="flex-1 flex flex-col gap-1.5">
-                <Input label="Search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Tasks, Team Members, Teams…" />
+                <Input label="Search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="MasterClasses index database…" />
                 <div className="h-4">{searching ? <InlineSearchLoading label="Searching Notion…" /> : null}</div>
               </div>
               <div className="self-end">
@@ -184,8 +181,9 @@ export function ControlForm() {
                       <p className="text-xs text-subtle-ink break-all">{db.id}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="ghost" size="sm" type="button" onClick={() => applyDatabase(db.id, "onboardings")}>Use for Onboarding</Button>
-                      <Button variant="ghost" size="sm" type="button" onClick={() => applyDatabase(db.id, "teams")}>Use for Teams</Button>
+                      <Button variant="ghost" size="sm" type="button" onClick={() => setNotionMasterClassesIndexDbId(db.id)}>
+                        Use for MasterClasses index
+                      </Button>
                     </div>
                   </div>
                 ))}

@@ -44,9 +44,18 @@ function normalizeTaskQuery(query: string) {
 }
 
 function getPageTitle(page: NotionPageResult): string {
-  const titleProp = Object.values(page.properties ?? {}).find((prop) => prop.type === "title");
-  const title = titleProp?.title?.map((t) => t.plain_text ?? "").join("").trim();
-  return title || "Untitled task";
+  const props = page.properties ?? {};
+  const titleProp = Object.values(props).find((prop) => prop.type === "title");
+  if (titleProp?.type === "title") {
+    const title = titleProp.title?.map((t) => t.plain_text ?? "").join("").trim();
+    if (title) return title;
+  }
+  const richProp = Object.values(props).find((prop) => prop.type === "rich_text");
+  if (richProp?.type === "rich_text") {
+    const text = richProp.rich_text?.map((t) => t.plain_text ?? "").join("").trim();
+    if (text) return text;
+  }
+  return "Untitled task";
 }
 
 function matchesTaskQuery(title: string, query: string) {
@@ -56,14 +65,51 @@ function matchesTaskQuery(title: string, query: string) {
   return normalizedTitle.includes(normalizedQuery);
 }
 
+/** Notion 2025-09-03+ uses data sources; `POST /databases/{id}/query` is deprecated for migrated DBs. */
+const taskDatabaseQueryEndpointCache = new Map<string, Promise<{ url: string; version: string }>>();
+
+async function getTaskDatabaseQueryEndpoint(databaseId: string, apiKey: string) {
+  const hit = taskDatabaseQueryEndpointCache.get(databaseId);
+  if (hit) return hit;
+
+  const promise = (async () => {
+    const dataSourceId = await getDatabaseDataSourceId(databaseId, apiKey);
+    if (dataSourceId) {
+      return {
+        url: `${NOTION_API_BASE}/data_sources/${dataSourceId}/query`,
+        version: NOTION_TEMPLATE_VERSION,
+      };
+    }
+    return {
+      url: `${NOTION_API_BASE}/databases/${databaseId}/query`,
+      version: NOTION_VERSION,
+    };
+  })();
+
+  taskDatabaseQueryEndpointCache.set(databaseId, promise);
+  return promise;
+}
+
 async function queryTaskPages(params: {
   databaseId: string;
   pageSize: number;
   filterPropertyName?: string | null;
   query?: string;
+  /** When the name column is rich_text, Notion requires `rich_text.contains`, not `title.contains`. */
+  titlePropertyType?: "title" | "rich_text" | null;
   startCursor?: string;
 }) {
-  const { databaseId, pageSize, filterPropertyName, query, startCursor } = params;
+  const apiKey = process.env.NOTION_API_KEY;
+  if (!apiKey) {
+    return {
+      ok: false as const,
+      status: 401,
+      errorText: "Missing NOTION_API_KEY",
+      data: null,
+    };
+  }
+
+  const { databaseId, pageSize, filterPropertyName, query, titlePropertyType, startCursor } = params;
   const trimmedQuery = query?.trim() ?? "";
 
   const body: Record<string, unknown> = {
@@ -75,17 +121,21 @@ async function queryTaskPages(params: {
   }
 
   if (trimmedQuery && filterPropertyName) {
+    const valueFilter =
+      titlePropertyType === "rich_text"
+        ? { rich_text: { contains: trimmedQuery } }
+        : { title: { contains: trimmedQuery } };
     body.filter = {
       property: filterPropertyName,
-      title: {
-        contains: trimmedQuery,
-      },
+      ...valueFilter,
     };
   }
 
-  const res = await fetch(`${NOTION_API_BASE}/databases/${databaseId}/query`, {
+  const { url, version } = await getTaskDatabaseQueryEndpoint(databaseId, apiKey);
+
+  const res = await fetch(url, {
     method: "POST",
-    headers: notionHeaders(),
+    headers: notionHeaders(version, apiKey),
     body: JSON.stringify(body),
   });
 
@@ -153,14 +203,23 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
   const trimmedQuery = query.trim();
 
   try {
-    const schema = await getDatabaseSchema(dbId);
-    const titleProperty = findPropertyName(schema.properties, ["Name", "Title", "Task", "Task Name"], ["title"]);
+    let schema: NotionDatabaseResponse;
+    try {
+      schema = await getDatabaseSchema(dbId);
+    } catch {
+      schema = await getDatabaseSchema(dbId, NOTION_TEMPLATE_VERSION, process.env.NOTION_API_KEY);
+    }
+
+    const titleProperty = findPropertyName(schema.properties, ["Name", "Title", "Task", "Task Name"], ["title", "rich_text"]);
+    const propType = titleProperty ? schema.properties[titleProperty]?.type : undefined;
+    const titlePropertyType = propType === "rich_text" ? "rich_text" : titleProperty ? "title" : null;
 
     const primary = await queryTaskPages({
       databaseId: dbId,
       pageSize: 10,
-      filterPropertyName: titleProperty,
+      filterPropertyName: titleProperty ?? null,
       query: trimmedQuery,
+      titlePropertyType,
     });
 
     if (primary.ok && primary.data) {

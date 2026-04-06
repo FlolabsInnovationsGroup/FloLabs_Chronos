@@ -412,7 +412,8 @@ Chronos exposes a task search API:
 This queries the Notion Tasks database and returns task candidates for UI selection.
 
 ### Search behavior
-- the API detects and uses the Tasks DB schema dynamically
+- the API detects and uses the Tasks DB schema dynamically (including `title` or `rich_text` name columns)
+- **Notion 2025-09-03+**: query uses `POST /v1/data_sources/{id}/query` when the Tasks database exposes a data source (migrated workspaces); otherwise it uses legacy `POST /v1/databases/{id}/query`
 - it supports short queries such as `F`
 - it falls back to a broader scan/filter path if the filtered Notion query is empty
 - it can surface configuration errors in the response metadata for debugging

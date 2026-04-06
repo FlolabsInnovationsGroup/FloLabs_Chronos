@@ -7,6 +7,8 @@ const NOTION_TEMPLATE_VERSION = "2026-03-11";
 
 interface NotionDatabaseProperty {
   type: string;
+  /** Present on `relation` properties from Retrieve a database (single-property relations to one database). */
+  relation?: { database_id?: string; type?: string };
 }
 
 interface NotionBlockResult {
@@ -69,7 +71,8 @@ function matchesTaskQuery(title: string, query: string) {
 const taskDatabaseQueryEndpointCache = new Map<string, Promise<{ url: string; version: string }>>();
 
 async function getTaskDatabaseQueryEndpoint(databaseId: string, apiKey: string) {
-  const hit = taskDatabaseQueryEndpointCache.get(databaseId);
+  const cacheKey = `${databaseId}:${apiKey}`;
+  const hit = taskDatabaseQueryEndpointCache.get(cacheKey);
   if (hit) return hit;
 
   const promise = (async () => {
@@ -86,12 +89,13 @@ async function getTaskDatabaseQueryEndpoint(databaseId: string, apiKey: string) 
     };
   })();
 
-  taskDatabaseQueryEndpointCache.set(databaseId, promise);
+  taskDatabaseQueryEndpointCache.set(cacheKey, promise);
   return promise;
 }
 
 async function queryTaskPages(params: {
   databaseId: string;
+  apiKey: string;
   pageSize: number;
   filterPropertyName?: string | null;
   query?: string;
@@ -99,17 +103,15 @@ async function queryTaskPages(params: {
   titlePropertyType?: "title" | "rich_text" | null;
   startCursor?: string;
 }) {
-  const apiKey = process.env.NOTION_API_KEY;
+  const { databaseId, apiKey, pageSize, filterPropertyName, query, titlePropertyType, startCursor } = params;
   if (!apiKey) {
     return {
       ok: false as const,
       status: 401,
-      errorText: "Missing NOTION_API_KEY",
+      errorText: "Missing Notion API key",
       data: null,
     };
   }
-
-  const { databaseId, pageSize, filterPropertyName, query, titlePropertyType, startCursor } = params;
   const trimmedQuery = query?.trim() ?? "";
 
   const body: Record<string, unknown> = {
@@ -163,7 +165,11 @@ async function queryTaskPages(params: {
   };
 }
 
-async function fallbackTaskSearch(databaseId: string, query: string): Promise<{ id: string; title: string }[]> {
+async function fallbackTaskSearch(
+  databaseId: string,
+  query: string,
+  apiKey: string
+): Promise<{ id: string; title: string }[]> {
   const normalizedQuery = normalizeTaskQuery(query);
   const matches: { id: string; title: string }[] = [];
   const seen = new Set<string>();
@@ -174,6 +180,7 @@ async function fallbackTaskSearch(databaseId: string, query: string): Promise<{ 
   do {
     const response = await queryTaskPages({
       databaseId,
+      apiKey,
       pageSize: 100,
       startCursor: cursor,
     });
@@ -197,17 +204,24 @@ async function fallbackTaskSearch(databaseId: string, query: string): Promise<{ 
 }
 
 export async function searchTasks(query: string): Promise<{ id: string; title: string }[]> {
-  const dbId = process.env.NOTION_TASKS_DB_ID;
-  if (!dbId || !process.env.NOTION_API_KEY) return [];
+  const { notionApiKey, notionTasksDbId } = await getNotionConfig();
+  if (!notionApiKey) return [];
+
+  let dbId = notionTasksDbId;
+  if (!dbId) {
+    const entriesSchema = await loadTimeEntriesDatabaseSchema(notionApiKey);
+    dbId = entriesSchema ? getTasksDatabaseIdFromTimeEntriesSchema(entriesSchema) : null;
+  }
+  if (!dbId) return [];
 
   const trimmedQuery = query.trim();
 
   try {
     let schema: NotionDatabaseResponse;
     try {
-      schema = await getDatabaseSchema(dbId);
+      schema = await getDatabaseSchema(dbId, NOTION_VERSION, notionApiKey);
     } catch {
-      schema = await getDatabaseSchema(dbId, NOTION_TEMPLATE_VERSION, process.env.NOTION_API_KEY);
+      schema = await getDatabaseSchema(dbId, NOTION_TEMPLATE_VERSION, notionApiKey);
     }
 
     const titleProperty = findPropertyName(schema.properties, ["Name", "Title", "Task", "Task Name"], ["title", "rich_text"]);
@@ -216,6 +230,7 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
 
     const primary = await queryTaskPages({
       databaseId: dbId,
+      apiKey: notionApiKey,
       pageSize: 10,
       filterPropertyName: titleProperty ?? null,
       query: trimmedQuery,
@@ -232,7 +247,7 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
       }
     }
 
-    return await fallbackTaskSearch(dbId, trimmedQuery);
+    return await fallbackTaskSearch(dbId, trimmedQuery, notionApiKey);
   } catch {
     return [];
   }
@@ -266,6 +281,32 @@ async function getDatabaseSchema(databaseId: string, version = NOTION_VERSION, a
 
   databaseSchemaPromises.set(cacheKey, promise);
   return promise;
+}
+
+/**
+ * Time Entries DB `Task` relation (single-database) exposes `relation.database_id` — the linked Tasks database.
+ * Dual / multi relations are not supported here.
+ */
+function getTasksDatabaseIdFromTimeEntriesSchema(schema: NotionDatabaseResponse): string | null {
+  const task = schema.properties["Task"];
+  if (task?.type === "relation" && task.relation?.database_id) {
+    return task.relation.database_id;
+  }
+  return null;
+}
+
+async function loadTimeEntriesDatabaseSchema(notionApiKey: string): Promise<NotionDatabaseResponse | null> {
+  const entriesDbId = process.env.NOTION_DATABASE_ID;
+  if (!entriesDbId) return null;
+  try {
+    return await getDatabaseSchema(entriesDbId, NOTION_VERSION, notionApiKey);
+  } catch {
+    try {
+      return await getDatabaseSchema(entriesDbId, NOTION_TEMPLATE_VERSION, notionApiKey);
+    } catch {
+      return null;
+    }
+  }
 }
 
 async function queryAllDatabasePages(databaseId: string, notionApiKey: string): Promise<NotionPageResult[]> {

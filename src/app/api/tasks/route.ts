@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { getNotionConfig } from "@/lib/app-config";
 import { searchTasks } from "@/lib/notion";
 
 export async function GET(req: Request) {
@@ -9,21 +10,28 @@ export async function GET(req: Request) {
   const q = new URL(req.url).searchParams.get("q") ?? "";
 
   try {
+    const config = await getNotionConfig();
     const tasks = await searchTasks(q);
+    const taskSearchConfigured = Boolean(
+      config.notionApiKey && (config.notionTasksDbId || process.env.NOTION_DATABASE_ID)
+    );
     return NextResponse.json({
       tasks,
       meta: {
         query: q,
-        taskSearchConfigured: Boolean(process.env.NOTION_TASKS_DB_ID && process.env.NOTION_API_KEY),
+        taskSearchConfigured,
       },
     });
   } catch (error) {
+    const config = await getNotionConfig().catch(() => null);
     return NextResponse.json(
       {
         tasks: [],
         meta: {
           query: q,
-          taskSearchConfigured: Boolean(process.env.NOTION_TASKS_DB_ID && process.env.NOTION_API_KEY),
+          taskSearchConfigured: Boolean(
+            config?.notionApiKey && (config?.notionTasksDbId || process.env.NOTION_DATABASE_ID)
+          ),
         },
         error: error instanceof Error ? error.message : "Task search failed",
       },

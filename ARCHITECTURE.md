@@ -411,6 +411,10 @@ Chronos exposes a task search API:
 
 This queries the Notion Tasks database and returns task candidates for UI selection.
 
+**Tasks database resolution (in order):**
+1. `NOTION_TASKS_DB_ID` environment variable, or the Control panel value stored as `notion.tasksDbId` in app config (via `getNotionConfig()` — same source as other Notion DB IDs).
+2. If neither is set: load the Time Entries database (`NOTION_DATABASE_ID`), read the **`Task`** relation property schema, and use **`relation.database_id`** (single-property relations only; dual-property / multi-database relations are not resolved here).
+
 ### Search behavior
 - the API detects and uses the Tasks DB schema dynamically (including `title` or `rich_text` name columns)
 - **Notion 2025-09-03+**: query uses `POST /v1/data_sources/{id}/query` when the Tasks database exposes a data source (migrated workspaces); otherwise it uses legacy `POST /v1/databases/{id}/query`

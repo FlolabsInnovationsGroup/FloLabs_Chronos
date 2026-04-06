@@ -71,7 +71,11 @@ export function TaskPicker({
       setErrorMessage("");
       try {
         const res = await fetch(`/api/tasks?q=${encodeURIComponent(query)}`, { signal: ctrl.signal });
-        const data = await res.json();
+        const data = (await res.json()) as {
+          tasks?: TaskOption[];
+          meta?: { taskSearchConfigured?: boolean; query?: string };
+          error?: string;
+        };
 
         if (!res.ok) {
           setOptions([]);
@@ -79,18 +83,26 @@ export function TaskPicker({
           return;
         }
 
-        setOptions((data.tasks ?? []) as TaskOption[]);
-
-        if (data.meta && data.meta.taskSearchConfigured === false) {
-          setErrorMessage("Task search is not configured in the running environment.");
-          return;
-        }
+        const tasks = (data.tasks ?? []) as TaskOption[];
+        setOptions(tasks);
 
         if (data.error) {
           setErrorMessage(data.error);
           return;
         }
-      } catch {
+
+        if (
+          tasks.length === 0 &&
+          data.meta &&
+          data.meta.taskSearchConfigured === false
+        ) {
+          setErrorMessage("Task search is not configured in the running environment.");
+        }
+      } catch (e) {
+        const aborted =
+          (e instanceof DOMException && e.name === "AbortError") ||
+          (e instanceof Error && e.name === "AbortError");
+        if (aborted) return;
         setOptions([]);
         setErrorMessage("Could not load tasks.");
       } finally {

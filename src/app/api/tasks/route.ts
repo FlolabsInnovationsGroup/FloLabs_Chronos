@@ -12,7 +12,9 @@ export async function GET(req: Request) {
   try {
     const config = await getNotionConfig();
     const tasks = await searchTasks(q);
-    const taskSearchConfigured = Boolean(config.notionApiKey && config.notionTasksDbId);
+    const taskSearchConfigured = Boolean(
+      config.notionApiKey && (config.notionTasksDbId || process.env.NOTION_DATABASE_ID)
+    );
     return NextResponse.json({
       tasks,
       meta: {
@@ -27,7 +29,9 @@ export async function GET(req: Request) {
         tasks: [],
         meta: {
           query: q,
-          taskSearchConfigured: Boolean(config?.notionApiKey && config?.notionTasksDbId),
+          taskSearchConfigured: Boolean(
+            config?.notionApiKey && (config?.notionTasksDbId || process.env.NOTION_DATABASE_ID)
+          ),
         },
         error: error instanceof Error ? error.message : "Task search failed",
       },

@@ -57,7 +57,7 @@ export const FloatingListPanel = forwardRef<HTMLDivElement, FloatingListPanelPro
           position: "fixed",
           top: box.top,
           left: box.left,
-          width: box.width,
+          width: Math.max(box.width, 200),
           zIndex: PANEL_Z,
         }}
       >

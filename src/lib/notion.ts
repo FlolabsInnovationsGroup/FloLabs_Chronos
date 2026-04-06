@@ -45,16 +45,27 @@ function normalizeTaskQuery(query: string) {
   return query.trim().toLowerCase();
 }
 
+function richTextFragmentsPlain(fragments: NotionTitleFragment[] | undefined): string {
+  if (!fragments?.length) return "";
+  return fragments
+    .map((t) => {
+      const f = t as NotionTitleFragment & { text?: { content?: string } };
+      return f.plain_text ?? f.text?.content ?? "";
+    })
+    .join("")
+    .trim();
+}
+
 function getPageTitle(page: NotionPageResult): string {
   const props = page.properties ?? {};
   const titleProp = Object.values(props).find((prop) => prop.type === "title");
   if (titleProp?.type === "title") {
-    const title = titleProp.title?.map((t) => t.plain_text ?? "").join("").trim();
+    const title = richTextFragmentsPlain(titleProp.title);
     if (title) return title;
   }
   const richProp = Object.values(props).find((prop) => prop.type === "rich_text");
   if (richProp?.type === "rich_text") {
-    const text = richProp.rich_text?.map((t) => t.plain_text ?? "").join("").trim();
+    const text = richTextFragmentsPlain(richProp.rich_text);
     if (text) return text;
   }
   return "Untitled task";
@@ -190,19 +201,16 @@ async function queryTaskPages(params: {
     };
   }
 
-  const raw = (await res.json()) as {
-    results?: unknown[];
-    has_more?: boolean;
-    next_cursor?: string | null;
-  };
+  const raw = (await res.json()) as Record<string, unknown>;
+  const rawList = extractNotionQueryResults(raw);
 
-  let results = normalizeNotionQueryResults(raw.results);
+  let results = normalizeNotionQueryResults(rawList);
   results = await hydrateTaskPagesForSearch(results, apiKey);
 
   const data = {
     results,
-    has_more: raw.has_more,
-    next_cursor: raw.next_cursor,
+    has_more: Boolean(raw.has_more),
+    next_cursor: (raw.next_cursor as string | null | undefined) ?? null,
   };
 
   return {
@@ -216,12 +224,12 @@ async function queryTaskPages(params: {
 function taskPageNeedsTitleHydration(page: NotionPageResult): boolean {
   const props = page.properties;
   if (!props || typeof props !== "object") return true;
-  return !Object.values(props).some(
-    (prop) =>
-      prop &&
-      ((prop.type === "title" && prop.title && prop.title.length > 0) ||
-        (prop.type === "rich_text" && prop.rich_text && prop.rich_text.length > 0))
-  );
+  return !Object.values(props).some((prop) => {
+    if (!prop) return false;
+    if (prop.type === "title" && prop.title?.length) return richTextFragmentsPlain(prop.title).length > 0;
+    if (prop.type === "rich_text" && prop.rich_text?.length) return richTextFragmentsPlain(prop.rich_text).length > 0;
+    return false;
+  });
 }
 
 async function retrieveNotionPageForTaskSearch(pageId: string, apiKey: string): Promise<NotionPageResult | null> {
@@ -253,14 +261,20 @@ async function hydrateTaskPagesForSearch(pages: NotionPageResult[], apiKey: stri
   return pages.map((p) => byId.get(p.id) ?? p);
 }
 
-/** Data-source queries may return only `object: "page"` rows; filter out non-page entries. */
+function extractNotionQueryResults(json: Record<string, unknown>): unknown[] {
+  if (Array.isArray(json.results)) return json.results;
+  return [];
+}
+
+/** Keep database pages; drop `data_source` wiki rows; include id-only partial pages. */
 function normalizeNotionQueryResults(results: unknown): NotionPageResult[] {
   if (!Array.isArray(results)) return [];
   const out: NotionPageResult[] = [];
   for (const item of results) {
     if (!item || typeof item !== "object") continue;
-    const o = item as { object?: string; properties?: unknown };
-    if (o.object === "page" || (o.properties && typeof o.properties === "object")) {
+    const o = item as { object?: string; id?: string; properties?: unknown };
+    if (o.object === "data_source") continue;
+    if (o.object === "page" || (typeof o.id === "string" && o.id.length > 0)) {
       out.push(item as NotionPageResult);
     }
   }
@@ -311,7 +325,15 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
   const { notionApiKey, notionTasksDbId } = await getNotionConfig();
   if (!notionApiKey) return [];
 
-  const dbId = notionTasksDbId;
+  let dbId = notionTasksDbId;
+  if (!dbId && process.env.NOTION_DATABASE_ID) {
+    try {
+      const derived = await resolveNotionDatabaseIdsFromRelations(notionApiKey);
+      dbId = derived.tasksDbId;
+    } catch {
+      /* ignore — same derivation as getNotionConfig; second chance if config path failed */
+    }
+  }
   if (!dbId) return [];
 
   const trimmedQuery = query.trim();

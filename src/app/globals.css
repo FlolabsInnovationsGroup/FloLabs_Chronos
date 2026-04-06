@@ -76,6 +76,8 @@
   --c-label-muted: #8b8b84;
   --c-overlay-scrim: rgb(49 51 47 / 0.2);
   --c-paper-shadow: 0 12px 32px -4px rgb(49 51 47 / 0.06);
+  /* Left edge of sticky right columns (e.g. Users table Actions); no extra DOM, theme-aware */
+  --c-sticky-column-shadow: -10px 0 24px -10px rgb(49 51 47 / 0.14);
   --c-ring-primary: rgb(54 103 105 / 0.2);
   --c-ring-error: rgb(167 59 33 / 0.3);
 }
@@ -145,6 +147,7 @@ html.dark {
   --c-label-muted: #7a7a72;
   --c-overlay-scrim: rgb(0 0 0 / 0.55);
   --c-paper-shadow: 0 12px 32px -4px rgb(0 0 0 / 0.45);
+  --c-sticky-column-shadow: -12px 0 28px -10px rgb(0 0 0 / 0.55);
   --c-ring-primary: rgb(142 203 206 / 0.35);
   --c-ring-error: rgb(242 154 127 / 0.35);
 }

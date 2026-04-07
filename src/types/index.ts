@@ -99,6 +99,8 @@ export interface TimeEntry {
 export interface ActiveTimer {
   userId: string;
   projectId: string | null;
+  /** Denormalized for Redis / SSE; resolved from DB when project changes. */
+  projectName?: string | null;
   projectRequiresTaskOnStop?: boolean;
   tagIds: string[];
   description: string;

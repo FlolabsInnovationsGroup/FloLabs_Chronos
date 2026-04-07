@@ -27,10 +27,10 @@ export async function POST(req: Request) {
   const userId = session.user.id;
   const startedAt = Date.now();
 
-  let selectedProject: { id: string; requiresTaskOnStop: boolean } | null = null;
+  let selectedProject: { id: string; requiresTaskOnStop: boolean; name: string } | null = null;
   if (db && projectId) {
     const [project] = await db
-      .select({ id: projects.id, requiresTaskOnStop: projects.requiresTaskOnStop })
+      .select({ id: projects.id, requiresTaskOnStop: projects.requiresTaskOnStop, name: projects.name })
       .from(projects)
       .where(eq(projects.id, projectId))
       .limit(1);
@@ -57,6 +57,7 @@ export async function POST(req: Request) {
   const timer = {
     userId,
     projectId: projectId ?? null,
+    projectName: selectedProject?.name ?? null,
     projectRequiresTaskOnStop: selectedProject?.requiresTaskOnStop ?? false,
     tagIds: uniqueTagIds,
     description,

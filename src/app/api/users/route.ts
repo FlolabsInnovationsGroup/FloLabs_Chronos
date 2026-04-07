@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getAccessibleUsers } from "@/lib/permissions";
 import { getAllActiveTimers } from "@/lib/redis";
+import { db } from "@/lib/db";
+import { projects, timeEntries } from "@/lib/db/schema";
+import { and, inArray, isNull } from "drizzle-orm";
 import type { ActiveTimer } from "@/types";
 
 export async function GET() {
@@ -12,6 +15,43 @@ export async function GET() {
 
   const rows = await getAccessibleUsers(session.user);
   const activeTimers: Record<string, ActiveTimer> = await getAllActiveTimers().catch(() => ({}));
+  const activeUserIds = Object.keys(activeTimers);
+
+  /** Running Postgres row may still have project_id when Redis timer predates projectName or projectId sync. */
+  const runningProjectIdByUser = new Map<string, string>();
+  if (db && activeUserIds.length > 0) {
+    const runningRows = await db
+      .select({ userId: timeEntries.userId, projectId: timeEntries.projectId })
+      .from(timeEntries)
+      .where(and(isNull(timeEntries.stoppedAt), inArray(timeEntries.userId, activeUserIds)));
+    for (const row of runningRows) {
+      if (row.projectId) {
+        runningProjectIdByUser.set(row.userId, row.projectId);
+      }
+    }
+  }
+
+  const projectIdSet = new Set<string>();
+  for (const timer of Object.values(activeTimers)) {
+    if (typeof timer.projectId === "string" && timer.projectId.length > 0) {
+      projectIdSet.add(timer.projectId);
+    }
+  }
+  for (const pid of runningProjectIdByUser.values()) {
+    if (pid) projectIdSet.add(pid);
+  }
+  const uniqueProjectIds = [...projectIdSet];
+
+  const activeProjectNameById = new Map<string, string>();
+  if (db && uniqueProjectIds.length > 0) {
+    const activeProjectRows = await db
+      .select({ id: projects.id, name: projects.name })
+      .from(projects)
+      .where(inArray(projects.id, uniqueProjectIds));
+    for (const project of activeProjectRows) {
+      activeProjectNameById.set(project.id, project.name);
+    }
+  }
 
   const users = rows.map((user) => {
     const activeTimer = activeTimers[user.id];
@@ -19,13 +59,21 @@ export async function GET() {
     return {
       ...user,
       activeTimer: activeTimer
-        ? {
-            startedAt: activeTimer.startedAt,
-            description: activeTimer.description,
-            projectId: activeTimer.projectId,
-            notionTaskPageId: activeTimer.notionTaskPageId ?? null,
-            notionTaskTitle: activeTimer.notionTaskTitle ?? null,
-          }
+        ? (() => {
+            const effectiveProjectId =
+              activeTimer.projectId ?? runningProjectIdByUser.get(user.id) ?? null;
+            const projectName =
+              (typeof activeTimer.projectName === "string" ? activeTimer.projectName : null) ??
+              (effectiveProjectId ? (activeProjectNameById.get(effectiveProjectId) ?? null) : null);
+            return {
+              startedAt: activeTimer.startedAt,
+              description: activeTimer.description,
+              projectId: effectiveProjectId,
+              projectName,
+              notionTaskPageId: activeTimer.notionTaskPageId ?? null,
+              notionTaskTitle: activeTimer.notionTaskTitle ?? null,
+            };
+          })()
         : null,
     };
   });

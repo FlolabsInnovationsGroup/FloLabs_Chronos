@@ -536,12 +536,11 @@ export default function TeamPage() {
     "px-3 sm:px-4 lg:px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-on-surface-variant";
   const compactBodyCellClass = "px-3 sm:px-4 lg:px-5 py-4 align-top";
   const compactEmptyCellClass = "px-3 sm:px-4 lg:px-5 py-10 text-center text-sm text-outline-variant";
-  // Do not add `relative` here: it overrides `sticky` in Tailwind (both set `position`) and breaks the
-  // right-pinned column — header, background, and shadow then drift with horizontal scroll.
+  /** No sticky/shadow here — sticky + table-fixed caused misalignment; last column is plain + right-aligned. */
   const tableActionsHeadClass =
-    "min-w-[7.5rem] md:sticky md:right-0 md:z-[2] md:overflow-visible md:border-l md:border-outline-variant/30 md:bg-surface-container-low md:whitespace-nowrap md:text-right md:[box-shadow:var(--c-sticky-column-shadow)]";
+    "border-l border-outline-variant/30 bg-surface-container-low whitespace-nowrap text-right pl-3 min-w-[8.5rem] align-top";
   const tableActionsCellClass = (stripedRow: boolean) =>
-    `min-w-[7.5rem] md:sticky md:right-0 md:z-[1] md:overflow-visible md:border-l md:border-outline-variant/30 md:whitespace-nowrap md:text-right md:[box-shadow:var(--c-sticky-column-shadow)] ${stripedRow ? "md:bg-background" : "md:bg-surface-container-lowest"}`;
+    `border-l border-outline-variant/30 whitespace-nowrap text-right pl-3 min-w-[8.5rem] align-top ${stripedRow ? "bg-background" : "bg-surface-container-lowest"}`;
 
   return (
     <div className="flex flex-col gap-8 max-w-[90rem] mx-auto">
@@ -704,19 +703,8 @@ export default function TeamPage() {
 
       {activeTab === "users" && (
           <>
-            <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto overflow-y-visible pr-2 xl:overflow-x-visible xl:pr-0 [scrollbar-gutter:stable]">
-              <table className="w-full min-w-[1000px] max-w-full table-fixed border-separate border-spacing-0 xl:min-w-0">
-                <colgroup>
-                  <col style={{ width: "19%" }} />
-                  <col style={{ width: "9%" }} />
-                  <col style={{ width: "17%" }} />
-                  <col style={{ width: "19%" }} />
-                  <col style={{ width: "8%" }} />
-                  <col style={{ width: "8%" }} />
-                  <col style={{ width: "8%" }} />
-                  {/* Enough width for label + icon buttons; was 5% and clipped on desktop */}
-                  <col style={{ width: "12%" }} />
-                </colgroup>
+            <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto overflow-y-visible">
+              <table className="w-full min-w-0 table-auto border-separate border-spacing-0">
                 <thead>
                   <tr className="bg-surface-container-low">
                     {userColumns.map((column) => (
@@ -762,7 +750,7 @@ export default function TeamPage() {
                       const liveDuration = getLiveDuration(user.activeTimer?.startedAt, now);
                       return (
                         <tr key={user.id} className={index % 2 === 0 ? "" : "bg-background"}>
-                          <td className={`${compactBodyCellClass} max-xl:min-w-[220px]`}>
+                          <td className={`${compactBodyCellClass} max-xl:min-w-[12rem]`}>
                             <div>
                               <p
                                 className="text-sm font-medium text-on-background"
@@ -783,7 +771,7 @@ export default function TeamPage() {
                               <span className="whitespace-nowrap">{formatRole(user.role)}</span>
                             </Badge>
                           </td>
-                          <td className={`${compactBodyCellClass} max-xl:min-w-[220px]`}>
+                          <td className={`${compactBodyCellClass} max-xl:min-w-[12rem]`}>
                             <div className="flex flex-wrap gap-1">
                               {(user.teams ?? []).length > 0 ? (
                                 (user.teams ?? []).map((team) => (
@@ -801,7 +789,7 @@ export default function TeamPage() {
                               )}
                             </div>
                           </td>
-                          <td className={`${compactBodyCellClass} max-xl:min-w-[240px]`}>
+                          <td className={`${compactBodyCellClass} max-xl:min-w-[14rem]`}>
                             {liveDuration !== null ? (
                               <div className="flex flex-col gap-1">
                                 <Badge color="custom" className="bg-warm-muted text-error-dim">Live · {formatDurationHuman(liveDuration)}</Badge>
@@ -842,20 +830,18 @@ export default function TeamPage() {
                                           </span>
                                         </Badge>
                                       </a>
-                                      {user.activeTimer.projectName && (
-                                        <p
-                                          className="text-xs text-on-surface-variant pl-0.5 flex items-start gap-1 min-w-0"
-                                          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                                        >
-                                          <span className="material-symbols-outlined shrink-0 mt-0.5" style={{ fontSize: "12px" }}>
-                                            folder_open
-                                          </span>
-                                          <span className="min-w-0 break-words">
-                                            <span className="text-outline-variant">Project · </span>
-                                            {user.activeTimer.projectName}
-                                          </span>
-                                        </p>
-                                      )}
+                                      <p
+                                        className="text-xs text-on-surface-variant pl-0.5 flex items-start gap-1 min-w-0"
+                                        style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                                      >
+                                        <span className="material-symbols-outlined shrink-0 mt-0.5" style={{ fontSize: "12px" }}>
+                                          folder_open
+                                        </span>
+                                        <span className="min-w-0 break-words">
+                                          <span className="text-outline-variant">Project · </span>
+                                          {user.activeTimer.projectName ?? "—"}
+                                        </span>
+                                      </p>
                                     </div>
                                   ) : (
                                     <div className="flex flex-col gap-0.5 min-w-0 max-w-full">
@@ -867,20 +853,18 @@ export default function TeamPage() {
                                           {user.activeTimer.notionTaskTitle}
                                         </span>
                                       </Badge>
-                                      {user.activeTimer.projectName && (
-                                        <p
-                                          className="text-xs text-on-surface-variant pl-0.5 flex items-start gap-1 min-w-0"
-                                          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                                        >
-                                          <span className="material-symbols-outlined shrink-0 mt-0.5" style={{ fontSize: "12px" }}>
-                                            folder_open
-                                          </span>
-                                          <span className="min-w-0 break-words">
-                                            <span className="text-outline-variant">Project · </span>
-                                            {user.activeTimer.projectName}
-                                          </span>
-                                        </p>
-                                      )}
+                                      <p
+                                        className="text-xs text-on-surface-variant pl-0.5 flex items-start gap-1 min-w-0"
+                                        style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                                      >
+                                        <span className="material-symbols-outlined shrink-0 mt-0.5" style={{ fontSize: "12px" }}>
+                                          folder_open
+                                        </span>
+                                        <span className="min-w-0 break-words">
+                                          <span className="text-outline-variant">Project · </span>
+                                          {user.activeTimer.projectName ?? "—"}
+                                        </span>
+                                      </p>
                                     </div>
                                   ))}
                               </div>

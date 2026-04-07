@@ -536,11 +536,11 @@ export default function TeamPage() {
     "px-3 sm:px-4 lg:px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-on-surface-variant";
   const compactBodyCellClass = "px-3 sm:px-4 lg:px-5 py-4 align-top";
   const compactEmptyCellClass = "px-3 sm:px-4 lg:px-5 py-10 text-center text-sm text-outline-variant";
-  /** No sticky/shadow here — sticky + table-fixed caused misalignment; last column is plain + right-aligned. */
+  /** Narrow last column: 1% width hint + nowrap so column sizes to content; tight padding vs other cells. */
   const tableActionsHeadClass =
-    "border-l border-outline-variant/30 bg-surface-container-low whitespace-nowrap text-right pl-3 min-w-[8.5rem] align-top";
+    "w-[1%] border-l border-outline-variant/30 bg-surface-container-low whitespace-nowrap text-right align-top !px-2 sm:!px-2.5 lg:!px-3 py-3";
   const tableActionsCellClass = (stripedRow: boolean) =>
-    `border-l border-outline-variant/30 whitespace-nowrap text-right pl-3 min-w-[8.5rem] align-top ${stripedRow ? "bg-background" : "bg-surface-container-lowest"}`;
+    `w-[1%] border-l border-outline-variant/30 whitespace-nowrap text-right align-top !px-2 sm:!px-2.5 lg:!px-3 py-4 ${stripedRow ? "bg-background" : "bg-surface-container-lowest"}`;
 
   return (
     <div className="flex flex-col gap-8 max-w-[90rem] mx-auto">
@@ -914,7 +914,7 @@ export default function TeamPage() {
                             <td
                               className={`${compactBodyCellClass} ${tableActionsCellClass(index % 2 !== 0)}`}
                             >
-                              <div className="flex gap-0.5 sm:gap-1 md:flex-nowrap md:justify-end">
+                              <div className="flex w-fit max-w-full gap-0.5 sm:gap-1 md:ml-auto md:flex-nowrap md:justify-end">
                                 {(role === "admin" || role === "team_lead") && (
                                   <>
                                     <Tooltip label="Edit member">
@@ -1040,7 +1040,7 @@ export default function TeamPage() {
                             </span>
                           </td>
                           <td className={`${compactBodyCellClass} ${tableActionsCellClass(index % 2 !== 0)}`}>
-                            <div className="flex gap-2 flex-wrap md:flex-nowrap md:justify-end">
+                            <div className="flex w-fit max-w-full flex-wrap gap-2 md:ml-auto md:flex-nowrap md:justify-end">
                               <Button variant="ghost" size="sm" onClick={() => void handleCopyInvite(invite.inviteUrl)}>
                                 Copy Link
                               </Button>

@@ -16,6 +16,7 @@ export interface User {
     startedAt: number;
     description: string;
     projectId: string | null;
+    projectName?: string | null;
     notionTaskPageId?: string | null;
     notionTaskTitle?: string | null;
   } | null;
@@ -59,6 +60,9 @@ export interface Project {
   icon: string;
   requiresTaskOnStop: boolean;
   archived: boolean;
+  createdById?: string | null;
+  /** Present when loaded from API with creator join (Projects list). */
+  createdBy?: { id: string; name: string } | null;
   createdAt: Date;
 }
 

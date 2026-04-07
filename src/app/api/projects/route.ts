@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { projects } from "@/lib/db/schema";
+import { projects, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { canManageProjects } from "@/lib/permissions";
@@ -12,8 +12,23 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!db) return NextResponse.json({ projects: [] });
 
-  const rows = await db.select().from(projects).orderBy(projects.name);
-  return NextResponse.json({ projects: rows });
+  const rows = await db
+    .select({
+      project: projects,
+      creatorId: users.id,
+      creatorName: users.name,
+    })
+    .from(projects)
+    .leftJoin(users, eq(projects.createdById, users.id))
+    .orderBy(projects.name);
+
+  return NextResponse.json({
+    projects: rows.map(({ project, creatorId, creatorName }) => ({
+      ...project,
+      createdBy:
+        creatorId != null ? { id: creatorId, name: creatorName ?? "Unknown" } : null,
+    })),
+  });
 }
 
 const createSchema = z.object({
@@ -21,6 +36,15 @@ const createSchema = z.object({
   color: z.string().default("#366769"),
   icon: z.string().default("folder"),
   requiresTaskOnStop: z.boolean().default(false),
+});
+
+/** Legacy PUT ?id= — only allow safe fields (never createdById). */
+const putUpdateSchema = z.object({
+  name: z.string().min(1).optional(),
+  color: z.string().optional(),
+  icon: z.string().optional(),
+  requiresTaskOnStop: z.boolean().optional(),
+  archived: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -34,7 +58,10 @@ export async function POST(req: Request) {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
 
-  const [project] = await db.insert(projects).values(parsed.data).returning();
+  const [project] = await db
+    .insert(projects)
+    .values({ ...parsed.data, createdById: session.user.id })
+    .returning();
   broadcastDataChange("projects");
   return NextResponse.json({ project }, { status: 201 });
 }
@@ -51,7 +78,13 @@ export async function PUT(req: Request) {
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   const body = await req.json();
-  const [project] = await db.update(projects).set(body).where(eq(projects.id, id)).returning();
+  const parsed = putUpdateSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
+  const [project] = await db
+    .update(projects)
+    .set(parsed.data)
+    .where(eq(projects.id, id))
+    .returning();
   broadcastDataChange("projects");
   return NextResponse.json({ project });
 }

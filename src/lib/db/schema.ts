@@ -136,6 +136,8 @@ export const projects = pgTable("projects", {
   icon: text("icon").default("folder"),
   requiresTaskOnStop: boolean("requires_task_on_stop").notNull().default(false),
   archived: boolean("archived").default(false),
+  /** Admin who created the project (only admins can create projects). */
+  createdById: uuid("created_by_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 

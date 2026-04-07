@@ -128,6 +128,9 @@ async function main() {
     console.log(`Created admin: ${adminEmail} / flchron2026`);
   }
 
+  const adminForProjects = await db.select({ id: users.id }).from(users).where(eq(users.email, adminEmail)).limit(1);
+  const createdById = adminForProjects[0]?.id ?? null;
+
   const sampleProjects = [
     { name: "Brand Guidelines", color: "#366769", icon: "palette" },
     { name: "Website Redesign", color: "#5c5e6e", icon: "web" },
@@ -135,7 +138,10 @@ async function main() {
   ];
   for (const p of sampleProjects) {
     const exists = await db.select({ id: projects.id }).from(projects).where(eq(projects.name, p.name)).limit(1);
-    if (exists.length === 0) { await db.insert(projects).values(p); console.log("Created project:", p.name); }
+    if (exists.length === 0) {
+      await db.insert(projects).values({ ...p, ...(createdById ? { createdById } : {}) });
+      console.log("Created project:", p.name);
+    }
   }
 
   // Tags are now per-user; seed only if admin user exists

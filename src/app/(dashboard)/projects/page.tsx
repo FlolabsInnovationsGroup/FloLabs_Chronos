@@ -103,6 +103,13 @@ function ProjectForm({
           <p className="text-xs text-outline-variant mt-0.5" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             {icon.replace(/_/g, " ")}
           </p>
+          {initial?.id && (
+            <p className="text-xs text-outline-variant mt-2" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+              {initial.createdBy?.name
+                ? `Created by ${initial.createdBy.name}`
+                : "Created by — (before tracking was enabled)"}
+            </p>
+          )}
         </div>
       </div>
 
@@ -347,6 +354,11 @@ export default function ProjectsPage() {
                   <p className="text-xs text-on-surface-variant mt-2" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
                     {project.requiresTaskOnStop ? "Task required to stop timers" : "Task optional on stop"}
                   </p>
+                  <p className="text-xs text-outline-variant mt-1.5" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                    {project.createdBy?.name
+                      ? `Created by ${project.createdBy.name}`
+                      : "Created by —"}
+                  </p>
                 </div>
 
                 {canManageProjects && (
@@ -391,7 +403,12 @@ export default function ProjectsPage() {
                       {project.icon ?? "folder"}
                     </span>
                   </div>
-                  <p className="text-sm text-on-surface-variant flex-1 truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{project.name}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-on-surface-variant truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>{project.name}</p>
+                    <p className="text-[11px] text-outline-variant mt-0.5 truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                      {project.createdBy?.name ? `Created by ${project.createdBy.name}` : "Created by —"}
+                    </p>
+                  </div>
                   {canManageProjects && (
                     <Tooltip label="Unarchive">
                       <button onClick={() => handleArchive(project)} className="p-1 rounded text-on-surface-variant hover:text-on-background opacity-0 group-hover:opacity-100 transition-all">

@@ -314,6 +314,7 @@ CREATE TABLE projects (
   icon                    TEXT DEFAULT 'folder',
   requires_task_on_stop   BOOLEAN NOT NULL DEFAULT false,
   archived                BOOLEAN DEFAULT false,
+  created_by_id           UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at              TIMESTAMPTZ DEFAULT now()
 );
 

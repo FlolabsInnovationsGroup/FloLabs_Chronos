@@ -536,10 +536,12 @@ export default function TeamPage() {
     "px-3 sm:px-4 lg:px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-on-surface-variant";
   const compactBodyCellClass = "px-3 sm:px-4 lg:px-5 py-4 align-top";
   const compactEmptyCellClass = "px-3 sm:px-4 lg:px-5 py-10 text-center text-sm text-outline-variant";
+  // Do not add `relative` here: it overrides `sticky` in Tailwind (both set `position`) and breaks the
+  // right-pinned column — header, background, and shadow then drift with horizontal scroll.
   const tableActionsHeadClass =
-    "md:sticky md:right-0 md:z-[2] md:relative md:overflow-visible md:border-l md:border-outline-variant/30 md:bg-surface-container-low md:whitespace-nowrap md:[box-shadow:var(--c-sticky-column-shadow)]";
+    "md:sticky md:right-0 md:z-[2] md:overflow-visible md:border-l md:border-outline-variant/30 md:bg-surface-container-low md:whitespace-nowrap md:text-right md:[box-shadow:var(--c-sticky-column-shadow)]";
   const tableActionsCellClass = (stripedRow: boolean) =>
-    `md:sticky md:right-0 md:z-[1] md:relative md:overflow-visible md:border-l md:border-outline-variant/30 md:whitespace-nowrap md:[box-shadow:var(--c-sticky-column-shadow)] ${stripedRow ? "md:bg-background" : "md:bg-surface-container-lowest"}`;
+    `md:sticky md:right-0 md:z-[1] md:overflow-visible md:border-l md:border-outline-variant/30 md:whitespace-nowrap md:text-right md:[box-shadow:var(--c-sticky-column-shadow)] ${stripedRow ? "md:bg-background" : "md:bg-surface-container-lowest"}`;
 
   return (
     <div className="flex flex-col gap-8 max-w-[90rem] mx-auto">

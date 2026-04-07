@@ -536,11 +536,11 @@ export default function TeamPage() {
     "px-3 sm:px-4 lg:px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-on-surface-variant";
   const compactBodyCellClass = "px-3 sm:px-4 lg:px-5 py-4 align-top";
   const compactEmptyCellClass = "px-3 sm:px-4 lg:px-5 py-10 text-center text-sm text-outline-variant";
-  /** Narrow last column: 1% width hint + nowrap so column sizes to content; tight padding vs other cells. */
+  /** Narrow column (w-[1%] + nowrap) + sticky right so it stays visible when the table scrolls horizontally. Never add `relative` — it overrides `sticky`. */
   const tableActionsHeadClass =
-    "w-[1%] border-l border-outline-variant/30 bg-surface-container-low whitespace-nowrap text-right align-top !px-2 sm:!px-2.5 lg:!px-3 py-3";
+    "sticky right-0 z-[2] w-[1%] border-l border-outline-variant/30 bg-surface-container-low whitespace-nowrap text-right align-top !px-2 sm:!px-2.5 lg:!px-3 py-3 [box-shadow:var(--c-sticky-column-shadow)]";
   const tableActionsCellClass = (stripedRow: boolean) =>
-    `w-[1%] border-l border-outline-variant/30 whitespace-nowrap text-right align-top !px-2 sm:!px-2.5 lg:!px-3 py-4 ${stripedRow ? "bg-background" : "bg-surface-container-lowest"}`;
+    `sticky right-0 z-[1] w-[1%] border-l border-outline-variant/30 whitespace-nowrap text-right align-top !px-2 sm:!px-2.5 lg:!px-3 py-4 [box-shadow:var(--c-sticky-column-shadow)] ${stripedRow ? "bg-background" : "bg-surface-container-lowest"}`;
 
   return (
     <div className="flex flex-col gap-8 max-w-[90rem] mx-auto">

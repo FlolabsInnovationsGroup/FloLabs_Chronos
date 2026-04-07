@@ -106,6 +106,7 @@ Projects are global:
 - Users may reassign the project of their own currently running timer from the active timer UI.
 - Only admins can create, edit, archive, restore, or delete projects.
 - Deleting a project also deletes linked time entries, with a warning/confirmation flow.
+- `projects.created_by_id` records which admin created the project. Legacy rows created before this column existed may be backfilled to the primary admin (earliest active `role = admin` user) via `scripts/backfill-projects-created-by-admin.sql`.
 
 ### Tags
 

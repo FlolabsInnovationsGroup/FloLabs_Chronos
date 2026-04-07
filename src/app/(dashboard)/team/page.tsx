@@ -703,7 +703,17 @@ export default function TeamPage() {
       {activeTab === "users" && (
           <>
             <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto overflow-y-visible">
-              <table className="w-full min-w-[880px] border-separate border-spacing-0 lg:min-w-[960px]">
+              <table className="w-full min-w-[1120px] table-fixed border-separate border-spacing-0">
+                <colgroup>
+                  <col style={{ width: "21%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "19%" }} />
+                  <col style={{ width: "21%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "5%" }} />
+                </colgroup>
                 <thead>
                   <tr className="bg-surface-container-low">
                     {userColumns.map((column) => (
@@ -749,7 +759,7 @@ export default function TeamPage() {
                       const liveDuration = getLiveDuration(user.activeTimer?.startedAt, now);
                       return (
                         <tr key={user.id} className={index % 2 === 0 ? "" : "bg-background"}>
-                          <td className={compactBodyCellClass}>
+                          <td className={`${compactBodyCellClass} min-w-[220px]`}>
                             <div>
                               <p
                                 className="text-sm font-medium text-on-background"
@@ -770,7 +780,7 @@ export default function TeamPage() {
                               <span className="whitespace-nowrap">{formatRole(user.role)}</span>
                             </Badge>
                           </td>
-                          <td className={compactBodyCellClass}>
+                          <td className={`${compactBodyCellClass} min-w-[220px]`}>
                             <div className="flex flex-wrap gap-1">
                               {(user.teams ?? []).length > 0 ? (
                                 (user.teams ?? []).map((team) => (
@@ -788,13 +798,24 @@ export default function TeamPage() {
                               )}
                             </div>
                           </td>
-                          <td className={compactBodyCellClass}>
+                          <td className={`${compactBodyCellClass} min-w-[240px]`}>
                             {liveDuration !== null ? (
                               <div className="flex flex-col gap-1">
                                 <Badge color="custom" className="bg-warm-muted text-error-dim">Live · {formatDurationHuman(liveDuration)}</Badge>
+                                {/* Session project when no Notion task (timer project only) */}
+                                {!user.activeTimer?.notionTaskTitle && user.activeTimer?.projectName && (
+                                  <Badge color="tertiary" className="max-w-full min-w-0">
+                                    <span className="material-symbols-outlined mr-0.5 shrink-0" style={{ fontSize: "11px" }}>
+                                      folder_open
+                                    </span>
+                                    <span className="truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                                      {user.activeTimer.projectName}
+                                    </span>
+                                  </Badge>
+                                )}
                                 {user.activeTimer?.description && (
                                   <p
-                                    className="max-w-[12rem] text-xs text-on-surface-variant break-words md:max-w-[14rem] lg:max-w-[16rem]"
+                                    className="max-w-[16rem] text-xs text-on-surface-variant break-words"
                                     style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                                   >
                                     {user.activeTimer.description}
@@ -802,12 +823,39 @@ export default function TeamPage() {
                                 )}
                                 {user.activeTimer?.notionTaskTitle &&
                                   (user.activeTimer.notionTaskPageId ? (
-                                    <a
-                                      href={`https://www.notion.so/${user.activeTimer.notionTaskPageId.replace(/-/g, "")}`}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="inline-flex max-w-full"
-                                    >
+                                    <div className="flex flex-col gap-0.5 min-w-0 max-w-full">
+                                      <a
+                                        href={`https://www.notion.so/${user.activeTimer.notionTaskPageId.replace(/-/g, "")}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex max-w-full"
+                                      >
+                                        <Badge color="secondary" className="max-w-full min-w-0">
+                                          <span className="material-symbols-outlined mr-0.5 shrink-0" style={{ fontSize: "11px" }}>
+                                            task
+                                          </span>
+                                          <span className="truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                                            {user.activeTimer.notionTaskTitle}
+                                          </span>
+                                        </Badge>
+                                      </a>
+                                      {user.activeTimer.projectName && (
+                                        <p
+                                          className="text-xs text-on-surface-variant pl-0.5 flex items-start gap-1 min-w-0"
+                                          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                                        >
+                                          <span className="material-symbols-outlined shrink-0 mt-0.5" style={{ fontSize: "12px" }}>
+                                            folder_open
+                                          </span>
+                                          <span className="min-w-0 break-words">
+                                            <span className="text-outline-variant">Project · </span>
+                                            {user.activeTimer.projectName}
+                                          </span>
+                                        </p>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col gap-0.5 min-w-0 max-w-full">
                                       <Badge color="secondary" className="max-w-full min-w-0">
                                         <span className="material-symbols-outlined mr-0.5 shrink-0" style={{ fontSize: "11px" }}>
                                           task
@@ -816,16 +864,21 @@ export default function TeamPage() {
                                           {user.activeTimer.notionTaskTitle}
                                         </span>
                                       </Badge>
-                                    </a>
-                                  ) : (
-                                    <Badge color="secondary" className="max-w-full min-w-0">
-                                      <span className="material-symbols-outlined mr-0.5 shrink-0" style={{ fontSize: "11px" }}>
-                                        task
-                                      </span>
-                                      <span className="truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
-                                        {user.activeTimer.notionTaskTitle}
-                                      </span>
-                                    </Badge>
+                                      {user.activeTimer.projectName && (
+                                        <p
+                                          className="text-xs text-on-surface-variant pl-0.5 flex items-start gap-1 min-w-0"
+                                          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                                        >
+                                          <span className="material-symbols-outlined shrink-0 mt-0.5" style={{ fontSize: "12px" }}>
+                                            folder_open
+                                          </span>
+                                          <span className="min-w-0 break-words">
+                                            <span className="text-outline-variant">Project · </span>
+                                            {user.activeTimer.projectName}
+                                          </span>
+                                        </p>
+                                      )}
+                                    </div>
                                   ))}
                               </div>
                             ) : (

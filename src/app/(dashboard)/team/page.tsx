@@ -539,9 +539,9 @@ export default function TeamPage() {
   // Do not add `relative` here: it overrides `sticky` in Tailwind (both set `position`) and breaks the
   // right-pinned column — header, background, and shadow then drift with horizontal scroll.
   const tableActionsHeadClass =
-    "md:sticky md:right-0 md:z-[2] md:overflow-visible md:border-l md:border-outline-variant/30 md:bg-surface-container-low md:whitespace-nowrap md:text-right md:[box-shadow:var(--c-sticky-column-shadow)]";
+    "min-w-[7.5rem] md:sticky md:right-0 md:z-[2] md:overflow-visible md:border-l md:border-outline-variant/30 md:bg-surface-container-low md:whitespace-nowrap md:text-right md:[box-shadow:var(--c-sticky-column-shadow)]";
   const tableActionsCellClass = (stripedRow: boolean) =>
-    `md:sticky md:right-0 md:z-[1] md:overflow-visible md:border-l md:border-outline-variant/30 md:whitespace-nowrap md:text-right md:[box-shadow:var(--c-sticky-column-shadow)] ${stripedRow ? "md:bg-background" : "md:bg-surface-container-lowest"}`;
+    `min-w-[7.5rem] md:sticky md:right-0 md:z-[1] md:overflow-visible md:border-l md:border-outline-variant/30 md:whitespace-nowrap md:text-right md:[box-shadow:var(--c-sticky-column-shadow)] ${stripedRow ? "md:bg-background" : "md:bg-surface-container-lowest"}`;
 
   return (
     <div className="flex flex-col gap-8 max-w-[90rem] mx-auto">
@@ -704,17 +704,18 @@ export default function TeamPage() {
 
       {activeTab === "users" && (
           <>
-            <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto overflow-y-visible">
-              <table className="w-full min-w-[1120px] table-fixed border-separate border-spacing-0">
+            <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto overflow-y-visible pr-2 xl:overflow-x-visible xl:pr-0 [scrollbar-gutter:stable]">
+              <table className="w-full min-w-[1000px] max-w-full table-fixed border-separate border-spacing-0 xl:min-w-0">
                 <colgroup>
-                  <col style={{ width: "21%" }} />
-                  <col style={{ width: "10%" }} />
                   <col style={{ width: "19%" }} />
-                  <col style={{ width: "21%" }} />
+                  <col style={{ width: "9%" }} />
+                  <col style={{ width: "17%" }} />
+                  <col style={{ width: "19%" }} />
                   <col style={{ width: "8%" }} />
                   <col style={{ width: "8%" }} />
                   <col style={{ width: "8%" }} />
-                  <col style={{ width: "5%" }} />
+                  {/* Enough width for label + icon buttons; was 5% and clipped on desktop */}
+                  <col style={{ width: "12%" }} />
                 </colgroup>
                 <thead>
                   <tr className="bg-surface-container-low">
@@ -761,7 +762,7 @@ export default function TeamPage() {
                       const liveDuration = getLiveDuration(user.activeTimer?.startedAt, now);
                       return (
                         <tr key={user.id} className={index % 2 === 0 ? "" : "bg-background"}>
-                          <td className={`${compactBodyCellClass} min-w-[220px]`}>
+                          <td className={`${compactBodyCellClass} max-xl:min-w-[220px]`}>
                             <div>
                               <p
                                 className="text-sm font-medium text-on-background"
@@ -782,7 +783,7 @@ export default function TeamPage() {
                               <span className="whitespace-nowrap">{formatRole(user.role)}</span>
                             </Badge>
                           </td>
-                          <td className={`${compactBodyCellClass} min-w-[220px]`}>
+                          <td className={`${compactBodyCellClass} max-xl:min-w-[220px]`}>
                             <div className="flex flex-wrap gap-1">
                               {(user.teams ?? []).length > 0 ? (
                                 (user.teams ?? []).map((team) => (
@@ -800,7 +801,7 @@ export default function TeamPage() {
                               )}
                             </div>
                           </td>
-                          <td className={`${compactBodyCellClass} min-w-[240px]`}>
+                          <td className={`${compactBodyCellClass} max-xl:min-w-[240px]`}>
                             {liveDuration !== null ? (
                               <div className="flex flex-col gap-1">
                                 <Badge color="custom" className="bg-warm-muted text-error-dim">Live · {formatDurationHuman(liveDuration)}</Badge>

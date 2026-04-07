@@ -12,30 +12,42 @@ interface ReportChartProps {
 }
 
 export function ReportChart({ data, title = "Past 7 Days" }: ReportChartProps) {
-  const maxHours = Math.max(...data.map((d) => d.hours), 1);
+  const maxHours = data.length > 0 ? Math.max(...data.map((d) => d.hours), 0) : 0;
+  /** Tallest bar = 100% of chart height so day-to-day differences are proportional to the week’s peak. */
+  const scaleMax = maxHours > 0 ? maxHours : 1;
 
   return (
     <div className="bg-surface-container-lowest rounded-xl paper-shadow p-6">
-      <h3
-        className="text-sm font-semibold text-on-background mb-5"
-        style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-      >
-        {title}
-      </h3>
+      <div className="flex items-baseline justify-between gap-3 mb-5">
+        <h3
+          className="text-sm font-semibold text-on-background"
+          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+        >
+          {title}
+        </h3>
+        {maxHours > 0 && (
+          <span
+            className="text-xs text-on-surface-variant shrink-0"
+            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          >
+            Scale: {maxHours.toFixed(1)}h max
+          </span>
+        )}
+      </div>
 
-      {/* Chart area */}
+      {/* Chart area — inner column must have explicit height so bar % heights resolve */}
       <div className="flex items-end gap-3 h-36">
         {data.map((day) => {
-          const heightPct = (day.hours / maxHours) * 100;
+          const heightPct = maxHours > 0 ? (day.hours / scaleMax) * 100 : 0;
           const isToday = day.date === new Date().toISOString().split("T")[0];
 
           return (
-            <div key={day.date} className="flex-1 flex flex-col items-center gap-1.5 h-full">
+            <div key={day.date} className="flex-1 flex flex-col items-center gap-1.5 h-full min-w-0">
               {/* Bar column */}
-              <div className="flex-1 flex items-end w-full">
-                <div className="relative w-full group">
+              <div className="flex flex-1 flex-col justify-end w-full min-h-0">
+                <div className="relative h-full w-full min-h-0 group flex flex-col justify-end">
                   {/* Tooltip */}
-                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
                     <div
                       className="bg-chrome text-background text-xs px-2 py-1 rounded-lg whitespace-nowrap"
                       style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -44,18 +56,18 @@ export function ReportChart({ data, title = "Past 7 Days" }: ReportChartProps) {
                     </div>
                   </div>
 
-                  {/* Bar */}
+                  {/* Bar — no minimum %; tallest day in range hits full column height */}
                   <div
                     className="w-full rounded-t-lg transition-all duration-500"
                     style={{
-                      height: `${Math.max(heightPct, day.hours > 0 ? 4 : 0)}%`,
-                      minHeight: day.hours > 0 ? "4px" : "2px",
+                      height: `${heightPct}%`,
+                      minHeight: day.hours > 0 && heightPct < 1 ? "2px" : undefined,
                       backgroundColor: isToday ? "var(--c-primary)" : "var(--c-primary-fixed-dim)",
                     }}
                   />
                   {/* Zero bar placeholder */}
                   {day.hours === 0 && (
-                    <div className="w-full h-0.5 bg-surface-container rounded-full" />
+                    <div className="w-full h-0.5 shrink-0 bg-surface-container rounded-full" />
                   )}
                 </div>
               </div>

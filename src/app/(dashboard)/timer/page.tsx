@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
-import { eq, and, gte, isNotNull, desc, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, isNotNull, desc, inArray } from "drizzle-orm";
+import { getCalendarWeekRangeLocal } from "@/lib/utils";
 import { TimerDashboardClient } from "@/components/timer/TimerDashboardClient";
 import type { Project, Tag, TimeEntry } from "@/types";
 
@@ -55,10 +56,9 @@ async function buildEntriesWithTags(
   })) as TimeEntry[];
 }
 
-async function getTodayEntries(userId: string): Promise<TimeEntry[]> {
+async function getWeekEntries(userId: string): Promise<TimeEntry[]> {
   if (!db) return [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const { start, end } = getCalendarWeekRangeLocal(new Date());
 
   const rows = await db
     .select({
@@ -69,15 +69,23 @@ async function getTodayEntries(userId: string): Promise<TimeEntry[]> {
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
-    .where(and(eq(timeEntries.userId, userId), isNotNull(timeEntries.stoppedAt), gte(timeEntries.startedAt, today)))
+    .where(
+      and(
+        eq(timeEntries.userId, userId),
+        isNotNull(timeEntries.stoppedAt),
+        gte(timeEntries.startedAt, start),
+        lte(timeEntries.startedAt, end)
+      )
+    )
     .orderBy(desc(timeEntries.startedAt))
-    .limit(50);
+    .limit(200);
 
   return buildEntriesWithTags(rows);
 }
 
 async function getRecentEntries(userId: string): Promise<TimeEntry[]> {
   if (!db) return [];
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   const rows = await db
     .select({
@@ -88,7 +96,7 @@ async function getRecentEntries(userId: string): Promise<TimeEntry[]> {
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
-    .where(and(eq(timeEntries.userId, userId), isNotNull(timeEntries.stoppedAt)))
+    .where(and(eq(timeEntries.userId, userId), isNotNull(timeEntries.stoppedAt), gte(timeEntries.startedAt, sevenDaysAgo)))
     .orderBy(desc(timeEntries.startedAt))
     .limit(50);
 
@@ -109,10 +117,10 @@ export default async function TimerPage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  const [projectsList, tagsList, todayEntries, recentEntries, weeklyTarget] = await Promise.all([
+  const [projectsList, tagsList, weekEntries, recentEntries, weeklyTarget] = await Promise.all([
     getProjects(),
     getUserTags(userId),
-    getTodayEntries(userId),
+    getWeekEntries(userId),
     getRecentEntries(userId),
     getUserWeeklyTarget(userId),
   ]);
@@ -122,9 +130,9 @@ export default async function TimerPage() {
       <TimerDashboardClient
         projects={projectsList}
         tags={tagsList}
-        initialTodayEntries={todayEntries}
+        initialWeekEntries={weekEntries}
         initialRecentEntries={recentEntries}
-        targetHours={weeklyTarget / 5}
+        weeklyTargetHours={weeklyTarget}
       />
     </div>
   );

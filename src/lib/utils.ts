@@ -58,6 +58,19 @@ export function formatTime(date: Date | string): string {
   });
 }
 
+/** Monday 00:00:00 through Sunday 23:59:59.999 in the same local timezone as `reference`. */
+export function getCalendarWeekRangeLocal(reference: Date = new Date()): { start: Date; end: Date } {
+  const start = new Date(reference);
+  start.setHours(0, 0, 0, 0);
+  const day = start.getDay();
+  const daysSinceMonday = (day + 6) % 7;
+  start.setDate(start.getDate() - daysSinceMonday);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
 export function cn(...classes: (string | undefined | null | false)[]): string {
   return classes.filter(Boolean).join(" ");
 }

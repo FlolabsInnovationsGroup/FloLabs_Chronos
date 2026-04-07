@@ -5,21 +5,19 @@ import { Card } from "@/components/ui/Card";
 import type { TimeEntry } from "@/types";
 
 interface ActiveTimerCardProps {
-  todayEntries?: TimeEntry[];
-  targetHours?: number;
+  weekEntries?: TimeEntry[];
+  weeklyTargetHours?: number;
 }
 
-export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTimerCardProps) {
+export function ActiveTimerCard({ weekEntries = [], weeklyTargetHours = 40 }: ActiveTimerCardProps) {
   const { activeTimer, elapsed } = useTimer();
 
-  // Total ms logged today from completed entries
-  const completedMs = todayEntries.reduce((sum, e) => sum + (e.durationMs ?? 0), 0);
-  // Add current session elapsed time
-  const totalMsToday = completedMs + (activeTimer ? elapsed : 0);
+  const completedMs = weekEntries.reduce((sum, e) => sum + (e.durationMs ?? 0), 0);
+  const totalMsWeek = completedMs + (activeTimer ? elapsed : 0);
 
-  const totalHours = totalMsToday / 3_600_000;
-  const targetMs = targetHours * 3_600_000;
-  const progressPct = Math.min(100, (totalMsToday / targetMs) * 100);
+  const totalHours = totalMsWeek / 3_600_000;
+  const targetMs = weeklyTargetHours * 3_600_000;
+  const progressPct = Math.min(100, (totalMsWeek / targetMs) * 100);
 
   // Format hours display
   const hoursInt = Math.floor(totalHours);
@@ -28,10 +26,10 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
   // Active project name
   const activeProjectName =
     activeTimer
-      ? todayEntries.find((e) => e.projectId === activeTimer.projectId)?.project?.name ??
+      ? weekEntries.find((e) => e.projectId === activeTimer.projectId)?.project?.name ??
         "No project"
       : null;
-  const sessionCount = todayEntries.length + (activeTimer ? 1 : 0);
+  const sessionCount = weekEntries.length + (activeTimer ? 1 : 0);
 
   return (
     <Card className="min-w-0 p-4 sm:p-6 flex flex-col gap-5 sm:gap-6 overflow-hidden">
@@ -41,7 +39,7 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
           className="text-base font-semibold text-on-background"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
-          Daily Momentum
+          Weekly Momentum
         </h2>
         {activeTimer && (
           <span className="flex items-center gap-1.5 rounded-full bg-warm-muted px-2.5 py-1 text-xs font-medium text-error-dim">
@@ -60,7 +58,7 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
           className="text-xs uppercase tracking-widest text-tertiary font-medium"
           style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
         >
-          Hours logged today
+          Hours logged this week
         </p>
         <div className="flex flex-wrap items-baseline gap-1.5 min-w-0">
           <span
@@ -74,7 +72,7 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
             className="text-sm text-outline-variant ml-0 sm:ml-1"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
-            / {targetHours}h target
+            / {weeklyTargetHours}h target
           </span>
         </div>
       </div>
@@ -96,7 +94,7 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
         >
           {progressPct >= 100
             ? "Target reached!"
-            : `${Math.round(progressPct)}% of daily target`}
+            : `${Math.round(progressPct)}% of weekly target`}
         </p>
       </div>
 
@@ -127,9 +125,9 @@ export function ActiveTimerCard({ todayEntries = [], targetHours = 8 }: ActiveTi
           <p
             className="text-sm font-medium text-on-background truncate mt-1"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-            title={activeProjectName ?? todayEntries[0]?.project?.name ?? "None"}
+            title={activeProjectName ?? weekEntries[0]?.project?.name ?? "None"}
           >
-            {activeProjectName ?? todayEntries[0]?.project?.name ?? "None"}
+            {activeProjectName ?? weekEntries[0]?.project?.name ?? "None"}
           </p>
         </div>
       </div>

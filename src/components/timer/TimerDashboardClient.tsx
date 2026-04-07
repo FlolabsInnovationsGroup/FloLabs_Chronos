@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useSSE } from "@/hooks/use-sse";
 import { useTimer } from "@/hooks/use-timer";
+import { getCalendarWeekRangeLocal } from "@/lib/utils";
 import { TimerDisplay } from "@/components/timer/TimerDisplay";
 import { TimerControls } from "@/components/timer/TimerControls";
 import { ActiveTimerCard } from "@/components/timer/ActiveTimerCard";
@@ -13,48 +14,52 @@ import type { Project, Tag, TimeEntry, SSEEvent } from "@/types";
 interface TimerDashboardClientProps {
   projects: Project[];
   tags: Tag[];
-  initialTodayEntries: TimeEntry[];
+  initialWeekEntries: TimeEntry[];
   initialRecentEntries: TimeEntry[];
-  targetHours: number;
+  weeklyTargetHours: number;
 }
 
 export function TimerDashboardClient({
   projects,
   tags,
-  initialTodayEntries,
+  initialWeekEntries,
   initialRecentEntries,
-  targetHours,
+  weeklyTargetHours,
 }: TimerDashboardClientProps) {
   const { data: session } = useSession();
   const { activeTimer, start, stop } = useTimer();
   const userId = session?.user.id;
 
-  const [todayEntries, setTodayEntries] = useState<TimeEntry[]>(initialTodayEntries);
+  const [weekEntries, setWeekEntries] = useState<TimeEntry[]>(initialWeekEntries);
   const [recentEntries, setRecentEntries] = useState<TimeEntry[]>(initialRecentEntries);
 
   const refreshEntries = useCallback(async () => {
     if (!userId) return;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const from = today.toISOString();
+    const { start: weekStart, end: weekEnd } = getCalendarWeekRangeLocal(new Date());
+    const weekFrom = weekStart.toISOString();
+    const weekTo = weekEnd.toISOString();
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    const [todayRes, recentRes] = await Promise.all([
-      fetch(`/api/entries?userId=${userId}&from=${encodeURIComponent(from)}&limit=50`, { cache: "no-store" }),
-      fetch(`/api/entries?userId=${userId}&limit=50`, { cache: "no-store" }),
+    const [weekRes, recentRes] = await Promise.all([
+      fetch(
+        `/api/entries?userId=${userId}&from=${encodeURIComponent(weekFrom)}&to=${encodeURIComponent(weekTo)}&limit=200`,
+        { cache: "no-store" }
+      ),
+      fetch(`/api/entries?userId=${userId}&from=${encodeURIComponent(sevenDaysAgo)}&limit=50`, { cache: "no-store" }),
     ]);
 
-    const todayData = await todayRes.json();
+    const weekData = await weekRes.json();
     const recentData = await recentRes.json();
 
-    setTodayEntries(todayData.entries ?? []);
+    setWeekEntries(weekData.entries ?? []);
     setRecentEntries(recentData.entries ?? []);
   }, [userId]);
 
   useEffect(() => {
-    setTodayEntries(initialTodayEntries);
+    setWeekEntries(initialWeekEntries);
     setRecentEntries(initialRecentEntries);
-  }, [initialRecentEntries, initialTodayEntries]);
+  }, [initialRecentEntries, initialWeekEntries]);
 
   useSSE(
     useCallback(
@@ -91,14 +96,14 @@ export function TimerDashboardClient({
         </div>
 
         <div className="col-span-12 md:col-span-5 min-w-0">
-          <ActiveTimerCard todayEntries={todayEntries} targetHours={targetHours} />
+          <ActiveTimerCard weekEntries={weekEntries} weeklyTargetHours={weeklyTargetHours} />
         </div>
       </div>
 
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium text-on-background" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
-            Recent Sessions
+            Last 7 Days
           </h2>
           <span className="text-sm text-outline-variant" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
             {recentEntries.length} entries

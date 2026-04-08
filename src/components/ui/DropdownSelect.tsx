@@ -26,6 +26,8 @@ interface DropdownSelectProps {
   hideTriggerLabel?: boolean;
   /** Shown as `aria-label` on the trigger when the label is hidden. */
   buttonAriaLabel?: string;
+  /** Show a search input at the top of the dropdown to filter options by label. */
+  searchable?: boolean;
 }
 
 export function DropdownSelect({
@@ -41,15 +43,28 @@ export function DropdownSelect({
   leadingIconColor = "var(--c-on-surface-variant)",
   hideTriggerLabel,
   buttonAriaLabel,
+  searchable,
 }: DropdownSelectProps) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   const selected = useMemo(
     () => options.find((opt) => opt.value === value),
     [options, value]
+  );
+
+  const filteredOptions = useMemo(
+    () =>
+      searchable && search.trim()
+        ? options.filter((opt) =>
+            opt.label.toLowerCase().includes(search.toLowerCase())
+          )
+        : options,
+    [options, search, searchable]
   );
 
   useEffect(() => {
@@ -75,6 +90,18 @@ export function DropdownSelect({
       document.removeEventListener("keydown", handleEscape);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!searchable) return;
+    if (open) {
+      const timer = setTimeout(() => {
+        searchRef.current?.focus();
+      }, 10);
+      return () => clearTimeout(timer);
+    } else {
+      setSearch("");
+    }
+  }, [open, searchable]);
 
   function selectOption(nextValue: string) {
     onChange?.(nextValue);
@@ -138,39 +165,63 @@ export function DropdownSelect({
         open={open}
         anchorRef={rootRef}
         shellClassName={panelClassName}
-        scrollClassName="max-h-72 overflow-y-auto overscroll-contain p-1.5"
+        scrollClassName={searchable ? "" : "max-h-72 overflow-y-auto overscroll-contain p-1.5"}
       >
-        {options.map((option) => {
-          const active = option.value === value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => selectOption(option.value)}
-              className={cn(
-                "w-full rounded-xl px-3 py-2 text-left text-sm transition-colors flex items-center gap-2",
-                active ? "bg-surface-container-high text-on-background" : "text-on-surface-variant hover:bg-surface-container-low"
-              )}
+        {searchable && (
+          <div className="p-2 border-b border-outline-variant/20">
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search…"
+              className="w-full px-3 py-1.5 text-sm bg-surface-container-low rounded-lg outline-none focus:ring-2 focus:ring-primary/20 placeholder:text-outline-variant text-on-background"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-              role="option"
-              aria-selected={active}
+            />
+          </div>
+        )}
+        <div className={searchable ? "max-h-64 overflow-y-auto overscroll-contain p-1.5" : undefined}>
+          {filteredOptions.length === 0 ? (
+            <p
+              className="text-sm text-outline-variant px-3 py-3 text-center"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
             >
-              {option.color ? (
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: option.color }} />
-              ) : option.icon ? (
-                <span className="material-symbols-outlined shrink-0" style={{ fontSize: "16px", color: option.color ?? "var(--c-on-surface-variant)" }}>
-                  {option.icon}
-                </span>
-              ) : null}
-              <span className="truncate">{option.label}</span>
-              {active && (
-                <span className="material-symbols-outlined ml-auto text-primary" style={{ fontSize: "16px" }}>
-                  check
-                </span>
-              )}
-            </button>
-          );
-        })}
+              No results
+            </p>
+          ) : (
+            filteredOptions.map((option) => {
+              const active = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => selectOption(option.value)}
+                  className={cn(
+                    "w-full rounded-xl px-3 py-2 text-left text-sm transition-colors flex items-center gap-2",
+                    active ? "bg-surface-container-high text-on-background" : "text-on-surface-variant hover:bg-surface-container-low"
+                  )}
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  role="option"
+                  aria-selected={active}
+                >
+                  {option.color ? (
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: option.color }} />
+                  ) : option.icon ? (
+                    <span className="material-symbols-outlined shrink-0" style={{ fontSize: "16px", color: option.color ?? "var(--c-on-surface-variant)" }}>
+                      {option.icon}
+                    </span>
+                  ) : null}
+                  <span className="truncate">{option.label}</span>
+                  {active && (
+                    <span className="material-symbols-outlined ml-auto text-primary" style={{ fontSize: "16px" }}>
+                      check
+                    </span>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
       </FloatingListPanel>
     </div>
   );

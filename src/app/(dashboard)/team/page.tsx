@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Badge } from "@/components/ui/Badge";
+import { DropdownSelect } from "@/components/ui/DropdownSelect";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -90,11 +92,20 @@ function getLiveDuration(startedAt?: number | null, now = Date.now()) {
 
 export default function TeamPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const role = session?.user.role;
   const userId = session?.user.id;
 
+  // Members cannot access the Users page — redirect them to the timer
+  useEffect(() => {
+    if (role === "member") {
+      router.replace("/timer");
+    }
+  }, [role, router]);
+
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [teamFilter, setTeamFilter] = useState<string>("");
   const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -334,6 +345,13 @@ export default function TeamPage() {
 
     return sorted;
   }, [now, sortDir, sortKey, users]);
+
+  const filteredUsers = useMemo(() => {
+    if (!teamFilter) return sortedUsers;
+    return sortedUsers.filter((u) =>
+      (u.teams ?? []).some((t) => t.id === teamFilter)
+    );
+  }, [sortedUsers, teamFilter]);
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -703,6 +721,20 @@ export default function TeamPage() {
 
       {activeTab === "users" && (
           <>
+            {(role === "admin" || role === "team_lead") && teams.length > 0 && (
+              <div className="flex items-center gap-2">
+                <DropdownSelect
+                  options={[
+                    { value: "", label: "All teams" },
+                    ...teams.map((t) => ({ value: t.id, label: t.name })),
+                  ]}
+                  value={teamFilter}
+                  onChange={setTeamFilter}
+                  className="w-48"
+                  placeholder="All teams"
+                />
+              </div>
+            )}
             <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto overflow-y-visible">
               <table className="w-full min-w-0 table-auto border-separate border-spacing-0">
                 <thead>
@@ -735,18 +767,18 @@ export default function TeamPage() {
                         </td>
                       </tr>
                     ))
-                  ) : users.length === 0 ? (
+                  ) : filteredUsers.length === 0 ? (
                     <tr>
                       <td
                         colSpan={userColumns.length}
                         className={compactEmptyCellClass}
                         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                       >
-                        No users in scope.
+                        {teamFilter ? "No users in this team." : "No users in scope."}
                       </td>
                     </tr>
                   ) : (
-                    sortedUsers.map((user, index) => {
+                    filteredUsers.map((user, index) => {
                       const liveDuration = getLiveDuration(user.activeTimer?.startedAt, now);
                       return (
                         <tr key={user.id} className={index % 2 === 0 ? "" : "bg-background"}>

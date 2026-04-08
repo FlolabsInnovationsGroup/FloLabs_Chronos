@@ -18,10 +18,11 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
-const NAV_ITEMS: NavItem[] = [
+const BASE_NAV_ITEMS: NavItem[] = [
   { href: "/timer", icon: "schedule", label: "Timer" },
   { href: "/projects", icon: "folder", label: "Projects" },
   { href: "/tags", icon: "label", label: "Tags" },
+  { href: "/teams", icon: "groups", label: "Teams" },
   { href: "/team", icon: "group", label: "Users" },
   { href: "/reports", icon: "bar_chart", label: "Reports" },
 ];
@@ -91,8 +92,11 @@ function SettingsLink(params: {
 export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const isAdmin = session?.user.role === "admin";
-  const navItems = isAdmin ? [...NAV_ITEMS, { href: "/control", icon: "tune", label: "Control" }] : NAV_ITEMS;
+  const role = session?.user.role;
+  const navItems = [
+    ...BASE_NAV_ITEMS.filter((item) => !(item.href === "/team" && role === "member")),
+    ...(role === "admin" ? [{ href: "/control", icon: "tune", label: "Control" }] : []),
+  ];
 
   if (mobile) {
     return (

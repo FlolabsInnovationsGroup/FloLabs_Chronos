@@ -103,6 +103,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
           ]}
           placeholder="All members"
           className="w-full sm:w-40"
+          searchable
         />
       )}
 
@@ -116,6 +117,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
         ]}
         placeholder="All projects"
         className="w-full sm:w-40"
+        searchable
       />
 
       {/* Tag select */}
@@ -128,6 +130,7 @@ export function ReportFilters({ projects, tags, users = [] }: ReportFiltersProps
         ]}
         placeholder="All tags"
         className="w-full sm:w-36"
+        searchable
       />
 
       {/* Group by */}

@@ -106,6 +106,7 @@ export default function TeamPage() {
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [teamFilter, setTeamFilter] = useState<string>("");
+  const [userSearch, setUserSearch] = useState("");
   const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -347,11 +348,18 @@ export default function TeamPage() {
   }, [now, sortDir, sortKey, users]);
 
   const filteredUsers = useMemo(() => {
-    if (!teamFilter) return sortedUsers;
-    return sortedUsers.filter((u) =>
-      (u.teams ?? []).some((t) => t.id === teamFilter)
-    );
-  }, [sortedUsers, teamFilter]);
+    let result = sortedUsers;
+    if (teamFilter) {
+      result = result.filter((u) => (u.teams ?? []).some((t) => t.id === teamFilter));
+    }
+    if (userSearch.trim()) {
+      const q = userSearch.trim().toLowerCase();
+      result = result.filter(
+        (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [sortedUsers, teamFilter, userSearch]);
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -723,8 +731,8 @@ export default function TeamPage() {
 
       {activeTab === "users" && (
           <>
-            {(role === "admin" || role === "team_lead") && teams.length > 0 && (
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {(role === "admin" || role === "team_lead") && teams.length > 0 && (
                 <DropdownSelect
                   options={[
                     { value: "", label: "All teams" },
@@ -735,8 +743,24 @@ export default function TeamPage() {
                   className="w-48"
                   placeholder="All teams"
                 />
+              )}
+              <div className="relative">
+                <span
+                  className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-outline-variant pointer-events-none"
+                  style={{ fontSize: "15px" }}
+                >
+                  search
+                </span>
+                <input
+                  type="text"
+                  placeholder="Search members…"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="pl-8 pr-3 py-1.5 text-sm text-on-background bg-surface-container-low rounded-xl outline-none focus:ring-2 focus:ring-primary/20 placeholder:text-outline-variant w-52"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                />
               </div>
-            )}
+            </div>
             <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto overflow-y-visible">
               <table className="w-full min-w-0 table-auto border-separate border-spacing-0">
                 <thead>
@@ -776,7 +800,7 @@ export default function TeamPage() {
                         className={compactEmptyCellClass}
                         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                       >
-                        {teamFilter ? "No users in this team." : "No users in scope."}
+                        {userSearch.trim() ? "No members match your search." : teamFilter ? "No users in this team." : "No users in scope."}
                       </td>
                     </tr>
                   ) : (

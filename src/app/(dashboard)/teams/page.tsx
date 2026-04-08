@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { Badge } from "@/components/ui/Badge";
 import { cn, formatDurationHuman, getCalendarWeekRangeLocal } from "@/lib/utils";
 import type { Team, TimeEntry, User } from "@/types";
+// User is used for teamMembersCache values
 
 function formatRole(role: string) {
   return role === "team_lead" ? "Team Lead" : role === "admin" ? "Admin" : "Member";
@@ -27,7 +28,8 @@ export default function TeamsPage() {
   const isMember = session?.user.role === "member";
 
   const [teams, setTeams] = useState<Team[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  // teamMembers is keyed by teamId and populated on-demand from /api/teams/[id]/members
+  const [teamMembersCache, setTeamMembersCache] = useState<Record<string, User[]>>({});
   const [weeklyEntries, setWeeklyEntries] = useState<TimeEntry[]>([]);
   const [threeMonthEntries, setThreeMonthEntries] = useState<TimeEntry[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
@@ -55,21 +57,18 @@ export default function TeamsPage() {
       const to = end.toISOString().split("T")[0];
       const threeMonthsFrom = monthsAgo(3);
 
-      const [teamsRes, usersRes, entriesRes, threeMonthRes] = await Promise.all([
+      const [teamsRes, entriesRes, threeMonthRes] = await Promise.all([
         fetch("/api/teams", { cache: "no-store" }),
-        fetch("/api/users", { cache: "no-store" }),
         fetch(`/api/entries?from=${from}&to=${to}&limit=1000`, { cache: "no-store" }),
         fetch(`/api/entries?from=${threeMonthsFrom}&to=${to}&limit=10000`, { cache: "no-store" }),
       ]);
 
       const teamsData = (await teamsRes.json()) as { teams?: Team[] };
-      const usersData = (await usersRes.json()) as { users?: User[] };
       const entriesData = (await entriesRes.json()) as { entries?: TimeEntry[] };
       const threeMonthData = (await threeMonthRes.json()) as { entries?: TimeEntry[] };
 
       const fetchedTeams = teamsData.teams ?? [];
       setTeams(fetchedTeams);
-      setUsers(usersData.users ?? []);
       setWeeklyEntries(entriesData.entries ?? []);
       setThreeMonthEntries(threeMonthData.entries ?? []);
 
@@ -118,6 +117,18 @@ export default function TeamsPage() {
       .finally(() => setMemberLoading(false));
   }, [selectedMemberId]);
 
+  // Fetch members for the selected team via /api/teams/[id]/members (works for all roles)
+  useEffect(() => {
+    if (!selectedTeamId) return;
+    if (teamMembersCache[selectedTeamId]) return; // already loaded
+    fetch(`/api/teams/${selectedTeamId}/members`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data: { members?: User[] }) => {
+        setTeamMembersCache((prev) => ({ ...prev, [selectedTeamId]: data.members ?? [] }));
+      })
+      .catch(() => {});
+  }, [selectedTeamId, teamMembersCache]);
+
   const filteredSortedTeams = useMemo(() => {
     const q = teamSearch.trim().toLowerCase();
     const filtered = q ? teams.filter((t) => t.name.toLowerCase().includes(q)) : teams;
@@ -134,8 +145,8 @@ export default function TeamsPage() {
 
   const rawTeamMembers = useMemo(() => {
     if (!selectedTeamId) return [];
-    return users.filter((u) => (u.teams ?? []).some((t) => t.id === selectedTeamId));
-  }, [users, selectedTeamId]);
+    return teamMembersCache[selectedTeamId] ?? [];
+  }, [teamMembersCache, selectedTeamId]);
 
   const teamMembers = useMemo(() => {
     return [...rawTeamMembers].sort((a, b) => {
@@ -145,8 +156,8 @@ export default function TeamsPage() {
   }, [rawTeamMembers, memberSortAsc]);
 
   const selectedMember = useMemo(
-    () => users.find((u) => u.id === selectedMemberId) ?? null,
-    [users, selectedMemberId]
+    () => rawTeamMembers.find((u) => u.id === selectedMemberId) ?? null,
+    [rawTeamMembers, selectedMemberId]
   );
 
   const teamStats = useMemo(() => {

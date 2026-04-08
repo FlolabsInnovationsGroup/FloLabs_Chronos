@@ -449,18 +449,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
         </div>
       )}
 
-      {activeTimer && !stopValidation.canStop && (
-        <div className="md:hidden rounded-xl border border-warm-border bg-warm-surface px-4 py-3 text-sm text-error-dim">
-          <div className="flex items-start gap-2">
-            <span className="material-symbols-outlined shrink-0" style={{ fontSize: "18px" }}>
-              info
-            </span>
-            <p style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
-              You can&apos;t stop this timer yet. {stopValidation.message}
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Mobile stop-block message is rendered in BottomNav (floating, above the controls pill) — not here. */}
 
       {actionError && (
         <p

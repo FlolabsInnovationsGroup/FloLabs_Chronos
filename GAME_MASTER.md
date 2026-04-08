@@ -204,6 +204,7 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 - Live-state indicators that were still using the old sky-blue treatment were updated to the warm red live treatment on the Users page live badge, the active-timer card, and the mobile bottom timer pill.
 - Users page now shows which visible users are currently live, along with the running duration of their active entry; the data comes from existing Redis-backed active timers and is refreshed from timer SSE events without expanding member visibility.
 - On the Users page Live column, the Chronos project always uses the same **Project · {name}** line (folder icon + text) as when a Notion task is present, including when there is no task.
+- Users page live timers now render linked Notion tasks as warm clickable badges that open the task page in a new tab, and the timer-entry form stack no longer introduces an inner scrollbar from `TimerControls` root overflow.
 - Timer dashboard **Weekly Momentum** card sums completed entries whose `startedAt` falls in the **current calendar week** (Monday–Sunday, local time) and compares to the user’s full **weekly target hours**; refreshes use `/api/entries` with `from`/`to` for that range.
 - `/register` onboarding/reset UI now includes reveal-password controls plus password confirmation for both invite acceptance and reset-password completion, while `/register?forgot=1` remains the request-reset form.
 - Tooltip/info-dialog rendering was hardened so delayed tooltips stay within the visible viewport even inside overflow-constrained UI and mobile layouts.

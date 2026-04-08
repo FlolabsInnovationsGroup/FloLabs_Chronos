@@ -282,7 +282,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-5 overflow-x-hidden">
+    <div className="flex min-w-0 flex-col gap-5 overflow-x-clip">
       <div className="flex flex-col gap-1.5 relative">
         <input
           type="text"
@@ -314,7 +314,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
         <TaskSuggestions query={description} open={showSuggestions} onPick={applySuggestion} />
         {activeTimer && !stopValidation.canStop && (
           <p
-            className="text-xs text-error"
+            className="hidden text-xs text-error md:block"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {stopValidation.message}

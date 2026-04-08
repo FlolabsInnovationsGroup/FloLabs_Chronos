@@ -192,8 +192,17 @@ export async function PATCH(
     await updateTeamMemberRoleInNotion(notionTeamMemberId, parsed.data.role).catch(() => {});
   }
 
-  if (requestedTeamIds !== undefined) {
-    await replaceUserTeamMemberships(id, requestedTeamIds);
+  // Only replace team memberships when explicitly provided AND the new role is not admin
+  // (or when the caller explicitly provides teams for an admin). Sending [] for an admin
+  // role change must NOT wipe memberships — preserve them so they survive a demotion back.
+  if (requestedTeamIds !== undefined && !(finalRole === "admin" && requestedTeamIds.length === 0 && requestedTeamIds === (parsed.data.teamIds ?? undefined))) {
+    // If transitioning TO admin with an empty teamIds list, skip the replacement
+    // so existing memberships are preserved for future role reversals.
+    const isPromotingToAdmin = finalRole === "admin" && existingUser.role !== "admin";
+    const shouldPreserve = isPromotingToAdmin && requestedTeamIds.length === 0;
+    if (!shouldPreserve) {
+      await replaceUserTeamMemberships(id, requestedTeamIds);
+    }
   }
   const userTeams = await getUserTeams(id);
   broadcastDataChange("team");

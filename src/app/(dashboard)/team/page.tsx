@@ -429,7 +429,9 @@ export default function TeamPage() {
               ? {
                   name: editName,
                   role: editRole,
-                  teamIds: editRole === "admin" ? [] : editTeamIds,
+                  // When promoting to admin, omit teamIds entirely so existing memberships
+                  // are preserved on the server and survive a future demotion.
+                  ...(editRole !== "admin" ? { teamIds: editTeamIds } : {}),
                   isActive: editIsActive,
                   notionTeamMemberId: editTeamMemberNotion?.id ?? null,
                 }

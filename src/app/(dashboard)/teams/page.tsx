@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Badge } from "@/components/ui/Badge";
 import { cn, formatDurationHuman, getCalendarWeekRangeLocal } from "@/lib/utils";
@@ -14,12 +14,21 @@ function formatEntryDate(date: Date | string) {
   return new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+/** Returns the ISO date string for N months ago from today (start of that day). */
+function monthsAgo(n: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() - n);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().split("T")[0];
+}
+
 export default function TeamsPage() {
   useSession();
 
   const [teams, setTeams] = useState<Team[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [weeklyEntries, setWeeklyEntries] = useState<TimeEntry[]>([]);
+  const [threeMonthEntries, setThreeMonthEntries] = useState<TimeEntry[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [recentEntries, setRecentEntries] = useState<TimeEntry[]>([]);
@@ -28,27 +37,40 @@ export default function TeamsPage() {
   const [loading, setLoading] = useState(true);
   const [memberLoading, setMemberLoading] = useState(false);
 
+  // Left panel controls
+  const [teamSearch, setTeamSearch] = useState("");
+  const [teamSortAsc, setTeamSortAsc] = useState(true);
+
+  // Right panel controls
+  const [memberSortAsc, setMemberSortAsc] = useState(true);
+
+  const teamSearchRef = useRef<HTMLInputElement>(null);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const { start, end } = getCalendarWeekRangeLocal();
       const from = start.toISOString().split("T")[0];
       const to = end.toISOString().split("T")[0];
+      const threeMonthsFrom = monthsAgo(3);
 
-      const [teamsRes, usersRes, entriesRes] = await Promise.all([
+      const [teamsRes, usersRes, entriesRes, threeMonthRes] = await Promise.all([
         fetch("/api/teams", { cache: "no-store" }),
         fetch("/api/users", { cache: "no-store" }),
         fetch(`/api/entries?from=${from}&to=${to}&limit=1000`, { cache: "no-store" }),
+        fetch(`/api/entries?from=${threeMonthsFrom}&to=${to}&limit=10000`, { cache: "no-store" }),
       ]);
 
       const teamsData = (await teamsRes.json()) as { teams?: Team[] };
       const usersData = (await usersRes.json()) as { users?: User[] };
       const entriesData = (await entriesRes.json()) as { entries?: TimeEntry[] };
+      const threeMonthData = (await threeMonthRes.json()) as { entries?: TimeEntry[] };
 
       const fetchedTeams = teamsData.teams ?? [];
       setTeams(fetchedTeams);
       setUsers(usersData.users ?? []);
       setWeeklyEntries(entriesData.entries ?? []);
+      setThreeMonthEntries(threeMonthData.entries ?? []);
 
       setSelectedTeamId((prev) => {
         if (prev) return prev;
@@ -95,15 +117,31 @@ export default function TeamsPage() {
       .finally(() => setMemberLoading(false));
   }, [selectedMemberId]);
 
+  const filteredSortedTeams = useMemo(() => {
+    const q = teamSearch.trim().toLowerCase();
+    const filtered = q ? teams.filter((t) => t.name.toLowerCase().includes(q)) : teams;
+    return [...filtered].sort((a, b) => {
+      const cmp = a.name.localeCompare(b.name);
+      return teamSortAsc ? cmp : -cmp;
+    });
+  }, [teams, teamSearch, teamSortAsc]);
+
   const selectedTeam = useMemo(
     () => teams.find((t) => t.id === selectedTeamId) ?? null,
     [teams, selectedTeamId]
   );
 
-  const teamMembers = useMemo(() => {
+  const rawTeamMembers = useMemo(() => {
     if (!selectedTeamId) return [];
     return users.filter((u) => (u.teams ?? []).some((t) => t.id === selectedTeamId));
   }, [users, selectedTeamId]);
+
+  const teamMembers = useMemo(() => {
+    return [...rawTeamMembers].sort((a, b) => {
+      const cmp = a.name.localeCompare(b.name);
+      return memberSortAsc ? cmp : -cmp;
+    });
+  }, [rawTeamMembers, memberSortAsc]);
 
   const selectedMember = useMemo(
     () => users.find((u) => u.id === selectedMemberId) ?? null,
@@ -111,23 +149,34 @@ export default function TeamsPage() {
   );
 
   const teamStats = useMemo(() => {
-    const activeMembers = teamMembers.filter((u) => u.isActive);
+    const activeMembers = rawTeamMembers.filter((u) => u.isActive);
     const liveCount = activeMembers.filter((u) => u.activeTimer?.startedAt).length;
-    const teamUserIds = new Set(teamMembers.map((u) => u.id));
+    const teamUserIds = new Set(rawTeamMembers.map((u) => u.id));
+
     const weeklyMs = weeklyEntries
       .filter((e) => teamUserIds.has(e.userId))
       .reduce((sum, e) => sum + (e.durationMs ?? 0), 0);
+
     const avgTarget =
       activeMembers.length > 0
         ? activeMembers.reduce((sum, u) => sum + (u.weeklyTargetHours ?? 0), 0) / activeMembers.length
         : 0;
+
+    // Average weekly hours over the past 3 months
+    // We have ~13 weeks of data — compute total ms for team members then divide by 13
+    const threeMonthMs = threeMonthEntries
+      .filter((e) => teamUserIds.has(e.userId))
+      .reduce((sum, e) => sum + (e.durationMs ?? 0), 0);
+    const avgWeekly3Mo = threeMonthMs / 3_600_000 / 13; // 3 months ≈ 13 weeks
+
     return {
       activeMembers: activeMembers.length,
       liveCount,
       weeklyHours: weeklyMs / 3_600_000,
       avgTarget,
+      avgWeekly3Mo,
     };
-  }, [teamMembers, weeklyEntries]);
+  }, [rawTeamMembers, weeklyEntries, threeMonthEntries]);
 
   const memberWeeklyHours = useMemo(
     () => memberWeeklyEntries.reduce((sum, e) => sum + (e.durationMs ?? 0), 0) / 3_600_000,
@@ -149,7 +198,7 @@ export default function TeamsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-[90rem] mx-auto">
+    <div className="flex flex-col gap-6 max-w-[90rem] mx-auto h-full">
       <div>
         <h1
           className="text-2xl font-light italic text-on-background"
@@ -175,45 +224,81 @@ export default function TeamsPage() {
           <div className="flex-1 h-64 rounded-xl bg-surface-container-low animate-pulse" />
         </div>
       ) : (
-        <div className="flex gap-6 items-start">
-          {/* Left: Team list */}
-          <div className="w-64 shrink-0 flex flex-col gap-1">
-            {teams.length === 0 ? (
-              <p
-                className="text-sm text-outline-variant px-3 py-4"
-                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+        /* Pin this row so the two columns can scroll independently */
+        <div className="flex gap-6 items-start min-h-0" style={{ height: "calc(100vh - 12rem)" }}>
+
+          {/* ── Left: scrollable team list ── */}
+          <div className="w-64 shrink-0 flex flex-col gap-2 h-full">
+            {/* Search + sort controls */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <span
+                  className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-outline-variant pointer-events-none"
+                  style={{ fontSize: "15px" }}
+                >
+                  search
+                </span>
+                <input
+                  ref={teamSearchRef}
+                  type="text"
+                  placeholder="Search teams…"
+                  value={teamSearch}
+                  onChange={(e) => setTeamSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-sm text-on-background bg-surface-container-low rounded-xl outline-none focus:ring-2 focus:ring-primary/20 placeholder:text-outline-variant"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                />
+              </div>
+              <button
+                type="button"
+                title={teamSortAsc ? "Sort Z→A" : "Sort A→Z"}
+                onClick={() => setTeamSortAsc((v) => !v)}
+                className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl bg-surface-container-low text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors"
               >
-                No teams available.
-              </p>
-            ) : (
-              teams.map((team) => (
-                <button
-                  key={team.id}
-                  type="button"
-                  onClick={() => handleTeamSelect(team.id)}
-                  className={cn(
-                    "w-full text-left px-4 py-3 rounded-xl text-sm transition-colors",
-                    selectedTeamId === team.id
-                      ? "bg-surface-container-high text-primary"
-                      : "text-on-surface-variant hover:bg-surface-container-low hover:text-on-background"
-                  )}
+                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                  {teamSortAsc ? "sort_by_alpha" : "sort"}
+                </span>
+              </button>
+            </div>
+
+            {/* Scrollable list */}
+            <div className="flex-1 overflow-y-auto flex flex-col gap-1 pr-0.5">
+              {filteredSortedTeams.length === 0 ? (
+                <p
+                  className="text-sm text-outline-variant px-3 py-4"
                   style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium truncate">{team.name}</span>
-                    {!team.isActive && (
-                      <Badge color="secondary" className="shrink-0 text-[10px]">
-                        Inactive
-                      </Badge>
+                  No teams found.
+                </p>
+              ) : (
+                filteredSortedTeams.map((team) => (
+                  <button
+                    key={team.id}
+                    type="button"
+                    onClick={() => handleTeamSelect(team.id)}
+                    className={cn(
+                      "w-full text-left px-4 py-3 rounded-xl text-sm transition-colors",
+                      selectedTeamId === team.id
+                        ? "bg-surface-container-high text-primary"
+                        : "text-on-surface-variant hover:bg-surface-container-low hover:text-on-background"
                     )}
-                  </div>
-                </button>
-              ))
-            )}
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium truncate">{team.name}</span>
+                      {!team.isActive && (
+                        <Badge color="secondary" className="shrink-0 text-[10px]">
+                          Inactive
+                        </Badge>
+                      )}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
 
-          {/* Right: Team dashboard or member card */}
-          <div className="flex-1 min-w-0">
+          {/* ── Right: team dashboard or member card (independently scrollable) ── */}
+          <div className="flex-1 min-w-0 h-full overflow-y-auto">
             {!selectedTeam ? (
               <div className="rounded-xl bg-surface-container-lowest paper-shadow p-8 text-center">
                 <p
@@ -224,7 +309,7 @@ export default function TeamsPage() {
                 </p>
               </div>
             ) : selectedMember ? (
-              /* Member performance card */
+              /* ── Member performance card ── */
               <div className="rounded-xl bg-surface-container-lowest paper-shadow p-6 flex flex-col gap-6">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div>
@@ -375,7 +460,7 @@ export default function TeamsPage() {
                 )}
               </div>
             ) : (
-              /* Team dashboard */
+              /* ── Team dashboard ── */
               <div className="flex flex-col gap-6">
                 <div className="rounded-xl bg-surface-container-lowest paper-shadow p-6">
                   <div className="flex items-center gap-2 mb-1">
@@ -396,7 +481,7 @@ export default function TeamsPage() {
                     {selectedTeam.name}
                   </h2>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mt-5">
                     <div className="rounded-xl bg-surface-container-low p-4">
                       <p
                         className="text-xs uppercase tracking-wide text-on-surface-variant"
@@ -444,6 +529,20 @@ export default function TeamsPage() {
                         className="text-xs uppercase tracking-wide text-on-surface-variant"
                         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                       >
+                        Avg Weekly (3 mo)
+                      </p>
+                      <p
+                        className="text-2xl font-light italic text-on-background mt-1"
+                        style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
+                      >
+                        {teamStats.avgWeekly3Mo.toFixed(1)}h
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-surface-container-low p-4">
+                      <p
+                        className="text-xs uppercase tracking-wide text-on-surface-variant"
+                        style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                      >
                         Avg Target
                       </p>
                       <p
@@ -458,13 +557,25 @@ export default function TeamsPage() {
 
                 {/* Member list */}
                 <div className="rounded-xl bg-surface-container-lowest paper-shadow overflow-hidden">
-                  <div className="px-5 py-4 border-b border-surface-container">
+                  <div className="px-5 py-4 border-b border-surface-container flex items-center justify-between gap-3">
                     <p
                       className="text-xs uppercase tracking-wide text-on-surface-variant font-semibold"
                       style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                     >
                       Members ({teamMembers.length})
                     </p>
+                    <button
+                      type="button"
+                      title={memberSortAsc ? "Sort Z→A" : "Sort A→Z"}
+                      onClick={() => setMemberSortAsc((v) => !v)}
+                      className="flex items-center gap-1 text-xs text-on-surface-variant hover:text-primary transition-colors"
+                      style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                        {memberSortAsc ? "arrow_upward" : "arrow_downward"}
+                      </span>
+                      {memberSortAsc ? "A–Z" : "Z–A"}
+                    </button>
                   </div>
                   {teamMembers.length === 0 ? (
                     <p

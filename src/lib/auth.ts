@@ -63,14 +63,54 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
+      // On initial sign-in, seed the token from the authorize() return value.
       if (user) {
         const t = token as Record<string, unknown>;
         t.id = user.id;
         t.role = (user as { role?: Role }).role ?? "member";
         t.teamId = (user as { teamId?: string | null }).teamId ?? null;
         t.isActive = (user as { isActive?: boolean }).isActive ?? true;
+        t.roleRefreshedAt = Date.now();
       }
+
+      // On subsequent calls (session refresh, "update" trigger), re-read role/isActive
+      // from the DB so that admin-applied role changes take effect without re-login.
+      const t = token as Record<string, unknown>;
+      const userId = t.id as string | undefined;
+      const lastRefresh = (t.roleRefreshedAt as number | undefined) ?? 0;
+      const REFRESH_INTERVAL_MS = 30_000; // re-check DB every 30 seconds
+
+      if (userId && (trigger === "update" || Date.now() - lastRefresh > REFRESH_INTERVAL_MS)) {
+        try {
+          const { db } = await import("./db");
+          const { users } = await import("./db/schema");
+          const { eq } = await import("drizzle-orm");
+
+          if (db) {
+            const [fresh] = await db
+              .select({ role: users.role, teamId: users.teamId, isActive: users.isActive })
+              .from(users)
+              .where(eq(users.id, userId))
+              .limit(1);
+
+            if (fresh) {
+              t.role = fresh.role as Role;
+              t.teamId = fresh.teamId ?? null;
+              t.isActive = fresh.isActive;
+              t.roleRefreshedAt = Date.now();
+
+              // If the user has been deactivated, invalidate the session.
+              if (!fresh.isActive) {
+                return null as unknown as typeof token;
+              }
+            }
+          }
+        } catch {
+          // DB unavailable — keep existing token values, don't crash auth.
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {

@@ -1,10 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { BottomNav } from "./BottomNav";
+
+/** Re-validate the session from the server every 30 seconds so role/isActive changes take effect promptly. */
+const SESSION_REFRESH_MS = 30_000;
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -12,7 +16,25 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: session, update: updateSession } = useSession();
   const [mobileNavPath, setMobileNavPath] = useState<string | null>(null);
+
+  // Periodically refresh the session so role changes made by admins
+  // take effect without requiring the user to sign out and back in.
+  useEffect(() => {
+    const id = setInterval(() => {
+      void updateSession();
+    }, SESSION_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [updateSession]);
+
+  // When the session updates and the user becomes inactive, sign them out.
+  useEffect(() => {
+    if (session && session.user.isActive === false) {
+      router.push("/login");
+    }
+  }, [session, router]);
   const mobileNavOpen = mobileNavPath === pathname;
 
   useEffect(() => {

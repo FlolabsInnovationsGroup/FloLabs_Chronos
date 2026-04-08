@@ -93,8 +93,9 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
   const pathname = usePathname();
   const { data: session } = useSession();
   const role = session?.user.role;
+  const MEMBER_HIDDEN = new Set(["/team", "/projects", "/control"]);
   const navItems = [
-    ...BASE_NAV_ITEMS.filter((item) => !(item.href === "/team" && role === "member")),
+    ...BASE_NAV_ITEMS.filter((item) => !(role === "member" && MEMBER_HIDDEN.has(item.href))),
     ...(role === "admin" ? [{ href: "/control", icon: "tune", label: "Control" }] : []),
   ];
 

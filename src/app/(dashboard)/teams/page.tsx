@@ -23,7 +23,8 @@ function monthsAgo(n: number): string {
 }
 
 export default function TeamsPage() {
-  useSession();
+  const { data: session } = useSession();
+  const isMember = session?.user.role === "member";
 
   const [teams, setTeams] = useState<Team[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -194,6 +195,8 @@ export default function TeamsPage() {
   }
 
   function handleMemberClick(userId: string) {
+    // Members can see the list but not individual performance cards.
+    if (isMember) return;
     setSelectedMemberId((prev) => (prev === userId ? null : userId));
   }
 
@@ -591,7 +594,10 @@ export default function TeamsPage() {
                           key={member.id}
                           type="button"
                           onClick={() => handleMemberClick(member.id)}
-                          className="w-full text-left px-5 py-4 hover:bg-surface-container-low transition-colors flex items-center justify-between gap-4"
+                          className={cn(
+                            "w-full text-left px-5 py-4 transition-colors flex items-center justify-between gap-4",
+                            isMember ? "cursor-default" : "hover:bg-surface-container-low cursor-pointer"
+                          )}
                         >
                           <div className="min-w-0">
                             <p

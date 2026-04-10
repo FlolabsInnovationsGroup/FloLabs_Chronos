@@ -262,6 +262,24 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 
 ---
 
+---
+
+## ✅ Completed — Discussion Replies Feature
+
+### Feature: Discussion Replies ✅
+
+- `discussion_replies` table: `id`, `discussion_id`, `author_id`, `message`, `created_at`, `updated_at` — FK to `entry_discussions(id)` ON DELETE CASCADE
+- Migration: `scripts/migrate-discussion-replies.ts` (`pnpm run db:migrate:discussion-replies`)
+- `DiscussionReply` TypeScript interface in `src/types/index.ts`; `EntryDiscussion` updated with `replies?: DiscussionReply[]`
+- API routes:
+  - `GET /api/discussions/[id]/replies` — list replies for a discussion (auth + canViewDiscussions check)
+  - `POST /api/discussions/[id]/replies` — add a reply (auth + canViewDiscussions; anyone who can see the discussion can reply)
+  - `fetchRepliesForDiscussions` helper exported from the replies route, used by both discussions list routes
+- `GET /api/discussions` and `GET /api/discussions/entry/[entryId]` now attach replies to each discussion
+- `DiscussionCard` rewritten: per-discussion expand/collapse, full thread view (opening message + replies as chat bubble rows with colored initials avatar), inline reply textarea + Send button, optimistic reply append, Cmd/Ctrl+Enter shortcut; count badge toggles all-expanded/all-collapsed
+
+---
+
 ## What's Next (V1.2 candidates)
 
 - [ ] Email delivery for invitations (Resend integration)

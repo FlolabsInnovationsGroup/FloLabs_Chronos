@@ -11,6 +11,7 @@ import {
   getAccessibleUserIds,
 } from "@/lib/permissions";
 import { broadcastDiscussionChange } from "@/lib/realtime";
+import { fetchRepliesForDiscussions } from "@/app/api/discussions/[id]/replies/route";
 import type { EntryDiscussion } from "@/types";
 
 function toDiscussion(row: {
@@ -123,7 +124,14 @@ export async function GET() {
     rows = rows.filter((r) => r.discussion.resolvedAt === null);
   }
 
-  return NextResponse.json({ discussions: rows.map(toDiscussion) });
+  const discussions = rows.map(toDiscussion);
+
+  const repliesMap = await fetchRepliesForDiscussions(discussions.map((d) => d.id));
+  for (const d of discussions) {
+    d.replies = repliesMap.get(d.id) ?? [];
+  }
+
+  return NextResponse.json({ discussions });
 }
 
 const postSchema = z.object({

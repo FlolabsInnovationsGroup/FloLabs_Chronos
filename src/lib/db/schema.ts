@@ -229,6 +229,25 @@ export const entryDiscussions = pgTable(
 export type EntryDiscussionRecord = typeof entryDiscussions.$inferSelect;
 export type NewEntryDiscussion = typeof entryDiscussions.$inferInsert;
 
+export const discussionReplies = pgTable(
+  'discussion_replies',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    discussionId: uuid('discussion_id').notNull().references(() => entryDiscussions.id, { onDelete: 'cascade' }),
+    authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    message: text('message').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (t) => [
+    index('idx_replies_discussion').on(t.discussionId),
+    index('idx_replies_author').on(t.authorId),
+  ]
+);
+
+export type DiscussionReplyRecord = typeof discussionReplies.$inferSelect;
+export type NewDiscussionReply = typeof discussionReplies.$inferInsert;
+
 export const appConfig = pgTable(
   "app_config",
   {

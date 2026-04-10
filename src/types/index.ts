@@ -109,6 +109,16 @@ export interface ActiveTimer {
   startedAt: number; // Unix ms timestamp
 }
 
+export interface DiscussionReply {
+  id: string;
+  discussionId: string;
+  authorId: string;
+  message: string;
+  createdAt: Date;
+  updatedAt: Date;
+  author?: Pick<User, 'id' | 'name'>;
+}
+
 export interface EntryDiscussion {
   id: string;
   entryId: string;
@@ -123,6 +133,7 @@ export interface EntryDiscussion {
   entryOwnerUserId?: string;
   entryDescription?: string;
   entryProjectName?: string;
+  replies?: DiscussionReply[];
 }
 
 export interface SSEEvent {

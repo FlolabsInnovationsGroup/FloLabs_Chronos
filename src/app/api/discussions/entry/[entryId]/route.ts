@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { entryDiscussions, timeEntries, users, projects } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { canViewDiscussions } from "@/lib/permissions";
+import { fetchRepliesForDiscussions } from "@/app/api/discussions/[id]/replies/route";
 import type { EntryDiscussion } from "@/types";
 
 export async function GET(
@@ -68,6 +69,11 @@ export async function GET(
     entryDescription: entry.description,
     entryProjectName: projectName,
   }));
+
+  const repliesMap = await fetchRepliesForDiscussions(discussions.map((d) => d.id));
+  for (const d of discussions) {
+    d.replies = repliesMap.get(d.id) ?? [];
+  }
 
   return NextResponse.json({ discussions });
 }

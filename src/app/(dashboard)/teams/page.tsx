@@ -450,6 +450,34 @@ export default function TeamsPage() {
                                     <span className="text-outline-variant italic">No description</span>
                                   )}
                                 </p>
+                                {entry.notionTaskTitle && (() => {
+                                  const taskUrl = entry.notionTaskPageId
+                                    ? `https://www.notion.so/${entry.notionTaskPageId.replace(/-/g, "")}`
+                                    : null;
+                                  return taskUrl ? (
+                                    <a
+                                      href={taskUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex mt-1 max-w-full rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#755a40]/30"
+                                    >
+                                      <Badge
+                                        color="custom"
+                                        className="max-w-full min-w-0 bg-[#fed9b8] text-[#755a40] transition-colors hover:bg-[#f4ceb0]"
+                                      >
+                                        <span className="material-symbols-outlined mr-0.5 shrink-0" style={{ fontSize: "11px" }}>task</span>
+                                        <span className="truncate" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+                                          {entry.notionTaskTitle}
+                                        </span>
+                                      </Badge>
+                                    </a>
+                                  ) : (
+                                    <Badge color="secondary" className="mt-1">
+                                      <span className="material-symbols-outlined mr-0.5" style={{ fontSize: "11px" }}>task</span>
+                                      {entry.notionTaskTitle}
+                                    </Badge>
+                                  );
+                                })()}
                               </div>
                               <div className="text-right shrink-0">
                                 <p

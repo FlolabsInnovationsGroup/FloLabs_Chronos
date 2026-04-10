@@ -14,6 +14,7 @@
     "test:task-search": "tsx scripts/test-task-search-integration.ts",
     "seed": "tsx scripts/seed.ts",
     "db:migrate:invitations-notion": "tsx scripts/migrate-invitations-notion-team-member-id.ts",
+    "db:migrate:entry-discussions": "tsx scripts/migrate-entry-discussions.ts",
     "import:notion-entries": "tsx scripts/import-notion-entries.ts",
     "import:notion-entries:dry-run": "tsx scripts/import-notion-entries.ts --dry-run",
     "import:notion-entries:skip-ignored": "tsx scripts/import-notion-entries.ts --skip-ignored"

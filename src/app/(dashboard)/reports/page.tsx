@@ -340,7 +340,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       <ReportTable rows={reportRows} title={`Breakdown by ${groupBy}`} />
 
       {/* Detailed entries */}
-      <ReportEntries entries={entries} />
+      <ReportEntries entries={entries} viewerRole={sessionUser!.role} viewerId={sessionUser!.id} />
     </div>
   );
 }

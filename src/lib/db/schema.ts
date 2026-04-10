@@ -207,6 +207,28 @@ export const timeEntryTags = pgTable(
   ]
 );
 
+export const entryDiscussions = pgTable(
+  'entry_discussions',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    entryId: uuid('entry_id').notNull().references(() => timeEntries.id, { onDelete: 'cascade' }),
+    startedById: uuid('started_by_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    message: text('message').notNull(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    resolvedById: uuid('resolved_by_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (t) => [
+    index('idx_discussions_entry').on(t.entryId),
+    index('idx_discussions_started_by').on(t.startedById),
+    index('idx_discussions_unresolved').on(t.entryId, t.resolvedAt),
+  ]
+);
+
+export type EntryDiscussionRecord = typeof entryDiscussions.$inferSelect;
+export type NewEntryDiscussion = typeof entryDiscussions.$inferInsert;
+
 export const appConfig = pgTable(
   "app_config",
   {

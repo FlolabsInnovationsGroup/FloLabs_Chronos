@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
-import { eq, and, gte, lte, isNotNull, desc, inArray } from "drizzle-orm";
+import { timeEntries, projects, tags, users, timeEntryTags, entryDiscussions } from "@/lib/db/schema";
+import { eq, and, gte, lte, isNotNull, desc, inArray, isNull } from "drizzle-orm";
 import { getCalendarWeekRangeLocal } from "@/lib/utils";
 import { TimerDashboardClient } from "@/components/timer/TimerDashboardClient";
-import type { Project, Tag, TimeEntry } from "@/types";
+import { isAdmin, isTeamLead, getAccessibleUserIds } from "@/lib/permissions";
+import type { Project, Tag, TimeEntry, EntryDiscussion } from "@/types";
 
 export const metadata: Metadata = { title: "Timer | FloLabs Chronos" };
 
@@ -103,6 +104,106 @@ async function getRecentEntries(userId: string): Promise<TimeEntry[]> {
   return buildEntriesWithTags(rows);
 }
 
+async function getInitialDiscussions(sessionUser: {
+  id: string;
+  role: "admin" | "team_lead" | "member";
+  teamId: string | null;
+  isActive: boolean;
+}): Promise<EntryDiscussion[]> {
+  if (!db) return [];
+
+  const startedByAlias = users;
+
+  type DiscussionRow = {
+    discussion: typeof entryDiscussions.$inferSelect;
+    startedBy: { id: string; name: string } | null;
+    entry: { userId: string; description: string; projectId: string | null } | null;
+    projectName: string | null;
+  };
+
+  let rows: DiscussionRow[];
+
+  if (isAdmin(sessionUser)) {
+    rows = await db
+      .select({
+        discussion: entryDiscussions,
+        startedBy: { id: startedByAlias.id, name: startedByAlias.name },
+        entry: { userId: timeEntries.userId, description: timeEntries.description, projectId: timeEntries.projectId },
+        projectName: projects.name,
+      })
+      .from(entryDiscussions)
+      .leftJoin(startedByAlias, eq(entryDiscussions.startedById, startedByAlias.id))
+      .leftJoin(timeEntries, eq(entryDiscussions.entryId, timeEntries.id))
+      .leftJoin(projects, eq(timeEntries.projectId, projects.id))
+      .where(isNull(entryDiscussions.resolvedAt));
+  } else if (isTeamLead(sessionUser)) {
+    const accessibleUserIds = await getAccessibleUserIds(sessionUser);
+    if (!accessibleUserIds || accessibleUserIds.length === 0) return [];
+
+    const allRows = await db
+      .select({
+        discussion: entryDiscussions,
+        startedBy: { id: startedByAlias.id, name: startedByAlias.name },
+        entry: { userId: timeEntries.userId, description: timeEntries.description, projectId: timeEntries.projectId },
+        projectName: projects.name,
+      })
+      .from(entryDiscussions)
+      .leftJoin(startedByAlias, eq(entryDiscussions.startedById, startedByAlias.id))
+      .leftJoin(timeEntries, eq(entryDiscussions.entryId, timeEntries.id))
+      .leftJoin(projects, eq(timeEntries.projectId, projects.id))
+      .where(isNull(entryDiscussions.resolvedAt));
+
+    rows = allRows.filter(
+      (r) =>
+        r.discussion.startedById === sessionUser.id ||
+        (r.entry?.userId && accessibleUserIds.includes(r.entry.userId))
+    );
+  } else {
+    // Member: discussions on own entries
+    const myEntries = await db
+      .select({ id: timeEntries.id })
+      .from(timeEntries)
+      .where(eq(timeEntries.userId, sessionUser.id));
+
+    if (myEntries.length === 0) return [];
+    const myEntryIds = myEntries.map((e) => e.id);
+
+    const allRows = await db
+      .select({
+        discussion: entryDiscussions,
+        startedBy: { id: startedByAlias.id, name: startedByAlias.name },
+        entry: { userId: timeEntries.userId, description: timeEntries.description, projectId: timeEntries.projectId },
+        projectName: projects.name,
+      })
+      .from(entryDiscussions)
+      .leftJoin(startedByAlias, eq(entryDiscussions.startedById, startedByAlias.id))
+      .leftJoin(timeEntries, eq(entryDiscussions.entryId, timeEntries.id))
+      .leftJoin(projects, eq(timeEntries.projectId, projects.id))
+      .where(
+        myEntryIds.length === 1
+          ? eq(entryDiscussions.entryId, myEntryIds[0])
+          : inArray(entryDiscussions.entryId, myEntryIds)
+      );
+
+    rows = allRows.filter((r) => r.discussion.resolvedAt === null);
+  }
+
+  return rows.map((r) => ({
+    id: r.discussion.id,
+    entryId: r.discussion.entryId,
+    startedById: r.discussion.startedById,
+    message: r.discussion.message,
+    resolvedAt: r.discussion.resolvedAt,
+    resolvedById: r.discussion.resolvedById,
+    createdAt: r.discussion.createdAt!,
+    updatedAt: r.discussion.updatedAt!,
+    startedBy: r.startedBy ?? undefined,
+    entryOwnerUserId: r.entry?.userId,
+    entryDescription: r.entry?.description,
+    entryProjectName: r.projectName ?? undefined,
+  }));
+}
+
 async function getUserWeeklyTarget(userId: string): Promise<number> {
   if (!db) return 40;
   const [row] = await db
@@ -115,14 +216,16 @@ async function getUserWeeklyTarget(userId: string): Promise<number> {
 
 export default async function TimerPage() {
   const session = await auth();
-  const userId = session!.user.id;
+  const sessionUser = session!.user;
+  const userId = sessionUser.id;
 
-  const [projectsList, tagsList, weekEntries, recentEntries, weeklyTarget] = await Promise.all([
+  const [projectsList, tagsList, weekEntries, recentEntries, weeklyTarget, initialDiscussions] = await Promise.all([
     getProjects(),
     getUserTags(userId),
     getWeekEntries(userId),
     getRecentEntries(userId),
     getUserWeeklyTarget(userId),
+    getInitialDiscussions(sessionUser),
   ]);
 
   return (
@@ -133,6 +236,7 @@ export default async function TimerPage() {
         initialWeekEntries={weekEntries}
         initialRecentEntries={recentEntries}
         weeklyTargetHours={weeklyTarget}
+        initialDiscussions={initialDiscussions}
       />
     </div>
   );

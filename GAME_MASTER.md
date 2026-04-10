@@ -239,6 +239,29 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 
 ---
 
+## ✅ Completed — Entry Discussions Feature
+
+### Feature: Entry Discussions ✅
+
+- `entry_discussions` table: `id`, `entry_id`, `started_by_id`, `message`, `resolved_at`, `resolved_by_id`, `created_at`, `updated_at`
+- Migration: `scripts/migrate-entry-discussions.ts` (`pnpm run db:migrate:entry-discussions`)
+- Permission helpers in `src/lib/permissions.ts`: `canStartDiscussion`, `canResolveDiscussion`, `canViewDiscussions`
+- `discussionBroadcaster` EventEmitter in `src/lib/realtime.ts` + `broadcastDiscussionChange(entryId)`
+- SSE route (`/api/sse`) now forwards `discussion:new` events to connected clients
+- API routes:
+  - `GET/POST /api/discussions` — list unresolved (scoped by role) / start discussion
+  - `GET /api/discussions/entry/[entryId]` — all discussions on a specific entry (resolved + unresolved)
+  - `PATCH/DELETE /api/discussions/[id]` — resolve or hard-delete
+- `EntryCard`: chat bubble button visible only to admins/team leads on other users' entries
+- `EntryList`: forwards `onDiscuss`, `viewerRole`, `viewerId` props to each `EntryCard`
+- `ReportEntries`: modal to start a discussion from the Reports page (admin/team lead only)
+- `DiscussionCard` (`src/components/discussions/DiscussionCard.tsx`): collapsible card on the timer dashboard showing unresolved discussions; re-fetches on SSE discussion events
+- Timer dashboard (`TimerDashboardClient`): renders `DiscussionCard` above `ActiveTimerCard` in the right column
+- Timer page (`/timer/page.tsx`): SSR-fetches initial discussions per role and passes them to client
+- **Note:** Live-timer discussions intentionally skipped — active timers are Redis-only with no stable `entry_id` until stopped.
+
+---
+
 ## What's Next (V1.2 candidates)
 
 - [ ] Email delivery for invitations (Resend integration)

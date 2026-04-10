@@ -350,6 +350,18 @@ CREATE TABLE time_entry_tags (
   tag_id         UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
   PRIMARY KEY (time_entry_id, tag_id)
 );
+
+CREATE TABLE entry_discussions (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_id       UUID NOT NULL REFERENCES time_entries(id) ON DELETE CASCADE,
+  started_by_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message        TEXT NOT NULL,
+  resolved_at    TIMESTAMPTZ,
+  resolved_by_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at     TIMESTAMPTZ DEFAULT now(),
+  updated_at     TIMESTAMPTZ DEFAULT now()
+);
+-- Indexes: idx_discussions_entry, idx_discussions_started_by, idx_discussions_unresolved
 ```
 
 ### Data Rules
@@ -367,6 +379,22 @@ CREATE TABLE time_entry_tags (
 - Deleting a project deletes linked time entries.
 - Deleting a user cascades to their tags and membership rows; user deletion should still be product-gated by historical integrity rules.
 - Admins may have `team_id = NULL`.
+- Deleting an entry cascades to its discussions.
+- Deleting a user who started a discussion cascades (discussion row is removed).
+- Deleting a user who resolved a discussion sets `resolved_by_id = NULL` (SET NULL).
+
+### Entry Discussions — Access Rules
+
+Discussions are a lightweight async review mechanism for time entries.
+
+| Action | Who can perform |
+|---|---|
+| Start a discussion | Admins and team leads on entries belonging to other users within their accessible scope. Users cannot discuss their own entries. |
+| View discussions on an entry | Admins (all), team leads (within scope), members (own entries only). |
+| List unresolved discussions | Admin: all; Team lead: where they are the starter OR entry owner is in their accessible user set; Member: own entries. |
+| Resolve a discussion | Admin (any), discussion starter. |
+| Delete a discussion | Admin (any), starter (only if unresolved). |
+| Active-timer discussions | Not supported — active timers have no stable `entry_id` in Postgres until stopped. |
 
 ---
 

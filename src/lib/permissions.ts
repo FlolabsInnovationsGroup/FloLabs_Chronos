@@ -141,6 +141,30 @@ export async function getAccessibleTeams(user: SessionUserLike) {
   return db.select().from(teams).where(inArray(teams.id, teamIds)).orderBy(teams.name);
 }
 
+/** Admins and team leads can discuss entries of OTHER users they can see. Not own entries. */
+export async function canStartDiscussion(viewer: SessionUserLike, entryOwnerUserId: string): Promise<boolean> {
+  if (viewer.id === entryOwnerUserId) return false;
+  if (isAdmin(viewer)) return true;
+  if (isTeamLead(viewer)) return canAccessUser(viewer, entryOwnerUserId);
+  return false;
+}
+
+/** Admins can resolve any discussion. Discussion starter can resolve their own. */
+export function canResolveDiscussion(
+  viewer: SessionUserLike,
+  discussion: { startedById: string }
+): boolean {
+  if (isAdmin(viewer)) return true;
+  return viewer.id === discussion.startedById;
+}
+
+/** Who can view discussions on an entry */
+export async function canViewDiscussions(viewer: SessionUserLike, entryOwnerUserId: string): Promise<boolean> {
+  if (isAdmin(viewer)) return true;
+  if (isTeamLead(viewer)) return canAccessUser(viewer, entryOwnerUserId);
+  return viewer.id === entryOwnerUserId;
+}
+
 export async function replaceUserTeamMemberships(userId: string, teamIds: string[]) {
   if (!db) return;
   await db.delete(teamMemberships).where(eq(teamMemberships.userId, userId));

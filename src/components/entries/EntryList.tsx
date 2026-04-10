@@ -17,6 +17,9 @@ interface ProjectOption {
 interface EntryListProps {
   entries: TimeEntry[];
   onResume?: (entry: TimeEntry) => void;
+  onDiscuss?: (entry: TimeEntry) => void;
+  viewerRole?: string;
+  viewerId?: string;
   emptyMessage?: string;
   grouped?: boolean;
   showUser?: boolean;
@@ -25,6 +28,9 @@ interface EntryListProps {
 export function EntryList({
   entries,
   onResume,
+  onDiscuss,
+  viewerRole,
+  viewerId,
   emptyMessage = "No time entries yet. Start your first session above.",
   grouped = true,
   showUser = false,
@@ -198,6 +204,9 @@ export function EntryList({
                       key={entry.id}
                       entry={entry}
                       onResume={onResume}
+                      onDiscuss={onDiscuss}
+                      viewerRole={viewerRole}
+                      viewerId={viewerId}
                       isSelected={selectedIds.has(entry.id)}
                       onToggleSelect={toggleSelect}
                       anySelected={anySelected}
@@ -215,6 +224,9 @@ export function EntryList({
                 key={entry.id}
                 entry={entry}
                 onResume={onResume}
+                onDiscuss={onDiscuss}
+                viewerRole={viewerRole}
+                viewerId={viewerId}
                 isSelected={selectedIds.has(entry.id)}
                 onToggleSelect={toggleSelect}
                 anySelected={anySelected}

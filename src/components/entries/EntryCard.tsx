@@ -23,6 +23,9 @@ interface Project {
 interface EntryCardProps {
   entry: TimeEntry;
   onResume?: (entry: TimeEntry) => void;
+  onDiscuss?: (entry: TimeEntry) => void;
+  viewerRole?: string;
+  viewerId?: string;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   anySelected?: boolean;
@@ -39,7 +42,7 @@ function toDatetimeLocal(value: Date | string | null | undefined) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
-export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect, anySelected = false, showUser = false }: EntryCardProps) {
+export function EntryCard({ entry, onResume, onDiscuss, viewerRole, viewerId, isSelected = false, onToggleSelect, anySelected = false, showUser = false }: EntryCardProps) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -194,6 +197,9 @@ export function EntryCard({ entry, onResume, isSelected = false, onToggleSelect,
           <div className="flex items-center justify-between gap-3 sm:shrink-0 sm:justify-end">
             <div className="flex items-center gap-1 shrink-0">
               {onResume && <Tooltip label="Start timer with these values"><button onClick={() => onResume(entry)} className={`p-1.5 rounded-lg text-primary hover:bg-primary-container transition-all duration-150 ${hovered ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"}`} aria-label="Start timer from this entry"><span className="material-symbols-outlined" style={{ fontSize: "18px" }}>play_arrow</span></button></Tooltip>}
+              {onDiscuss && (viewerRole === 'admin' || viewerRole === 'team_lead') && entry.userId !== viewerId && (
+                <Tooltip label="Start discussion"><button onClick={() => onDiscuss(entry)} className={`p-1.5 rounded-lg text-primary hover:bg-primary-container transition-all duration-150 ${hovered ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"}`} aria-label="Start discussion"><span className="material-symbols-outlined" style={{ fontSize: "18px" }}>chat_bubble</span></button></Tooltip>
+              )}
               <Tooltip label="Edit"><button onClick={openEdit} className={`p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-all duration-150 ${hovered ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"}`} aria-label="Edit this entry"><span className="material-symbols-outlined" style={{ fontSize: "18px" }}>edit</span></button></Tooltip>
               <Tooltip label="Delete"><button onClick={() => setDeleteConfirm(true)} className={`p-1.5 rounded-lg text-error hover:bg-warm-muted transition-all duration-150 ${hovered ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"}`} aria-label="Delete this entry"><span className="material-symbols-outlined" style={{ fontSize: "18px" }}>delete</span></button></Tooltip>
             </div>

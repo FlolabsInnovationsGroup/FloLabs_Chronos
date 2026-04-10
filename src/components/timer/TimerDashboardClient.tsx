@@ -9,7 +9,8 @@ import { TimerDisplay } from "@/components/timer/TimerDisplay";
 import { TimerControls } from "@/components/timer/TimerControls";
 import { ActiveTimerCard } from "@/components/timer/ActiveTimerCard";
 import { EntryList } from "@/components/entries/EntryList";
-import type { Project, Tag, TimeEntry, SSEEvent } from "@/types";
+import { DiscussionCard } from "@/components/discussions/DiscussionCard";
+import type { Project, Tag, TimeEntry, SSEEvent, EntryDiscussion } from "@/types";
 
 interface TimerDashboardClientProps {
   projects: Project[];
@@ -17,6 +18,7 @@ interface TimerDashboardClientProps {
   initialWeekEntries: TimeEntry[];
   initialRecentEntries: TimeEntry[];
   weeklyTargetHours: number;
+  initialDiscussions: EntryDiscussion[];
 }
 
 export function TimerDashboardClient({
@@ -25,6 +27,7 @@ export function TimerDashboardClient({
   initialWeekEntries,
   initialRecentEntries,
   weeklyTargetHours,
+  initialDiscussions,
 }: TimerDashboardClientProps) {
   const { data: session } = useSession();
   const { activeTimer, start, stop } = useTimer();
@@ -95,7 +98,12 @@ export function TimerDashboardClient({
           <TimerControls projects={projects} tags={tags} />
         </div>
 
-        <div className="col-span-12 md:col-span-5 min-w-0">
+        <div className="col-span-12 md:col-span-5 min-w-0 flex flex-col gap-5">
+          <DiscussionCard
+            initialDiscussions={initialDiscussions}
+            viewerRole={session?.user.role ?? "member"}
+            viewerId={session?.user.id ?? ""}
+          />
           <ActiveTimerCard weekEntries={weekEntries} weeklyTargetHours={weeklyTargetHours} />
         </div>
       </div>

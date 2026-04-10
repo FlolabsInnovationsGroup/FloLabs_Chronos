@@ -109,10 +109,27 @@ export interface ActiveTimer {
   startedAt: number; // Unix ms timestamp
 }
 
+export interface EntryDiscussion {
+  id: string;
+  entryId: string;
+  startedById: string;
+  message: string;
+  resolvedAt: Date | null;
+  resolvedById: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  startedBy?: Pick<User, 'id' | 'name'>;
+  resolvedBy?: Pick<User, 'id' | 'name'> | null;
+  entryOwnerUserId?: string;
+  entryDescription?: string;
+  entryProjectName?: string;
+}
+
 export interface SSEEvent {
-  type: "timer:start" | "timer:stop" | "heartbeat" | "data:changed";
+  type: "timer:start" | "timer:stop" | "heartbeat" | "data:changed" | "discussion:new" | "discussion:resolved";
   userId?: string;
-  channel?: "projects" | "tags" | "team";
+  channel?: "projects" | "tags" | "team" | "discussions";
+  entryId?: string;
   data?: ActiveTimer | null;
 }
 

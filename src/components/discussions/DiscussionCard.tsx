@@ -156,9 +156,13 @@ export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: Dis
 
   const onlineIds = useOnlineUserIds();
 
-  // Load seen IDs from localStorage once on mount
+  // Load seen IDs from localStorage once on mount, and auto-open first discussion
   useEffect(() => {
     setSeenIds(getSeenIds());
+    if (discussions.length > 0 && !activeId) {
+      setActiveId(discussions[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-scroll to bottom of active discussion when new messages arrive
@@ -296,7 +300,7 @@ export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: Dis
           >
             <button
               type="button"
-              onClick={() => { setListOpen((v) => !v); setActiveId(null); }}
+              onClick={() => setListOpen((v) => !v)}
               className={`inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 rounded-full text-xs font-semibold tabular-nums transition-colors ${
                 hasAnyUnread
                   ? 'bg-error text-on-error'
@@ -317,9 +321,20 @@ export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: Dis
         </div>
       </div>
 
-      {/* Discussion list (shown only when badge clicked) */}
-      {listOpen && !activeDiscussion && (
+      {/* Discussion list (shown only when badge clicked, overlays active chat) */}
+      {listOpen && (
         <div className="flex flex-col divide-y divide-surface-container-low border-t border-surface-container-low">
+          {activeDiscussion && (
+            <button
+              type="button"
+              onClick={() => setListOpen(false)}
+              className="flex items-center gap-1.5 px-5 py-2.5 w-full text-left hover:bg-surface-container-low transition-colors text-xs text-primary font-medium"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>arrow_back</span>
+              Back to conversation
+            </button>
+          )}
           {discussions.length === 0 ? (
             <p
               className="px-5 py-4 text-sm text-outline-variant"
@@ -383,18 +398,18 @@ export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: Dis
         </div>
       )}
 
-      {/* Active chat thread */}
-      {activeDiscussion && (
+      {/* Active chat thread — always visible when a discussion is selected */}
+      {activeDiscussion && !listOpen && (
         <div className="flex flex-col border-t border-surface-container-low">
           {/* Chat header */}
           <div className="flex items-center gap-2 px-5 py-3 border-b border-surface-container-low">
             <button
               type="button"
-              onClick={() => { setActiveId(null); setListOpen(true); }}
+              onClick={() => setListOpen(true)}
               className="p-0.5 rounded text-on-surface-variant hover:bg-surface-container-low transition-colors"
-              aria-label="Back to list"
+              aria-label="Show all conversations"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>arrow_back</span>
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>menu</span>
             </button>
             <div className="flex flex-col min-w-0 flex-1">
               <p

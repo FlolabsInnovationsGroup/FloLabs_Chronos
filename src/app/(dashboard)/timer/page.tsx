@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { timeEntries, projects, tags, users, timeEntryTags, entryDiscussions } from "@/lib/db/schema";
-import { eq, and, gte, lte, isNotNull, desc, inArray, isNull } from "drizzle-orm";
+import { eq, and, gte, lte, isNotNull, desc, inArray, isNull, asc } from "drizzle-orm";
+import { discussionReplies } from "@/lib/db/schema";
 import { getCalendarWeekRangeLocal } from "@/lib/utils";
 import { TimerDashboardClient } from "@/components/timer/TimerDashboardClient";
 import { isAdmin, isTeamLead, getAccessibleUserIds } from "@/lib/permissions";
@@ -188,7 +189,7 @@ async function getInitialDiscussions(sessionUser: {
     rows = allRows.filter((r) => r.discussion.resolvedAt === null);
   }
 
-  return rows.map((r) => ({
+  const discussions = rows.map((r) => ({
     id: r.discussion.id,
     entryId: r.discussion.entryId,
     startedById: r.discussion.startedById,
@@ -201,7 +202,46 @@ async function getInitialDiscussions(sessionUser: {
     entryOwnerUserId: r.entry?.userId,
     entryDescription: r.entry?.description,
     entryProjectName: r.projectName ?? undefined,
+    replies: [] as EntryDiscussion['replies'],
   }));
+
+  // Fetch replies for all discussions
+  const discussionIds = discussions.map((d) => d.id);
+  if (discussionIds.length > 0) {
+    const replyRows = await db
+      .select({
+        reply: discussionReplies,
+        author: { id: users.id, name: users.name },
+      })
+      .from(discussionReplies)
+      .leftJoin(users, eq(discussionReplies.authorId, users.id))
+      .where(
+        discussionIds.length === 1
+          ? eq(discussionReplies.discussionId, discussionIds[0])
+          : inArray(discussionReplies.discussionId, discussionIds)
+      )
+      .orderBy(asc(discussionReplies.createdAt));
+
+    const repliesMap = new Map<string, EntryDiscussion['replies']>();
+    for (const r of replyRows) {
+      const existing = repliesMap.get(r.reply.discussionId) ?? [];
+      existing.push({
+        id: r.reply.id,
+        discussionId: r.reply.discussionId,
+        authorId: r.reply.authorId,
+        message: r.reply.message,
+        createdAt: r.reply.createdAt!,
+        updatedAt: r.reply.updatedAt!,
+        author: r.author ?? undefined,
+      });
+      repliesMap.set(r.reply.discussionId, existing);
+    }
+    for (const d of discussions) {
+      d.replies = repliesMap.get(d.id) ?? [];
+    }
+  }
+
+  return discussions;
 }
 
 async function getUserWeeklyTarget(userId: string): Promise<number> {

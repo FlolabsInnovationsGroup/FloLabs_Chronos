@@ -1,24 +1,18 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSSE } from '@/hooks/use-sse';
 import { Tooltip } from '@/components/ui/Tooltip';
 import type { EntryDiscussion, DiscussionReply, SSEEvent } from '@/types';
 
-interface DiscussionCardProps {
-  initialDiscussions: EntryDiscussion[];
-  viewerRole: string;
-  viewerId: string;
-}
+// ─── helpers ────────────────────────────────────────────────────────────────
 
 function relativeDate(date: Date): string {
   const d = new Date(date);
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const diffMs = todayStart.getTime() - dStart.getTime();
-  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-
+  const diffDays = Math.round((todayStart.getTime() - dStart.getTime()) / (1000 * 60 * 60 * 24));
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
   if (diffDays <= 6) return `${diffDays} days ago`;
@@ -34,13 +28,24 @@ function avatarColor(name: string): string {
   return colors[(name.charCodeAt(0) ?? 0) % 3];
 }
 
+// ─── types ───────────────────────────────────────────────────────────────────
+
+interface DiscussionCardProps {
+  initialDiscussions: EntryDiscussion[];
+  viewerRole: string;
+  viewerId: string;
+}
+
+// ─── sub-components ──────────────────────────────────────────────────────────
+
 interface MessageRowProps {
   name: string;
   date: Date;
   message: string;
+  isLive?: boolean;
 }
 
-function MessageRow({ name, date, message }: MessageRowProps) {
+function MessageRow({ name, date, message, isLive }: MessageRowProps) {
   const initials = name.slice(0, 1).toUpperCase();
   return (
     <div className="flex items-start gap-2.5">
@@ -58,6 +63,13 @@ function MessageRow({ name, date, message }: MessageRowProps) {
           >
             {name}
           </span>
+          {isLive && (
+            <span
+              className="inline-block w-2 h-2 rounded-full bg-error shrink-0"
+              title="Online now"
+              aria-label="Online"
+            />
+          )}
           <span
             className="text-xs text-outline-variant"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -76,27 +88,125 @@ function MessageRow({ name, date, message }: MessageRowProps) {
   );
 }
 
+// ─── presence hook ────────────────────────────────────────────────────────────
+
+function useOnlineUserIds(): Set<string> {
+  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetch_() {
+      try {
+        const res = await fetch('/api/users', { cache: 'no-store' });
+        if (!res.ok || cancelled) return;
+        const data = await res.json() as { users?: { id: string; activeTimer: unknown | null }[] };
+        const live = new Set<string>(
+          (data.users ?? [])
+            .filter((u) => u.activeTimer !== null)
+            .map((u) => u.id)
+        );
+        if (!cancelled) setOnlineIds(live);
+      } catch { /* ignore */ }
+    }
+    void fetch_();
+    const interval = setInterval(() => void fetch_(), 30_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  return onlineIds;
+}
+
+// ─── unread tracking (localStorage) ─────────────────────────────────────────
+
+const SEEN_KEY = 'chronos:seen_discussion_reply_ids';
+
+function getSeenIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(SEEN_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch { return new Set(); }
+}
+
+function markSeen(ids: string[]) {
+  try {
+    const existing = getSeenIds();
+    for (const id of ids) existing.add(id);
+    // Keep only last 500 to avoid unbounded growth
+    const arr = [...existing].slice(-500);
+    localStorage.setItem(SEEN_KEY, JSON.stringify(arr));
+  } catch { /* ignore */ }
+}
+
+function hasUnread(discussion: EntryDiscussion, seen: Set<string>): boolean {
+  if (!discussion.replies?.length) return false;
+  return discussion.replies.some((r) => !seen.has(r.id));
+}
+
+// ─── main component ───────────────────────────────────────────────────────────
+
 export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: DiscussionCardProps) {
   const [discussions, setDiscussions] = useState<EntryDiscussion[]>(initialDiscussions);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [allExpanded, setAllExpanded] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
   const [replyLoading, setReplyLoading] = useState<Record<string, boolean>>({});
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const unresolvedCount = discussions.filter((d) => d.resolvedAt === null).length;
+  const onlineIds = useOnlineUserIds();
+
+  // Load seen IDs from localStorage once on mount
+  useEffect(() => {
+    setSeenIds(getSeenIds());
+  }, []);
+
+  // Auto-scroll to bottom of active discussion when new messages arrive
+  useEffect(() => {
+    if (activeId) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [activeId, discussions]);
+
+  // When opening a chat, mark all its replies as seen
+  function openDiscussion(id: string) {
+    setActiveId(id);
+    setListOpen(false);
+    const discussion = discussions.find((d) => d.id === id);
+    if (discussion?.replies?.length) {
+      const ids = discussion.replies.map((r) => r.id);
+      markSeen(ids);
+      setSeenIds((prev) => {
+        const next = new Set(prev);
+        for (const rid of ids) next.add(rid);
+        return next;
+      });
+    }
+  }
 
   const refetch = useCallback(async () => {
     try {
       const res = await fetch('/api/discussions');
       if (res.ok) {
-        const data = await res.json();
-        setDiscussions(data.discussions ?? []);
+        const data = await res.json() as { discussions?: EntryDiscussion[] };
+        const updated = data.discussions ?? [];
+        setDiscussions(updated);
+        // If actively viewing a chat, mark newly arrived replies as seen
+        if (activeId) {
+          const active = updated.find((d) => d.id === activeId);
+          if (active?.replies?.length) {
+            const ids = active.replies.map((r) => r.id);
+            markSeen(ids);
+            setSeenIds((prev) => {
+              const next = new Set(prev);
+              for (const rid of ids) next.add(rid);
+              return next;
+            });
+          }
+        }
       }
-    } catch {
-      // ignore
-    }
-  }, []);
+    } catch { /* ignore */ }
+  }, [activeId]);
 
   useSSE(
     useCallback(
@@ -109,28 +219,6 @@ export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: Dis
     )
   );
 
-  function toggleAllExpanded() {
-    const next = !allExpanded;
-    setAllExpanded(next);
-    if (next) {
-      setExpandedIds(new Set(discussions.map((d) => d.id)));
-    } else {
-      setExpandedIds(new Set());
-    }
-  }
-
-  function toggleExpanded(id: string) {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }
-
   async function handleResolve(discussion: EntryDiscussion) {
     setResolvingIds((prev) => new Set(prev).add(discussion.id));
     try {
@@ -141,6 +229,7 @@ export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: Dis
       });
       if (res.ok) {
         setDiscussions((prev) => prev.filter((d) => d.id !== discussion.id));
+        if (activeId === discussion.id) setActiveId(null);
       }
     } finally {
       setResolvingIds((prev) => {
@@ -171,16 +260,24 @@ export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: Dis
           )
         );
         setReplyTexts((prev) => ({ ...prev, [discussion.id]: '' }));
+        // Mark the reply we just sent as seen
+        markSeen([reply.id]);
+        setSeenIds((prev) => new Set(prev).add(reply.id));
       }
     } finally {
       setReplyLoading((prev) => ({ ...prev, [discussion.id]: false }));
     }
   }
 
-  if (discussions.length === 0) return null;
+  const unresolvedCount = discussions.filter((d) => d.resolvedAt === null).length;
+  const hasAnyUnread = discussions.some((d) => hasUnread(d, seenIds));
 
   const canResolve = (discussion: EntryDiscussion) =>
     viewerRole === 'admin' || discussion.startedById === viewerId;
+
+  const activeDiscussion = activeId ? discussions.find((d) => d.id === activeId) : null;
+
+  if (discussions.length === 0 && !activeId) return null;
 
   return (
     <div className="bg-surface-container-lowest rounded-xl paper-shadow">
@@ -193,16 +290,26 @@ export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: Dis
           Discussions
         </span>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={toggleAllExpanded}
-            className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 rounded-full bg-primary text-on-primary text-xs font-semibold tabular-nums"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-            aria-label={`${unresolvedCount} unresolved discussions, click to ${allExpanded ? 'collapse' : 'expand'} all`}
+          <Tooltip
+            label={`${unresolvedCount} unresolved · click to ${listOpen ? 'hide' : 'show'} list`}
+            delayMs={0}
           >
-            {unresolvedCount}
-          </button>
-          <Tooltip label="Discussions started on time entries that need your attention" delayMs={0}>
+            <button
+              type="button"
+              onClick={() => { setListOpen((v) => !v); setActiveId(null); }}
+              className={`inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 rounded-full text-xs font-semibold tabular-nums transition-colors ${
+                hasAnyUnread
+                  ? 'bg-error text-on-error'
+                  : 'bg-primary text-on-primary'
+              }`}
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+              aria-label={`${unresolvedCount} unresolved discussions`}
+              aria-pressed={listOpen}
+            >
+              {unresolvedCount}
+            </button>
+          </Tooltip>
+          <Tooltip label="Discussions on time entries that need attention" delayMs={0}>
             <span className="material-symbols-outlined text-on-surface-variant cursor-default" style={{ fontSize: '16px' }}>
               info
             </span>
@@ -210,124 +317,168 @@ export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: Dis
         </div>
       </div>
 
-      {/* Discussion list */}
-      <div className="flex flex-col divide-y divide-surface-container-low border-t border-surface-container-low">
-        {discussions.map((discussion) => {
-          const isExpanded = expandedIds.has(discussion.id);
-          const replies: DiscussionReply[] = discussion.replies ?? [];
-          return (
-            <div key={discussion.id} className="flex flex-col">
-              {/* Collapsed header row — click to expand */}
-              <button
-                type="button"
-                className="flex items-start justify-between gap-2 px-5 py-3.5 text-left w-full hover:bg-surface-container-low transition-colors"
-                onClick={() => toggleExpanded(discussion.id)}
-              >
-                <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                  <p
-                    className="text-sm italic text-on-background truncate"
-                    style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
-                  >
-                    {discussion.entryDescription || 'No description'}
-                  </p>
-                  {discussion.entryProjectName && (
-                    <span
-                      className="text-xs text-primary font-medium"
-                      style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+      {/* Discussion list (shown only when badge clicked) */}
+      {listOpen && !activeDiscussion && (
+        <div className="flex flex-col divide-y divide-surface-container-low border-t border-surface-container-low">
+          {discussions.length === 0 ? (
+            <p
+              className="px-5 py-4 text-sm text-outline-variant"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            >
+              No unresolved discussions.
+            </p>
+          ) : (
+            discussions.map((discussion) => {
+              const replies: DiscussionReply[] = discussion.replies ?? [];
+              const unread = hasUnread(discussion, seenIds);
+              return (
+                <button
+                  key={discussion.id}
+                  type="button"
+                  className="flex items-start justify-between gap-2 px-5 py-3.5 text-left w-full hover:bg-surface-container-low transition-colors"
+                  onClick={() => openDiscussion(discussion.id)}
+                >
+                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                    <p
+                      className="text-sm italic text-on-background truncate"
+                      style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
                     >
-                      {discussion.entryProjectName}
-                    </span>
-                  )}
-                  {!isExpanded && (
+                      {discussion.entryDescription || 'No description'}
+                    </p>
+                    {discussion.entryProjectName && (
+                      <span
+                        className="text-xs text-primary font-medium"
+                        style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                      >
+                        {discussion.entryProjectName}
+                      </span>
+                    )}
                     <p
                       className="text-xs text-outline-variant truncate"
                       style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                     >
                       {discussion.message}
                     </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {replies.length > 0 && (
-                    <span
-                      className="text-xs text-outline-variant tabular-nums"
-                      style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                    >
-                      {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
-                    </span>
-                  )}
-                  {canResolve(discussion) && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); void handleResolve(discussion); }}
-                      disabled={resolvingIds.has(discussion.id)}
-                      className="text-xs px-2.5 py-1 rounded-lg border border-surface-container-highest text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-50"
-                      style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                    >
-                      Resolve
-                    </button>
-                  )}
-                  <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '16px' }}>
-                    {isExpanded ? 'expand_less' : 'expand_more'}
-                  </span>
-                </div>
-              </button>
-
-              {/* Expanded thread */}
-              {isExpanded && (
-                <div className="px-5 pb-4 flex flex-col gap-3">
-                  {/* Opening message */}
-                  <MessageRow
-                    name={discussion.startedBy?.name ?? 'Unknown'}
-                    date={discussion.createdAt}
-                    message={discussion.message}
-                  />
-
-                  {/* Replies */}
-                  {replies.map((reply) => (
-                    <MessageRow
-                      key={reply.id}
-                      name={reply.author?.name ?? 'Unknown'}
-                      date={reply.createdAt}
-                      message={reply.message}
-                    />
-                  ))}
-
-                  {/* Reply form */}
-                  <div className="flex flex-col gap-2 pt-1 border-t border-surface-container-low">
-                    <textarea
-                      value={replyTexts[discussion.id] ?? ''}
-                      onChange={(e) =>
-                        setReplyTexts((prev) => ({ ...prev, [discussion.id]: e.target.value }))
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                          void handleReply(discussion);
-                        }
-                      }}
-                      placeholder="Reply…"
-                      rows={2}
-                      className="resize-none rounded-lg border border-surface-container-highest bg-background text-sm text-on-background placeholder:text-outline-variant px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                      style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                    />
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => void handleReply(discussion)}
-                        disabled={replyLoading[discussion.id] || !(replyTexts[discussion.id] ?? '').trim()}
-                        className="bg-primary text-on-primary rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {unread && (
+                      <span className="inline-block w-2 h-2 rounded-full bg-error shrink-0" aria-label="Unread messages" />
+                    )}
+                    {replies.length > 0 && (
+                      <span
+                        className="text-xs text-outline-variant tabular-nums"
                         style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
                       >
-                        {replyLoading[discussion.id] ? 'Sending…' : 'Send'}
-                      </button>
-                    </div>
+                        {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
+                      </span>
+                    )}
+                    <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '16px' }}>
+                      chevron_right
+                    </span>
                   </div>
-                </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* Active chat thread */}
+      {activeDiscussion && (
+        <div className="flex flex-col border-t border-surface-container-low">
+          {/* Chat header */}
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-surface-container-low">
+            <button
+              type="button"
+              onClick={() => { setActiveId(null); setListOpen(true); }}
+              className="p-0.5 rounded text-on-surface-variant hover:bg-surface-container-low transition-colors"
+              aria-label="Back to list"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>arrow_back</span>
+            </button>
+            <div className="flex flex-col min-w-0 flex-1">
+              <p
+                className="text-sm italic text-on-background truncate"
+                style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
+              >
+                {activeDiscussion.entryDescription || 'No description'}
+              </p>
+              {activeDiscussion.entryProjectName && (
+                <span
+                  className="text-xs text-primary font-medium"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  {activeDiscussion.entryProjectName}
+                </span>
               )}
             </div>
-          );
-        })}
-      </div>
+            {canResolve(activeDiscussion) && (
+              <button
+                type="button"
+                onClick={() => void handleResolve(activeDiscussion)}
+                disabled={resolvingIds.has(activeDiscussion.id)}
+                className="text-xs px-2.5 py-1 rounded-lg border border-surface-container-highest text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-50 shrink-0"
+                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+              >
+                Resolve
+              </button>
+            )}
+          </div>
+
+          {/* Messages */}
+          <div className="flex flex-col gap-3 px-5 py-4 max-h-72 overflow-y-auto">
+            {/* Opening message */}
+            <MessageRow
+              name={activeDiscussion.startedBy?.name ?? 'Unknown'}
+              date={activeDiscussion.createdAt}
+              message={activeDiscussion.message}
+              isLive={onlineIds.has(activeDiscussion.startedById)}
+            />
+
+            {/* Replies */}
+            {(activeDiscussion.replies ?? []).map((reply) => (
+              <MessageRow
+                key={reply.id}
+                name={reply.author?.name ?? 'Unknown'}
+                date={reply.createdAt}
+                message={reply.message}
+                isLive={onlineIds.has(reply.authorId)}
+              />
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Reply form */}
+          <div className="flex flex-col gap-2 px-5 pb-4 pt-1 border-t border-surface-container-low">
+            <textarea
+              value={replyTexts[activeDiscussion.id] ?? ''}
+              onChange={(e) =>
+                setReplyTexts((prev) => ({ ...prev, [activeDiscussion.id]: e.target.value }))
+              }
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  void handleReply(activeDiscussion);
+                }
+              }}
+              placeholder="Reply… (⌘↵ to send)"
+              rows={2}
+              className="resize-none rounded-lg border border-surface-container-highest bg-background text-sm text-on-background placeholder:text-outline-variant px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+            />
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => void handleReply(activeDiscussion)}
+                disabled={replyLoading[activeDiscussion.id] || !(replyTexts[activeDiscussion.id] ?? '').trim()}
+                className="bg-primary text-on-primary rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+              >
+                {replyLoading[activeDiscussion.id] ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

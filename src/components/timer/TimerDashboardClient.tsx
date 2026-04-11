@@ -35,6 +35,7 @@ export function TimerDashboardClient({
 
   const [weekEntries, setWeekEntries] = useState<TimeEntry[]>(initialWeekEntries);
   const [recentEntries, setRecentEntries] = useState<TimeEntry[]>(initialRecentEntries);
+  const [discussions, setDiscussions] = useState<EntryDiscussion[]>(initialDiscussions);
 
   const refreshEntries = useCallback(async () => {
     if (!userId) return;
@@ -59,10 +60,24 @@ export function TimerDashboardClient({
     setRecentEntries(recentData.entries ?? []);
   }, [userId]);
 
+  const refreshDiscussions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/discussions", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json() as { discussions?: EntryDiscussion[] };
+        setDiscussions(data.discussions ?? []);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     setWeekEntries(initialWeekEntries);
     setRecentEntries(initialRecentEntries);
   }, [initialRecentEntries, initialWeekEntries]);
+
+  useEffect(() => {
+    setDiscussions(initialDiscussions);
+  }, [initialDiscussions]);
 
   useSSE(
     useCallback(
@@ -71,8 +86,11 @@ export function TimerDashboardClient({
         if ((event.type === "timer:start" || event.type === "timer:stop") && event.userId === userId) {
           void refreshEntries();
         }
+        if (event.type === "discussion:new" || event.type === "discussion:resolved") {
+          void refreshDiscussions();
+        }
       },
-      [refreshEntries, userId]
+      [refreshEntries, refreshDiscussions, userId]
     )
   );
 
@@ -100,7 +118,7 @@ export function TimerDashboardClient({
 
         <div className="col-span-12 md:col-span-5 min-w-0 flex flex-col gap-5">
           <DiscussionCard
-            initialDiscussions={initialDiscussions}
+            initialDiscussions={discussions}
             viewerRole={session?.user.role ?? "member"}
             viewerId={session?.user.id ?? ""}
           />
@@ -117,7 +135,13 @@ export function TimerDashboardClient({
             {recentEntries.length} entries
           </span>
         </div>
-        <EntryList entries={recentEntries} onResume={handleReplay} emptyMessage="No sessions yet. Start your first one above." />
+        <EntryList
+          entries={recentEntries}
+          onResume={handleReplay}
+          viewerRole={session?.user.role ?? "member"}
+          viewerId={session?.user.id ?? ""}
+          emptyMessage="No sessions yet. Start your first one above."
+        />
       </div>
     </>
   );

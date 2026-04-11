@@ -387,7 +387,6 @@ function RegisterForm() {
                     value={confirmPassword}
                     onChange={setConfirmPassword}
                     placeholder="Repeat your password"
-                    minLength={8}
                   />
                 </>
               )}

@@ -9,13 +9,19 @@ async function main() {
   if (!db) throw new Error('Database is not configured');
 
   const filePath = path.join(process.cwd(), 'scripts', 'hubspot-import-data.jsonl');
+  const checkpointPath = path.join(process.cwd(), 'scripts', 'hubspot-import.checkpoint');
+  const startAt = fs.existsSync(checkpointPath) ? Number(fs.readFileSync(checkpointPath, 'utf8')) || 0 : 0;
+  const limit = Number(process.env.HUBSPOT_IMPORT_LIMIT ?? 2000);
   const rl = readline.createInterface({
     input: fs.createReadStream(filePath, 'utf8'),
     crlfDelay: Infinity,
   });
 
+  let lineNumber = 0;
   let count = 0;
   for await (const line of rl) {
+    lineNumber += 1;
+    if (lineNumber <= startAt) continue;
     if (!line.trim()) continue;
     const row = JSON.parse(line) as Record<string, any>;
     const email = String(row.email ?? '').trim().toLowerCase();
@@ -93,12 +99,19 @@ async function main() {
       });
 
     count += 1;
-    if (count % 500 === 0) {
-      console.log(`Imported ${count}`);
+    if (count % 250 === 0) {
+      fs.writeFileSync(checkpointPath, String(lineNumber), 'utf8');
+      console.log(`Imported ${count} in this run, checkpoint ${lineNumber}`);
+    }
+    if (count >= limit) {
+      fs.writeFileSync(checkpointPath, String(lineNumber), 'utf8');
+      console.log(`Paused after ${count} rows in this run at checkpoint ${lineNumber}`);
+      return;
     }
   }
 
-  console.log(`Finished importing ${count} HubSpot leads.`);
+  fs.writeFileSync(checkpointPath, String(lineNumber), 'utf8');
+  console.log(`Finished importing ${count} HubSpot leads in this run. Final checkpoint ${lineNumber}.`);
 }
 
 main().catch((error) => {

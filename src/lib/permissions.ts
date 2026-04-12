@@ -11,7 +11,7 @@ export interface SessionUserLike {
 }
 
 export function isAdmin(user?: Pick<SessionUserLike, "role"> | null): boolean {
-  return user?.role === "admin";
+  return user?.role === "admin" || user?.role === "hr";
 }
 
 export function isTeamLead(user?: Pick<SessionUserLike, "role"> | null): boolean {

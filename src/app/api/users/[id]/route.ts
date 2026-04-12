@@ -27,7 +27,7 @@ const deleteUserBodySchema = z.object({
 });
 
 const updateSchema = z.object({
-  role: z.enum(["admin", "team_lead", "member"]).optional(),
+  role: z.enum(["admin", "team_lead", "member", "hr"]).optional(),
   name: z.string().min(1).optional(),
   teamId: z.string().uuid().nullable().optional(),
   teamIds: z.array(z.string().uuid()).optional(),

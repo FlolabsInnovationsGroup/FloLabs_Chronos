@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { getAccessibleUsers } from "@/lib/permissions";
 import { getAllActiveTimers } from "@/lib/redis";
 import { db } from "@/lib/db";
-import { projects, timeEntries } from "@/lib/db/schema";
+import { applicants, projects, timeEntries } from "@/lib/db/schema";
 import { and, inArray, isNull } from "drizzle-orm";
 import type { ActiveTimer } from "@/types";
 
@@ -53,11 +53,21 @@ export async function GET() {
     }
   }
 
+  const applicantCounts = new Map<string, number>();
+  if (db && session.user.role === 'admin') {
+    const applicantRows = await db.select({ chronosUserId: applicants.chronosUserId }).from(applicants);
+    for (const row of applicantRows) {
+      if (!row.chronosUserId) continue;
+      applicantCounts.set(row.chronosUserId, (applicantCounts.get(row.chronosUserId) ?? 0) + 1);
+    }
+  }
+
   const users = rows.map((user) => {
     const activeTimer = activeTimers[user.id];
 
     return {
       ...user,
+      applicantCount: applicantCounts.get(user.id) ?? 0,
       activeTimer: activeTimer
         ? (() => {
             const effectiveProjectId =

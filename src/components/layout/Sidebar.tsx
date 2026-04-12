@@ -24,7 +24,6 @@ const BASE_NAV_ITEMS: NavItem[] = [
   { href: "/tags", icon: "label", label: "Tags" },
   { href: "/teams", icon: "groups", label: "Teams" },
   { href: "/team", icon: "group", label: "Users" },
-  { href: "/applicants", icon: "assignment_ind", label: "Applicants" },
   { href: "/reports", icon: "bar_chart", label: "Reports" },
 ];
 
@@ -94,7 +93,7 @@ export function Sidebar({ mobile = false, open = false, onClose }: SidebarProps)
   const pathname = usePathname();
   const { data: session } = useSession();
   const role = session?.user.role;
-  const MEMBER_HIDDEN = new Set(["/team", "/projects", "/control", "/applicants"]);
+  const MEMBER_HIDDEN = new Set(["/team", "/projects", "/control"]);
   const navItems = [
     ...BASE_NAV_ITEMS.filter((item) => !(role === "member" && MEMBER_HIDDEN.has(item.href))),
     ...(role === "admin" || role === "hr" ? [{ href: "/control", icon: "tune", label: "Control" }] : []),

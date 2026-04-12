@@ -8,6 +8,7 @@ import {
   index,
   uniqueIndex,
   primaryKey,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -247,6 +248,49 @@ export const discussionReplies = pgTable(
 
 export type DiscussionReplyRecord = typeof discussionReplies.$inferSelect;
 export type NewDiscussionReply = typeof discussionReplies.$inferInsert;
+
+export const applicants = pgTable(
+  "applicants",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    externalApplicantId: text("external_applicant_id"),
+    email: text("email").notNull().unique(),
+    name: text("name").notNull(),
+    phone: text("phone"),
+    country: text("country"),
+    stateRegion: text("state_region"),
+    city: text("city"),
+    dateOfBirth: text("date_of_birth"),
+    gender: text("gender"),
+    linkedinUrl: text("linkedin_url"),
+    education: text("education"),
+    fieldOfStudy: text("field_of_study"),
+    currentJobTitle: text("current_job_title"),
+    companyName: text("company_name"),
+    roleAppliedFor: text("role_applied_for"),
+    stage: text("stage").notNull().default("application_submitted"),
+    status: text("status").notNull().default("active"),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow(),
+    lastWebsiteVisit: timestamp("last_website_visit", { withTimezone: true }),
+    source: text("source"),
+    hubspotRecordId: text("hubspot_record_id"),
+    hubspotStatus: text("hubspot_status"),
+    hubspotOwner: text("hubspot_owner"),
+    hubspotLifecycleStage: text("hubspot_lifecycle_stage"),
+    hubspotLeadStatus: text("hubspot_lead_status"),
+    hubspotLastModifiedAt: timestamp("hubspot_last_modified_at", { withTimezone: true }),
+    hubspotRawData: jsonb("hubspot_raw_data"),
+    syncedToTeamMembers: boolean("synced_to_team_members").notNull().default(false),
+    chronosUserId: uuid("chronos_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [
+    index("idx_applicants_stage").on(t.stage),
+    index("idx_applicants_status").on(t.status),
+    index("idx_applicants_chronos_user_id").on(t.chronosUserId),
+  ]
+);
 
 export const appConfig = pgTable(
   "app_config",

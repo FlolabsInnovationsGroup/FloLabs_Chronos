@@ -559,7 +559,7 @@ export default function TeamPage() {
     { label: "Weekly", key: "weekly" },
     { label: "Status", key: null },
     { label: "Joined", key: "joined" },
-    ...(role === "admin" || role === "team_lead" || role === "member" ? [{ label: "Actions", key: null }] : []),
+    ...(role === "admin" || role === "hr" || role === "team_lead" || role === "member" ? [{ label: "Actions", key: null }] : []),
   ];
   const compactHeadCellClass =
     "px-3 sm:px-4 lg:px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-on-surface-variant";
@@ -607,7 +607,7 @@ export default function TeamPage() {
               </span>
             </div>
           )}
-          {role === "admin" && (
+          {(role === "admin" || role === "hr") && (
             <Button variant="primary" onClick={() => setShowInvite(true)}>
               Invite Member
             </Button>
@@ -733,7 +733,7 @@ export default function TeamPage() {
       {activeTab === "users" && (
           <>
             <div className="flex flex-wrap items-center gap-2">
-              {(role === "admin" || role === "team_lead") && teams.length > 0 && (
+              {(role === "admin" || role === "hr" || role === "team_lead") && teams.length > 0 && (
                 <DropdownSelect
                   options={[
                     { value: "", label: "All teams" },
@@ -935,12 +935,12 @@ export default function TeamPage() {
                                 : "—"}
                             </span>
                           </td>
-                          {(role === "admin" || role === "team_lead" || role === "member") && (
+                          {(role === "admin" || role === "hr" || role === "team_lead" || role === "member") && (
                             <td
                               className={`${compactBodyCellClass} ${tableActionsCellClass(index % 2 !== 0)}`}
                             >
                               <div className="flex w-fit max-w-full gap-0.5 sm:gap-1 md:ml-auto md:flex-nowrap md:justify-end">
-                                {(role === "admin" || role === "team_lead") && (
+                                {(role === "admin" || role === "hr" || role === "team_lead") && (
                                   <>
                                     <Tooltip label="Edit member">
                                       <button
@@ -953,7 +953,7 @@ export default function TeamPage() {
                                         </span>
                                       </button>
                                     </Tooltip>
-                                    {role === "admin" && user.id !== session?.user.id && (
+                                    {(role === "admin" || role === "hr") && user.id !== session?.user.id && (
                                       <Tooltip label="Delete member">
                                         <button
                                           type="button"
@@ -995,7 +995,7 @@ export default function TeamPage() {
               </table>
             </div>
 
-            {role === "admin" && (
+            {(role === "admin" || role === "hr") && (
               <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto overflow-y-visible">
                 <table className="w-full min-w-[680px] border-separate border-spacing-0 lg:min-w-[760px]">
                   <thead>

@@ -1572,7 +1572,7 @@ function findTeamMembersRolePropertyName(properties: Record<string, NotionDataba
 /** Sync Chronos role to Notion Team Members `Role` (or `Chronos Role` / `App Role`) select or status when option names match. */
 export async function updateTeamMemberRoleInNotion(
   notionPageId: string,
-  chronosRole: "admin" | "team_lead" | "member"
+  chronosRole: "admin" | "team_lead" | "member" | "hr"
 ): Promise<void> {
   const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
   if (!notionApiKey || !notionTeamMembersDbId) return;
@@ -1600,7 +1600,9 @@ export async function updateTeamMemberRoleInNotion(
       ? ["Admin", "admin", "Administrator"]
       : chronosRole === "team_lead"
         ? ["Team Lead", "Team lead", "team_lead", "Lead"]
-        : ["Member", "member"];
+        : chronosRole === "hr"
+          ? ["Human Resources", "HR", "hr", "Human resources"]
+          : ["Member", "member"];
 
   const matched =
     tryNames.find((c) => optionNames.includes(c)) ??

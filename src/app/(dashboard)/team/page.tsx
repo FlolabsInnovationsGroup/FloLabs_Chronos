@@ -35,6 +35,7 @@ const INVITE_ROLES = [
 const EDIT_ROLES = [
   { value: "member", label: "Member" },
   { value: "team_lead", label: "Team Lead" },
+  { value: "hr", label: "Human Resources" },
   { value: "admin", label: "Admin" },
 ];
 
@@ -50,7 +51,7 @@ type SortKey = "name" | "team" | "weekly" | "live" | "joined";
 type SortDir = "asc" | "desc";
 
 function formatRole(role: Role) {
-  return role === "team_lead" ? "Team Lead" : role === "admin" ? "Admin" : "Member";
+  return role === "team_lead" ? "Team Lead" : role === "admin" ? "Admin" : role === "hr" ? "Human Resources" : "Member";
 }
 
 function toDatetimeLocal(value: Date | string | null | undefined) {

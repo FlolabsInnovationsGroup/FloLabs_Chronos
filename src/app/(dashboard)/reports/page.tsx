@@ -43,7 +43,7 @@ interface SearchParams {
 
 async function getFilterData(sessionUser: {
   id: string;
-  role: "admin" | "team_lead" | "member";
+  role: import("@/types").Role;
   teamId: string | null;
   isActive: boolean;
 }) {
@@ -77,7 +77,7 @@ async function getEntries(
   params: SearchParams,
   sessionUser: {
     id: string;
-    role: "admin" | "team_lead" | "member";
+    role: import("@/types").Role;
     teamId: string | null;
     isActive: boolean;
   }

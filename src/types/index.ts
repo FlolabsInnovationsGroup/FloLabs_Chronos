@@ -1,4 +1,4 @@
-export type Role = "admin" | "team_lead" | "member";
+export type Role = "admin" | "team_lead" | "member" | "hr";
 
 export interface User {
   id: string;
@@ -134,6 +134,27 @@ export interface EntryDiscussion {
   entryDescription?: string;
   entryProjectName?: string;
   replies?: DiscussionReply[];
+}
+
+export interface Applicant {
+  id: string;
+  externalApplicantId?: string | null;
+  email: string;
+  name: string;
+  phone?: string | null;
+  country?: string | null;
+  city?: string | null;
+  linkedinUrl?: string | null;
+  roleAppliedFor?: string | null;
+  stage: string;
+  status: string;
+  joinedAt?: Date | null;
+  lastWebsiteVisit?: Date | null;
+  source?: string | null;
+  syncedToTeamMembers: boolean;
+  chronosUserId?: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface SSEEvent {

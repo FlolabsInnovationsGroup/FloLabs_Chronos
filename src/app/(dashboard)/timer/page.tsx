@@ -107,7 +107,7 @@ async function getRecentEntries(userId: string): Promise<TimeEntry[]> {
 
 async function getInitialDiscussions(sessionUser: {
   id: string;
-  role: "admin" | "team_lead" | "member";
+  role: import("@/types").Role;
   teamId: string | null;
   isActive: boolean;
 }): Promise<EntryDiscussion[]> {

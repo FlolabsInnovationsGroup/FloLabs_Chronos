@@ -211,7 +211,7 @@ function ProjectForm({
 
 export default function ProjectsPage() {
   const { data: session } = useSession();
-  const canManageProjects = session?.user.role === "admin";
+  const canManageProjects = session?.user.role === "admin" || session?.user.role === "hr";
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);

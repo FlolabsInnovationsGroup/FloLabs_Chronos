@@ -20,7 +20,7 @@ const PAGE_SIZE = 100;
 
 export default function TagsPage() {
   const { data: session } = useSession();
-  const isAdmin = session?.user.role === "admin";
+  const isAdmin = session?.user.role === "admin" || session?.user.role === "hr";
 
   const [tagList, setTagList] = useState<TagRow[]>([]);
   const [loading, setLoading] = useState(true);

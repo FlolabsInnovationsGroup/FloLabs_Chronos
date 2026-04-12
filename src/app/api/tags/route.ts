@@ -11,7 +11,7 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!db) return NextResponse.json({ tags: [] });
 
-  const isAdmin = session.user.role === "admin";
+  const isAdmin = session.user.role === "admin" || session.user.role === "hr";
 
   if (isAdmin) {
     const rows = await db
@@ -81,7 +81,7 @@ export async function DELETE(req: Request) {
 
   if (ids.length === 0) return NextResponse.json({ error: "Missing id(s)" }, { status: 400 });
 
-  const isAdmin = session.user.role === "admin";
+  const isAdmin = session.user.role === "admin" || session.user.role === "hr";
 
   if (!isAdmin) {
     const found = await db

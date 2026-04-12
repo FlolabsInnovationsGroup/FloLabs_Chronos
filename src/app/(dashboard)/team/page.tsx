@@ -166,7 +166,7 @@ export default function TeamPage() {
         fetch("/api/users", { cache: "no-store" }),
         fetch("/api/teams", { cache: "no-store" }),
       ];
-      if (role === "admin") {
+      if (role === "admin" || role === "hr") {
         requests.push(fetch("/api/invitations", { cache: "no-store" }));
       }
 
@@ -175,7 +175,7 @@ export default function TeamPage() {
       const teamsPayload = raw[1] as { teams?: Team[] };
       setUsers(usersPayload.users ?? []);
       setTeams(teamsPayload.teams ?? []);
-      if (role === "admin") {
+      if (role === "admin" || role === "hr") {
         const invPayload = raw[2] as { invitations?: TeamInvitation[] } | undefined;
         setInvitations(invPayload?.invitations ?? []);
       }
@@ -434,7 +434,7 @@ export default function TeamPage() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            ...(role === "admin"
+            ...((role === "admin" || role === "hr")
               ? {
                   name: editName,
                   role: editRole,
@@ -585,8 +585,8 @@ export default function TeamPage() {
             className="text-sm text-on-surface-variant mt-1"
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
-            {role === "admin"
-              ? "Admins manage teams, invitations, and member roles."
+            {role === "admin" || role === "hr"
+              ? "Admins and Human Resources can manage teams, invitations, and member roles."
               : role === "team_lead"
                 ? "You can see every member in the teams you belong to and edit their weekly time commitment."
                 : "You see only your account. You can update your weekly time target."}
@@ -594,7 +594,7 @@ export default function TeamPage() {
         </div>
 
         <div className="flex flex-col items-end gap-2 md:flex-row md:items-center">
-          {(role === "admin" || role === "team_lead") && (
+          {(role === "admin" || role === "hr" || role === "team_lead") && (
             <div className="rounded-xl bg-surface-container-low px-3 py-2 text-sm text-on-background">
               <span
                 className="font-medium"
@@ -1172,10 +1172,10 @@ export default function TeamPage() {
       <Modal
         open={!!editingUser}
         onClose={() => setEditingUser(null)}
-        title={role === "member" ? "Weekly target" : "Edit Member"}
+        title={role === "member" ? "Weekly target" : role === "team_lead" ? "Weekly target" : "Edit Member"}
       >
         <form onSubmit={handleEditUser} className="flex flex-col gap-4">
-          {role === "admin" && (
+          {(role === "admin" || role === "hr") && (
             <>
               <TeamMemberNotionPicker
                 variant="edit"

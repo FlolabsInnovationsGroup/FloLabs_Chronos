@@ -292,6 +292,29 @@ export const applicants = pgTable(
   ]
 );
 
+export const applicantDuplicateReviews = pgTable(
+  "applicant_duplicate_reviews",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    primaryApplicantId: uuid("primary_applicant_id").notNull().references(() => applicants.id, { onDelete: "cascade" }),
+    duplicateApplicantId: uuid("duplicate_applicant_id").notNull().references(() => applicants.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("pending"),
+    confidenceScore: bigint("confidence_score", { mode: "number" }).notNull().default(0),
+    reasons: jsonb("reasons").notNull().default(sql`'[]'::jsonb`),
+    reviewedById: uuid("reviewed_by_id").references(() => users.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("applicant_duplicate_reviews_pair_unique").on(t.primaryApplicantId, t.duplicateApplicantId),
+    index("idx_duplicate_reviews_primary").on(t.primaryApplicantId),
+    index("idx_duplicate_reviews_duplicate").on(t.duplicateApplicantId),
+    index("idx_duplicate_reviews_status").on(t.status),
+  ]
+);
+
 export const appConfig = pgTable(
   "app_config",
   {
@@ -321,3 +344,5 @@ export type NewTag = typeof tags.$inferInsert;
 export type TimeEntryRecord = typeof timeEntries.$inferSelect;
 export type NewTimeEntry = typeof timeEntries.$inferInsert;
 export type TimeEntryTagRecord = typeof timeEntryTags.$inferSelect;
+export type ApplicantDuplicateReviewRecord = typeof applicantDuplicateReviews.$inferSelect;
+export type NewApplicantDuplicateReview = typeof applicantDuplicateReviews.$inferInsert;

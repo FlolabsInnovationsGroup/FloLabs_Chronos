@@ -739,6 +739,12 @@ Phase 1 behavior:
 - surface possible duplicates to HR for manual review
 - do not merge or rewrite records automatically yet
 
+Phase 2 behavior:
+- persist duplicate review pairs in shared Chronos storage (`applicant_duplicate_reviews`)
+- keep confidence score and machine-detected reasons up to date
+- allow HR/admin review states: `pending`, `confirmed_duplicate`, `different_people`, `merged`
+- expose this review state to downstream HR tools like hephaestus so duplicate handling is shared, not local-only
+
 Future merge work should introduce a canonical person or identity layer above account emails.
 
 ## Deployment

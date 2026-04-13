@@ -196,6 +196,7 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 ## Recent Updates
 
 - Added phase-1 duplicate-person detection contract for shared applicant data: Chronos/Hephaestus now surface likely duplicate accounts for HR review using strong signals first (phone, LinkedIn) and supporting profile overlap signals, without auto-merging records.
+- Added phase-2 duplicate review persistence in Chronos with shared review statuses so hephaestus can consume maintained duplicate decisions instead of relying on local-only heuristics.
 
 - Documentation: `ARCHITECTURE.md` design-system section now covers dual-theme tokens, modal overlay scrolling, `FlolabsMark`, and correct task-on-stop data rules; `CLAUDE.md` and this file document theme implementation details.
 

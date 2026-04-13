@@ -136,6 +136,20 @@ export interface EntryDiscussion {
   replies?: DiscussionReply[];
 }
 
+export interface ApplicantDuplicateReview {
+  id: string;
+  primaryApplicantId: string;
+  duplicateApplicantId: string;
+  status: "pending" | "confirmed_duplicate" | "different_people" | "merged";
+  confidenceScore: number;
+  reasons: string[];
+  reviewedById?: string | null;
+  reviewedAt?: Date | null;
+  notes?: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 export interface Applicant {
   id: string;
   externalApplicantId?: string | null;
@@ -167,6 +181,7 @@ export interface Applicant {
   hubspotRawData?: Record<string, unknown> | null;
   syncedToTeamMembers: boolean;
   chronosUserId?: string | null;
+  duplicateReviews?: ApplicantDuplicateReview[];
   createdAt?: Date;
   updatedAt?: Date;
 }

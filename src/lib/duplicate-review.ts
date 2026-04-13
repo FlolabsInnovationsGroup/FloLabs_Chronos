@@ -1,6 +1,7 @@
 import { and, eq, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { applicantDuplicateReviews, applicants } from '@/lib/db/schema';
+import { applicantDuplicateReviews, applicants, users } from '@/lib/db/schema';
+import { addEmailAlias, ensureUserEmailAliasesSchema } from '@/lib/user-email-aliases';
 
 export type DuplicateReviewStatus = 'pending' | 'confirmed_duplicate' | 'different_people' | 'merged';
 
@@ -136,6 +137,23 @@ export async function updateDuplicateReview(input: {
     })
     .where(eq(applicantDuplicateReviews.id, input.reviewId))
     .returning();
+
+  if (updated && input.status === 'merged') {
+    await ensureUserEmailAliasesSchema();
+    const [primaryApplicant] = await db.select().from(applicants).where(eq(applicants.id, updated.primaryApplicantId)).limit(1);
+    const [duplicateApplicant] = await db.select().from(applicants).where(eq(applicants.id, updated.duplicateApplicantId)).limit(1);
+
+    const canonicalEmail = primaryApplicant?.email ?? null;
+    if (canonicalEmail) {
+      const [canonicalUser] = await db.select().from(users).where(eq(users.email, canonicalEmail)).limit(1);
+      if (canonicalUser) {
+        await addEmailAlias(canonicalUser.id, canonicalEmail, true);
+        if (duplicateApplicant?.email) {
+          await addEmailAlias(canonicalUser.id, duplicateApplicant.email);
+        }
+      }
+    }
+  }
 
   return updated ?? null;
 }

@@ -17,10 +17,14 @@ export async function ensureUserEmailAliasesSchema() {
   `);
 }
 
-export async function addPrimaryEmailAlias(userId: string, email: string) {
+export async function addEmailAlias(userId: string, email: string, isPrimary = false) {
   if (!db) return;
   await ensureUserEmailAliasesSchema();
-  await db.insert(userEmailAliases).values({ userId, email: email.toLowerCase(), isPrimary: true }).onConflictDoNothing();
+  await db.insert(userEmailAliases).values({ userId, email: email.toLowerCase(), isPrimary }).onConflictDoNothing();
+}
+
+export async function addPrimaryEmailAlias(userId: string, email: string) {
+  return addEmailAlias(userId, email, true);
 }
 
 export async function findUserByAnyEmail(email: string) {

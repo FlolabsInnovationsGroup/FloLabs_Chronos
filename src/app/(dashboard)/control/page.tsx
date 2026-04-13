@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { isAdmin } from "@/lib/permissions";
 import { ControlForm } from "./ControlForm";
 import { DuplicateReviewQueue } from "./DuplicateReviewQueue";
+import { EmailAliasManager } from "./EmailAliasManager";
 
 export const metadata: Metadata = { title: "Control | FloLabs Chronos" };
 
@@ -24,6 +25,7 @@ export default async function ControlPage() {
       </div>
       <ControlForm />
       <DuplicateReviewQueue />
+      <EmailAliasManager />
     </div>
   );
 }

@@ -12,13 +12,16 @@ function normalizeValue(value: string | null | undefined) {
 function scorePair(applicant: any, other: any) {
   let score = 0;
   const reasons: string[] = [];
+  let strongSignals = 0;
 
   if (normalizeValue(applicant.phone) && normalizeValue(applicant.phone) === normalizeValue(other.phone)) {
-    score += 5;
+    score += 6;
+    strongSignals += 1;
     reasons.push('same phone number');
   }
   if (normalizeValue(applicant.linkedinUrl) && normalizeValue(applicant.linkedinUrl) === normalizeValue(other.linkedinUrl)) {
-    score += 5;
+    score += 4;
+    strongSignals += 1;
     reasons.push('same LinkedIn URL');
   }
   if (normalizeValue(applicant.name) && normalizeValue(applicant.name) === normalizeValue(other.name)) {
@@ -42,7 +45,7 @@ function scorePair(applicant: any, other: any) {
     reasons.push('same role applied for');
   }
 
-  return { score, reasons };
+  return { score, reasons, strongSignals };
 }
 
 export async function ensureDuplicateReviewSchema() {
@@ -80,8 +83,10 @@ export async function syncDuplicateReviews() {
       const other = rows[j];
       if (normalizeValue(applicant.email) === normalizeValue(other.email)) continue;
 
-      const { score, reasons } = scorePair(applicant, other);
-      if (score < 5) continue;
+      const { score, reasons, strongSignals } = scorePair(applicant, other);
+      if (score < 7) continue;
+      if (strongSignals === 0) continue;
+      if (strongSignals === 1 && reasons.length < 3) continue;
 
       const [primaryApplicantId, duplicateApplicantId] = [applicant.id, other.id].sort();
       upserts.push({ primaryApplicantId, duplicateApplicantId, confidenceScore: score, reasons });

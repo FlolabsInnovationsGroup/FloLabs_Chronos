@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { passwordResetTokens, users } from "@/lib/db/schema";
 import { and, eq, gt, isNull } from "drizzle-orm";
+import { userEmailAliases } from "@/lib/db/schema";
 import { z } from "zod";
 
 const schema = z.object({ token: z.string().min(1), password: z.string().min(8) });
@@ -31,5 +32,6 @@ export async function POST(req: Request) {
   const hashedPassword = await bcrypt.hash(parsed.data.password, 12);
   await db.update(users).set({ password: hashedPassword, updatedAt: new Date() }).where(eq(users.id, reset.userId));
   await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, reset.id));
+  await db.update(userEmailAliases).set({ updatedAt: new Date() }).where(eq(userEmailAliases.userId, reset.userId));
   return NextResponse.json({ ok: true });
 }

@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { normalizeEmail } from "@/lib/invitations";
 import { ensureDiscordResourcesForUser } from "@/lib/discord-provisioning";
+import { addPrimaryEmailAlias } from "@/lib/user-email-aliases";
 
 const registerSchema = z.object({
   token: z.string().min(1),
@@ -67,6 +68,7 @@ export async function POST(req: Request) {
 
   await db.update(invitations).set({ acceptedAt: new Date() }).where(eq(invitations.id, invite.id));
 
+  await addPrimaryEmailAlias(user.id, user.email).catch(() => null);
   await ensureDiscordResourcesForUser({ userId: user.id, name: user.name }).catch(() => null);
 
   return NextResponse.json({ user }, { status: 201 });

@@ -86,6 +86,22 @@ export const passwordResetTokens = pgTable(
   (t) => [uniqueIndex("password_reset_tokens_token_unique").on(t.token)]
 );
 
+export const userEmailAliases = pgTable(
+  "user_email_aliases",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("user_email_aliases_email_unique").on(t.email),
+    index("idx_user_email_aliases_user").on(t.userId),
+  ]
+);
+
 export const invitations = pgTable(
   "invitations",
   {
@@ -329,6 +345,8 @@ export const appConfig = pgTable(
 
 export type UserRecord = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type UserEmailAliasRecord = typeof userEmailAliases.$inferSelect;
+export type NewUserEmailAlias = typeof userEmailAliases.$inferInsert;
 export type TeamRecord = typeof teams.$inferSelect;
 export type NewTeam = typeof teams.$inferInsert;
 export type TeamMembershipRecord = typeof teamMemberships.$inferSelect;

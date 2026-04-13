@@ -30,17 +30,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         // Dynamic import to avoid DB init at build time
         try {
-          const { db } = await import("./db");
-          const { users } = await import("./db/schema");
-          const { eq } = await import("drizzle-orm");
+          const { findUserByAnyEmail } = await import("./user-email-aliases");
 
-          if (!db) return null;
-
-          const [user] = await db
-            .select()
-            .from(users)
-            .where(eq(users.email, email.toLowerCase()))
-            .limit(1);
+          const user = await findUserByAnyEmail(email.toLowerCase());
 
           if (!user) return null;
           if (!user.isActive) return null;

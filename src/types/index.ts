@@ -3,6 +3,7 @@ export type Role = "admin" | "team_lead" | "member" | "hr";
 export interface User {
   id: string;
   email: string;
+  alternateEmails?: string[];
   name: string;
   role: Role;
   teamId: string | null;

@@ -366,6 +366,7 @@ CREATE TABLE entry_discussions (
 
 ### Data Rules
 - `users.email` is globally unique.
+- Duplicate-person detection may surface likely matches across `users` and `applicants`, but phase 1 is detection-only, not automatic merge.
 - `users.team_id` is a compatibility/default pointer, not the full membership model.
 - `team_memberships` stores true many-to-many membership.
 - `invitations.team_id` is a compatibility/default pointer.
@@ -725,6 +726,20 @@ FloLabs_Chronos/
 ```
 
 ---
+
+## Applicant identity unification (phase 1)
+
+Chronos and Hephaestus share applicant and account data, so duplicate handling starts in the shared model.
+
+Phase 1 behavior:
+- detect likely duplicate people across Chronos applicants and shared user-linked applicant views
+- use strong signals first: phone number, LinkedIn URL
+- add weaker supporting signals: same full name, city/country, education, role applied for
+- never auto-merge on name alone
+- surface possible duplicates to HR for manual review
+- do not merge or rewrite records automatically yet
+
+Future merge work should introduce a canonical person or identity layer above account emails.
 
 ## Deployment
 

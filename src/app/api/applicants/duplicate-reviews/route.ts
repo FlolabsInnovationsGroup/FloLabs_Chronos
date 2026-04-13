@@ -75,6 +75,7 @@ export async function POST(request: Request) {
   const reviewId = String(body.reviewId ?? '');
   const status = String(body.status ?? '');
   const notes = typeof body.notes === 'string' ? body.notes : null;
+  const canonicalApplicantId = typeof body.canonicalApplicantId === 'string' ? body.canonicalApplicantId : null;
 
   if (!reviewId || !['pending', 'confirmed_duplicate', 'different_people', 'merged'].includes(status)) {
     return NextResponse.json({ error: 'reviewId and valid status are required' }, { status: 400 });
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
     status: status as 'pending' | 'confirmed_duplicate' | 'different_people' | 'merged',
     reviewedById: session.user.id,
     notes,
+    canonicalApplicantId,
   });
 
   return NextResponse.json({ review });

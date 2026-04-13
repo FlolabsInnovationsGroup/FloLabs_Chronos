@@ -11,8 +11,11 @@ type Review = {
   confidenceScore?: number;
   confidence_score?: number;
   reasons?: string[];
-  primaryApplicant?: { name?: string; email?: string } | null;
-  duplicateApplicant?: { name?: string; email?: string } | null;
+  primaryApplicantId?: string;
+  duplicateApplicantId?: string;
+  primaryApplicant?: { id?: string; name?: string; email?: string } | null;
+  duplicateApplicant?: { id?: string; name?: string; email?: string } | null;
+  canonicalApplicantId?: string | null;
 };
 
 export function DuplicateReviewQueue() {
@@ -20,6 +23,7 @@ export function DuplicateReviewQueue() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   async function load(nextStatus = status) {
     setLoading(true);
@@ -34,6 +38,17 @@ export function DuplicateReviewQueue() {
     await fetch('/api/applicants/duplicate-reviews?sync=1', { method: 'PUT' });
     await load(status);
     setSyncing(false);
+  }
+
+  async function mergeWithCanonical(review: Review, canonicalApplicantId: string) {
+    setSavingId(review.id);
+    await fetch('/api/applicants/duplicate-reviews', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviewId: review.id, status: 'merged', canonicalApplicantId }),
+    });
+    await load(status);
+    setSavingId(null);
   }
 
   useEffect(() => {
@@ -72,6 +87,24 @@ export function DuplicateReviewQueue() {
               <Badge color="secondary">score {review.confidenceScore ?? review.confidence_score ?? 0}</Badge>
             </div>
             <p className="mt-2 text-xs text-on-surface-variant">Signals: {(review.reasons ?? []).join(', ') || '—'}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={savingId === review.id}
+                onClick={() => void mergeWithCanonical(review, review.primaryApplicant?.id ?? review.primaryApplicantId ?? '')}
+              >
+                Merge into {review.primaryApplicant?.name ?? 'primary'}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={savingId === review.id}
+                onClick={() => void mergeWithCanonical(review, review.duplicateApplicant?.id ?? review.duplicateApplicantId ?? '')}
+              >
+                Merge into {review.duplicateApplicant?.name ?? 'duplicate'}
+              </Button>
+            </div>
           </div>
         ))}
       </div>

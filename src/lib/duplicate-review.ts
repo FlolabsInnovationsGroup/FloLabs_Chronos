@@ -59,6 +59,7 @@ export async function ensureDuplicateReviewSchema() {
       reviewed_by_id uuid references users(id) on delete set null,
       reviewed_at timestamptz,
       notes text,
+      canonical_applicant_id uuid references applicants(id) on delete set null,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now(),
       constraint applicant_duplicate_reviews_pair_unique unique (primary_applicant_id, duplicate_applicant_id)
@@ -122,6 +123,7 @@ export async function updateDuplicateReview(input: {
   status: DuplicateReviewStatus;
   reviewedById?: string | null;
   notes?: string | null;
+  canonicalApplicantId?: string | null;
 }) {
   if (!db) return null;
   await ensureDuplicateReviewSchema();
@@ -133,6 +135,7 @@ export async function updateDuplicateReview(input: {
       reviewedById: input.reviewedById ?? null,
       reviewedAt: new Date(),
       notes: input.notes ?? null,
+      canonicalApplicantId: input.canonicalApplicantId ?? null,
       updatedAt: new Date(),
     })
     .where(eq(applicantDuplicateReviews.id, input.reviewId))
@@ -143,13 +146,15 @@ export async function updateDuplicateReview(input: {
     const [primaryApplicant] = await db.select().from(applicants).where(eq(applicants.id, updated.primaryApplicantId)).limit(1);
     const [duplicateApplicant] = await db.select().from(applicants).where(eq(applicants.id, updated.duplicateApplicantId)).limit(1);
 
-    const canonicalEmail = primaryApplicant?.email ?? null;
+    const canonicalApplicant = input.canonicalApplicantId === updated.duplicateApplicantId ? duplicateApplicant : primaryApplicant;
+    const secondaryApplicant = canonicalApplicant?.id === primaryApplicant?.id ? duplicateApplicant : primaryApplicant;
+    const canonicalEmail = canonicalApplicant?.email ?? null;
     if (canonicalEmail) {
       const [canonicalUser] = await db.select().from(users).where(eq(users.email, canonicalEmail)).limit(1);
       if (canonicalUser) {
         await addEmailAlias(canonicalUser.id, canonicalEmail, true);
-        if (duplicateApplicant?.email) {
-          await addEmailAlias(canonicalUser.id, duplicateApplicant.email);
+        if (secondaryApplicant?.email) {
+          await addEmailAlias(canonicalUser.id, secondaryApplicant.email);
         }
       }
     }

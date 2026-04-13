@@ -320,6 +320,7 @@ export const applicantDuplicateReviews = pgTable(
     reviewedById: uuid("reviewed_by_id").references(() => users.id, { onDelete: "set null" }),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     notes: text("notes"),
+    canonicalApplicantId: uuid("canonical_applicant_id").references(() => applicants.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },

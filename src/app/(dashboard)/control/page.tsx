@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { isAdmin } from "@/lib/permissions";
 import { ControlForm } from "./ControlForm";
+import { DuplicateReviewQueue } from "./DuplicateReviewQueue";
 
 export const metadata: Metadata = { title: "Control | FloLabs Chronos" };
 
@@ -22,6 +23,7 @@ export default async function ControlPage() {
         </p>
       </div>
       <ControlForm />
+      <DuplicateReviewQueue />
     </div>
   );
 }

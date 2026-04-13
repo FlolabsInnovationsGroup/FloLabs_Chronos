@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSSE } from '@/hooks/use-sse';
+import { useAutoRefresh } from '@/hooks/use-auto-refresh';
 import { Tooltip } from '@/components/ui/Tooltip';
 import type { EntryDiscussion, DiscussionReply, SSEEvent } from '@/types';
 
@@ -222,6 +223,11 @@ export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: Dis
       [refetch]
     )
   );
+
+  useAutoRefresh(refetch, {
+    enabled: true,
+    intervalMs: 5000,
+  });
 
   async function handleResolve(discussion: EntryDiscussion) {
     setResolvingIds((prev) => new Set(prev).add(discussion.id));

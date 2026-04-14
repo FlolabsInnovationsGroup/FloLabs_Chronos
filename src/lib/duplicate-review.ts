@@ -4,6 +4,7 @@ import { applicantDuplicateReviews, applicants, users } from '@/lib/db/schema';
 import { addEmailAlias, ensureUserEmailAliasesSchema } from '@/lib/user-email-aliases';
 
 export type DuplicateReviewStatus = 'pending' | 'confirmed_duplicate' | 'different_people' | 'merged';
+const AUTO_MERGE_SCORE_THRESHOLD = 15;
 
 function normalizeValue(value: string | null | undefined) {
   return String(value ?? '').trim().toLowerCase();
@@ -75,7 +76,13 @@ export async function syncDuplicateReviews() {
   await ensureDuplicateReviewSchema();
 
   const rows = await db.select().from(applicants);
-  const upserts: Array<{ primaryApplicantId: string; duplicateApplicantId: string; confidenceScore: number; reasons: string[] }> = [];
+  const upserts: Array<{
+    primaryApplicantId: string;
+    duplicateApplicantId: string;
+    confidenceScore: number;
+    reasons: string[];
+    autoMerge: boolean;
+  }> = [];
 
   for (let i = 0; i < rows.length; i += 1) {
     for (let j = i + 1; j < rows.length; j += 1) {
@@ -89,12 +96,18 @@ export async function syncDuplicateReviews() {
       if (strongSignals === 1 && reasons.length < 3) continue;
 
       const [primaryApplicantId, duplicateApplicantId] = [applicant.id, other.id].sort();
-      upserts.push({ primaryApplicantId, duplicateApplicantId, confidenceScore: score, reasons });
+      upserts.push({
+        primaryApplicantId,
+        duplicateApplicantId,
+        confidenceScore: score,
+        reasons,
+        autoMerge: score >= AUTO_MERGE_SCORE_THRESHOLD,
+      });
     }
   }
 
   for (const item of upserts) {
-    await db.insert(applicantDuplicateReviews).values({
+    const [review] = await db.insert(applicantDuplicateReviews).values({
       primaryApplicantId: item.primaryApplicantId,
       duplicateApplicantId: item.duplicateApplicantId,
       confidenceScore: item.confidenceScore,
@@ -107,7 +120,21 @@ export async function syncDuplicateReviews() {
         reasons: item.reasons,
         updatedAt: new Date(),
       },
-    });
+    }).returning();
+
+    if (
+      item.autoMerge &&
+      review &&
+      review.status !== 'merged' &&
+      review.status !== 'different_people'
+    ) {
+      await updateDuplicateReview({
+        reviewId: review.id,
+        status: 'merged',
+        notes: `Auto-merged because score is ${item.confidenceScore} (>= ${AUTO_MERGE_SCORE_THRESHOLD}).`,
+        canonicalApplicantId: item.primaryApplicantId,
+      });
+    }
   }
 
   return upserts;

@@ -4,7 +4,7 @@ import { applicantDuplicateReviews, applicants, users } from '@/lib/db/schema';
 import { addEmailAlias, ensureUserEmailAliasesSchema } from '@/lib/user-email-aliases';
 
 export type DuplicateReviewStatus = 'pending' | 'confirmed_duplicate' | 'different_people' | 'merged';
-const AUTO_MERGE_SCORE_THRESHOLD = 15;
+const AUTO_MERGE_SCORE_THRESHOLD = 9;
 
 function normalizeValue(value: string | null | undefined) {
   return String(value ?? '').trim().toLowerCase();

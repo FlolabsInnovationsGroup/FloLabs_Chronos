@@ -1,4 +1,4 @@
-import { and, eq, or } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { applicantDuplicateReviews, applicants, users } from '@/lib/db/schema';
 import { addEmailAlias, ensureUserEmailAliasesSchema } from '@/lib/user-email-aliases';
@@ -8,6 +8,13 @@ const AUTO_MERGE_SCORE_THRESHOLD = 9;
 
 function normalizeValue(value: string | null | undefined) {
   return String(value ?? '').trim().toLowerCase();
+}
+
+function chooseLongestNameApplicant<T extends { id: string; name: string | null }>(first: T, second: T): T {
+  const firstName = String(first.name ?? '').trim();
+  const secondName = String(second.name ?? '').trim();
+  if (secondName.length > firstName.length) return second;
+  return first;
 }
 
 function scorePair(applicant: any, other: any) {
@@ -82,6 +89,7 @@ export async function syncDuplicateReviews() {
     confidenceScore: number;
     reasons: string[];
     autoMerge: boolean;
+    canonicalApplicantId: string;
   }> = [];
 
   for (let i = 0; i < rows.length; i += 1) {
@@ -96,12 +104,14 @@ export async function syncDuplicateReviews() {
       if (strongSignals === 1 && reasons.length < 3) continue;
 
       const [primaryApplicantId, duplicateApplicantId] = [applicant.id, other.id].sort();
+      const canonicalApplicantId = chooseLongestNameApplicant(applicant, other).id;
       upserts.push({
         primaryApplicantId,
         duplicateApplicantId,
         confidenceScore: score,
         reasons,
         autoMerge: score >= AUTO_MERGE_SCORE_THRESHOLD,
+        canonicalApplicantId,
       });
     }
   }
@@ -132,7 +142,7 @@ export async function syncDuplicateReviews() {
         reviewId: review.id,
         status: 'merged',
         notes: `Auto-merged because score is ${item.confidenceScore} (>= ${AUTO_MERGE_SCORE_THRESHOLD}).`,
-        canonicalApplicantId: item.primaryApplicantId,
+        canonicalApplicantId: item.canonicalApplicantId,
       });
     }
   }
@@ -180,10 +190,22 @@ export async function updateDuplicateReview(input: {
 
     const canonicalApplicant = input.canonicalApplicantId === updated.duplicateApplicantId ? duplicateApplicant : primaryApplicant;
     const secondaryApplicant = canonicalApplicant?.id === primaryApplicant?.id ? duplicateApplicant : primaryApplicant;
+    const longestName = chooseLongestNameApplicant(
+      { id: canonicalApplicant?.id ?? '', name: canonicalApplicant?.name ?? '' },
+      { id: secondaryApplicant?.id ?? '', name: secondaryApplicant?.name ?? '' },
+    ).name;
+
+    if (canonicalApplicant?.id && longestName && normalizeValue(canonicalApplicant.name) !== normalizeValue(longestName)) {
+      await db.update(applicants).set({ name: longestName, updatedAt: new Date() }).where(eq(applicants.id, canonicalApplicant.id));
+    }
+
     const canonicalEmail = canonicalApplicant?.email ?? null;
     if (canonicalEmail) {
       const [canonicalUser] = await db.select().from(users).where(eq(users.email, canonicalEmail)).limit(1);
       if (canonicalUser) {
+        if (longestName && normalizeValue(canonicalUser.name) !== normalizeValue(longestName)) {
+          await db.update(users).set({ name: longestName, updatedAt: new Date() }).where(eq(users.id, canonicalUser.id));
+        }
         await addEmailAlias(canonicalUser.id, canonicalEmail, true);
         if (secondaryApplicant?.email) {
           await addEmailAlias(canonicalUser.id, secondaryApplicant.email);

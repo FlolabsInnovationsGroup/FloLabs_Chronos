@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { applicants, users } from '@/lib/db/schema';
 import { db } from '@/lib/db';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
+import { randomBytes } from 'crypto';
+import bcrypt from 'bcryptjs';
+import { teamMemberships, teams } from '@/lib/db/schema';
+import { ensureTeamMemberPage } from '@/lib/notion';
+import { addPrimaryEmailAlias } from '@/lib/user-email-aliases';
+import { ensureDiscordResourcesForUser } from '@/lib/discord-provisioning';
 
 function hasServiceAccess(request: Request) {
   const expected = process.env.CHRONOS_SYNC_TOKEN;
@@ -142,5 +148,90 @@ export async function POST(request: Request) {
     })
     .returning();
 
-  return NextResponse.json({ applicant: inserted[0] });
+  const applicant = inserted[0];
+  const shouldProvisionJoinedProfile = Boolean(body.syncedToTeamMembers) || body.stage === 'joined';
+
+  if (shouldProvisionJoinedProfile) {
+    try {
+      const [existingUser] = await db.select().from(users).where(eq(users.email, String(body.email).toLowerCase())).limit(1);
+      const requestedTeamIds = Array.isArray(body.teamIds)
+        ? body.teamIds.filter((value: unknown): value is string => typeof value === 'string' && value.length > 0)
+        : (typeof body.teamId === 'string' && body.teamId.length > 0 ? [body.teamId] : []);
+
+      const fallbackTeam = requestedTeamIds.length === 0
+        ? await db.select({ id: teams.id }).from(teams).where(eq(teams.isActive, true)).orderBy(desc(teams.createdAt)).limit(1)
+        : [];
+      const teamIds = requestedTeamIds.length > 0 ? requestedTeamIds : (fallbackTeam[0] ? [fallbackTeam[0].id] : []);
+
+      const teamRows = teamIds.length > 0
+        ? await db.select({ id: teams.id, notionPageId: teams.notionPageId }).from(teams).where(inArray(teams.id, teamIds))
+        : [];
+      const notionTeamPageIds = teamRows.map((row) => row.notionPageId).filter((id): id is string => Boolean(id));
+
+      const teamMemberPage = notionTeamPageIds.length > 0
+        ? await ensureTeamMemberPage({
+          email: String(body.email).toLowerCase(),
+          name,
+          notionTeamPageIds,
+          forceCreateNew: true,
+        })
+        : null;
+
+      const ensuredUser = existingUser
+        ? existingUser
+        : (await db
+          .insert(users)
+          .values({
+            email: String(body.email).toLowerCase(),
+            name,
+            password: await bcrypt.hash(randomBytes(24).toString('hex'), 12),
+            role: 'member',
+            teamId: teamIds[0] ?? null,
+            isActive: true,
+            notionTeamMemberId: teamMemberPage?.pageId ?? null,
+          })
+          .returning())[0];
+
+      if (teamMemberPage?.pageId && ensuredUser.notionTeamMemberId !== teamMemberPage.pageId) {
+        await db
+          .update(users)
+          .set({ notionTeamMemberId: teamMemberPage.pageId, updatedAt: new Date() })
+          .where(eq(users.id, ensuredUser.id));
+      }
+
+      if (teamIds.length > 0) {
+        await db.insert(teamMemberships).values(teamIds.map((teamId) => ({ userId: ensuredUser.id, teamId }))).onConflictDoNothing();
+        await db.update(users).set({ teamId: teamIds[0], updatedAt: new Date() }).where(eq(users.id, ensuredUser.id));
+      }
+
+      await db
+        .update(applicants)
+        .set({
+          chronosUserId: ensuredUser.id,
+          syncedToTeamMembers: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(applicants.id, applicant.id));
+
+      await addPrimaryEmailAlias(ensuredUser.id, ensuredUser.email).catch(() => null);
+      await ensureDiscordResourcesForUser({ userId: ensuredUser.id, name: ensuredUser.name }).catch(() => null);
+
+      return NextResponse.json({
+        applicant: { ...applicant, chronosUserId: ensuredUser.id, syncedToTeamMembers: true },
+        user: {
+          id: ensuredUser.id,
+          email: ensuredUser.email,
+          name: ensuredUser.name,
+          notionTeamMemberId: teamMemberPage?.pageId ?? ensuredUser.notionTeamMemberId ?? null,
+        },
+      });
+    } catch (error) {
+      return NextResponse.json({
+        error: error instanceof Error ? error.message : 'Joined profile provisioning failed',
+        applicant,
+      }, { status: 502 });
+    }
+  }
+
+  return NextResponse.json({ applicant });
 }

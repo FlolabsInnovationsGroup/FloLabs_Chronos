@@ -9,12 +9,55 @@ import { teamMemberships, teams } from '@/lib/db/schema';
 import { ensureTeamMemberPage } from '@/lib/notion';
 import { addPrimaryEmailAlias } from '@/lib/user-email-aliases';
 import { ensureDiscordResourcesForUser } from '@/lib/discord-provisioning';
+import { syncDuplicateReviews } from '@/lib/duplicate-review';
 
 function hasServiceAccess(request: Request) {
   const expected = process.env.CHRONOS_SYNC_TOKEN;
   if (!expected) return false;
   const header = request.headers.get('authorization');
   return header === `Bearer ${expected}`;
+}
+
+function normalizeRole(value: unknown) {
+  return String(value ?? '').trim();
+}
+
+function mergeRoleHistory(input: {
+  incomingRole: string;
+  existingRole: string | null;
+  existingRawData: unknown;
+  incomingRawData: unknown;
+}) {
+  const roles = new Set<string>();
+  const addRole = (value: unknown) => {
+    const role = normalizeRole(value);
+    if (role) roles.add(role);
+  };
+
+  const parseHistory = (raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return [] as string[];
+    const candidate = (raw as { rolesAppliedFor?: unknown }).rolesAppliedFor;
+    if (!Array.isArray(candidate)) return [] as string[];
+    return candidate.map((item) => String(item ?? '').trim()).filter(Boolean);
+  };
+
+  parseHistory(input.existingRawData).forEach(addRole);
+  parseHistory(input.incomingRawData).forEach(addRole);
+  addRole(input.existingRole);
+  addRole(input.incomingRole);
+
+  const existingObject = input.existingRawData && typeof input.existingRawData === 'object'
+    ? input.existingRawData as Record<string, unknown>
+    : {};
+  const incomingObject = input.incomingRawData && typeof input.incomingRawData === 'object'
+    ? input.incomingRawData as Record<string, unknown>
+    : {};
+
+  return {
+    ...existingObject,
+    ...incomingObject,
+    rolesAppliedFor: Array.from(roles),
+  };
 }
 
 export async function GET(request: Request) {
@@ -75,16 +118,32 @@ export async function POST(request: Request) {
   if (!db) return NextResponse.json({ error: 'Database unavailable' }, { status: 500 });
 
   const body = await request.json();
+  const normalizedEmail = String(body.email ?? '').toLowerCase();
   const name = String(body.name ?? `${body.firstName ?? ''} ${body.lastName ?? ''}`.trim());
   if (!body.email || !name) {
     return NextResponse.json({ error: 'email and name are required' }, { status: 400 });
   }
 
+  const [existingApplicant] = await db
+    .select({
+      roleAppliedFor: applicants.roleAppliedFor,
+      hubspotRawData: applicants.hubspotRawData,
+    })
+    .from(applicants)
+    .where(eq(applicants.email, normalizedEmail))
+    .limit(1);
+  const mergedRawData = mergeRoleHistory({
+    incomingRole: String(body.roleAppliedFor ?? ''),
+    existingRole: existingApplicant?.roleAppliedFor ?? null,
+    existingRawData: existingApplicant?.hubspotRawData ?? null,
+    incomingRawData: body.hubspotRawData ?? body.rawData ?? null,
+  });
+
   const inserted = await db
     .insert(applicants)
     .values({
       externalApplicantId: body.externalApplicantId ?? null,
-      email: String(body.email).toLowerCase(),
+      email: normalizedEmail,
       name,
       phone: body.phone ?? null,
       country: body.country ?? null,
@@ -109,7 +168,7 @@ export async function POST(request: Request) {
       hubspotLifecycleStage: body.hubspotLifecycleStage ?? null,
       hubspotLeadStatus: body.hubspotLeadStatus ?? null,
       hubspotLastModifiedAt: body.hubspotLastModifiedAt ? new Date(body.hubspotLastModifiedAt) : null,
-      hubspotRawData: body.hubspotRawData ?? body.rawData ?? null,
+      hubspotRawData: mergedRawData,
       syncedToTeamMembers: Boolean(body.syncedToTeamMembers),
       chronosUserId: body.chronosUserId ?? null,
     })
@@ -141,7 +200,7 @@ export async function POST(request: Request) {
         hubspotLifecycleStage: body.hubspotLifecycleStage ?? null,
         hubspotLeadStatus: body.hubspotLeadStatus ?? null,
         hubspotLastModifiedAt: body.hubspotLastModifiedAt ? new Date(body.hubspotLastModifiedAt) : null,
-        hubspotRawData: body.hubspotRawData ?? body.rawData ?? null,
+        hubspotRawData: mergedRawData,
         syncedToTeamMembers: Boolean(body.syncedToTeamMembers),
         chronosUserId: body.chronosUserId ?? null,
       },
@@ -216,6 +275,7 @@ export async function POST(request: Request) {
       await addPrimaryEmailAlias(ensuredUser.id, ensuredUser.email).catch(() => null);
       await ensureDiscordResourcesForUser({ userId: ensuredUser.id, name: ensuredUser.name }).catch(() => null);
 
+      await syncDuplicateReviews().catch(() => null);
       return NextResponse.json({
         applicant: { ...applicant, chronosUserId: ensuredUser.id, syncedToTeamMembers: true },
         user: {
@@ -233,5 +293,6 @@ export async function POST(request: Request) {
     }
   }
 
+  await syncDuplicateReviews().catch(() => null);
   return NextResponse.json({ applicant });
 }

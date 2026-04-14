@@ -2,8 +2,43 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { applicants } from '@/lib/db/schema';
-import { eq, or } from 'drizzle-orm';
+import { inArray } from 'drizzle-orm';
 import { getDuplicateReviewsForApplicant, syncDuplicateReviews, updateDuplicateReview } from '@/lib/duplicate-review';
+
+type ReviewRow = {
+  status: string;
+  primaryApplicantId?: string | null;
+  duplicateApplicantId?: string | null;
+  primary_applicant_id?: string | null;
+  duplicate_applicant_id?: string | null;
+  [key: string]: unknown;
+};
+
+async function listReviews(status: string | null, applicantId?: string | null) {
+  if (!db) {
+    return NextResponse.json({ error: 'Database unavailable' }, { status: 500 });
+  }
+
+  const reviews: ReviewRow[] = applicantId
+    ? await getDuplicateReviewsForApplicant(applicantId)
+    : await db.query.applicantDuplicateReviews.findMany({ with: {} });
+
+  const applicantIds = Array.from(new Set(reviews.flatMap((review) => [review.primaryApplicantId ?? review.primary_applicant_id, review.duplicateApplicantId ?? review.duplicate_applicant_id]).filter(Boolean) as string[]));
+  const applicantRows = applicantIds.length > 0
+    ? await db.select().from(applicants).where(inArray(applicants.id, applicantIds))
+    : [];
+  const applicantMap = new Map(applicantRows.map((row) => [row.id, row]));
+
+  const filtered = reviews
+    .filter((review) => !status || review.status === status)
+    .map((review) => ({
+      ...review,
+      primaryApplicant: applicantMap.get(review.primaryApplicantId ?? review.primary_applicant_id) ?? null,
+      duplicateApplicant: applicantMap.get(review.duplicateApplicantId ?? review.duplicate_applicant_id) ?? null,
+    }));
+
+  return NextResponse.json({ reviews: filtered });
+}
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -12,15 +47,16 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
+  const status = searchParams.get('status');
+  const sync = searchParams.get('sync');
   const applicantId = searchParams.get('applicantId');
 
-  if (!applicantId) {
+  if (sync === '1') {
     const synced = await syncDuplicateReviews();
     return NextResponse.json({ syncedCount: synced.length });
   }
 
-  const reviews = await getDuplicateReviewsForApplicant(applicantId);
-  return NextResponse.json({ reviews });
+  return listReviews(status, applicantId);
 }
 
 export async function PUT(request: Request) {
@@ -40,29 +76,7 @@ export async function PUT(request: Request) {
     const synced = await syncDuplicateReviews();
     return NextResponse.json({ syncedCount: synced.length });
   }
-
-  const reviews = await db.query.applicantDuplicateReviews.findMany({
-    with: {},
-  }).catch(async () => {
-    const rows = await getDuplicateReviewsForApplicant(searchParams.get('applicantId') ?? '');
-    return rows;
-  });
-
-  const applicantIds = Array.from(new Set(reviews.flatMap((review: any) => [review.primaryApplicantId ?? review.primary_applicant_id, review.duplicateApplicantId ?? review.duplicate_applicant_id]).filter(Boolean)));
-  const applicantRows = applicantIds.length > 0
-    ? await db.select().from(applicants).where(or(...applicantIds.map((id) => eq(applicants.id, id))))
-    : [];
-  const applicantMap = new Map(applicantRows.map((row) => [row.id, row]));
-
-  const filtered = reviews
-    .filter((review: any) => !status || (review.status === status))
-    .map((review: any) => ({
-      ...review,
-      primaryApplicant: applicantMap.get(review.primaryApplicantId ?? review.primary_applicant_id) ?? null,
-      duplicateApplicant: applicantMap.get(review.duplicateApplicantId ?? review.duplicate_applicant_id) ?? null,
-    }));
-
-  return NextResponse.json({ reviews: filtered });
+  return listReviews(status, searchParams.get('applicantId'));
 }
 
 export async function POST(request: Request) {

@@ -27,7 +27,7 @@ export function DuplicateReviewQueue() {
 
   async function load(nextStatus = status) {
     setLoading(true);
-    const res = await fetch(`/api/applicants/duplicate-reviews?status=${encodeURIComponent(nextStatus)}`, { cache: 'no-store', method: 'PUT' });
+    const res = await fetch(`/api/applicants/duplicate-reviews?status=${encodeURIComponent(nextStatus)}`, { cache: 'no-store' });
     const data = await res.json().catch(() => ({ reviews: [] }));
     setReviews(data.reviews ?? []);
     setLoading(false);
@@ -35,7 +35,7 @@ export function DuplicateReviewQueue() {
 
   async function syncNow() {
     setSyncing(true);
-    await fetch('/api/applicants/duplicate-reviews?sync=1', { method: 'PUT' });
+    await fetch('/api/applicants/duplicate-reviews?sync=1');
     await load(status);
     setSyncing(false);
   }

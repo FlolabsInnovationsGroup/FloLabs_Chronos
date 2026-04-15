@@ -220,7 +220,7 @@ export async function POST(request: Request) {
       const fallbackTeam = requestedTeamIds.length === 0
         ? await db.select({ id: teams.id }).from(teams).where(eq(teams.isActive, true)).orderBy(desc(teams.createdAt)).limit(1)
         : [];
-      const teamIds = requestedTeamIds.length > 0 ? requestedTeamIds : (fallbackTeam[0] ? [fallbackTeam[0].id] : []);
+      const teamIds: string[] = requestedTeamIds.length > 0 ? requestedTeamIds : (fallbackTeam[0] ? [fallbackTeam[0].id] : []);
 
       const teamRows = teamIds.length > 0
         ? await db.select({ id: teams.id, notionPageId: teams.notionPageId }).from(teams).where(inArray(teams.id, teamIds))
@@ -259,7 +259,7 @@ export async function POST(request: Request) {
       }
 
       if (teamIds.length > 0) {
-        await db.insert(teamMemberships).values(teamIds.map((teamId) => ({ userId: ensuredUser.id, teamId }))).onConflictDoNothing();
+        await db.insert(teamMemberships).values(teamIds.map((teamId: string) => ({ userId: ensuredUser.id, teamId }))).onConflictDoNothing();
         await db.update(users).set({ teamId: teamIds[0], updatedAt: new Date() }).where(eq(users.id, ensuredUser.id));
       }
 

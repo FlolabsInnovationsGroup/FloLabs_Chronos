@@ -33,8 +33,14 @@ async function listReviews(status: string | null, applicantId?: string | null) {
     .filter((review) => !status || review.status === status)
     .map((review) => ({
       ...review,
-      primaryApplicant: applicantMap.get(review.primaryApplicantId ?? review.primary_applicant_id) ?? null,
-      duplicateApplicant: applicantMap.get(review.duplicateApplicantId ?? review.duplicate_applicant_id) ?? null,
+      primaryApplicant: (() => {
+        const primaryId = review.primaryApplicantId ?? review.primary_applicant_id;
+        return primaryId ? applicantMap.get(primaryId) ?? null : null;
+      })(),
+      duplicateApplicant: (() => {
+        const duplicateId = review.duplicateApplicantId ?? review.duplicate_applicant_id;
+        return duplicateId ? applicantMap.get(duplicateId) ?? null : null;
+      })(),
     }));
 
   return NextResponse.json({ reviews: filtered });

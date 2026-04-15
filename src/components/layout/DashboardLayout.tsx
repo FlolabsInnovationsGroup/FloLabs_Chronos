@@ -49,6 +49,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     };
   }, [mobileNavOpen]);
 
+  // Keep applicant "recently visited" in sync on every route change.
+  useEffect(() => {
+    if (!session?.user) return;
+    const controller = new AbortController();
+    void fetch("/api/user-activity/visit", {
+      method: "POST",
+      cache: "no-store",
+      signal: controller.signal,
+      keepalive: true,
+    }).catch(() => null);
+    return () => controller.abort();
+  }, [pathname, session?.user?.id]);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Fixed left sidebar — hidden on mobile */}

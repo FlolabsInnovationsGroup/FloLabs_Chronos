@@ -162,22 +162,29 @@ export default function TeamPage() {
     }
 
     try {
-      const requests: Promise<Response>[] = [
-        fetch("/api/users", { cache: "no-store" }),
-        fetch("/api/teams", { cache: "no-store" }),
-      ];
-      if (role === "admin" || role === "hr") {
-        requests.push(fetch("/api/invitations", { cache: "no-store" }));
-      }
-
-      const raw = await Promise.all((await Promise.all(requests)).map(readJson));
-      const usersPayload = raw[0] as { users?: TeamUser[] };
-      const teamsPayload = raw[1] as { teams?: Team[] };
+      const usersPayload = (await readJson(await fetch("/api/users", { cache: "no-store" }))) as {
+        users?: TeamUser[];
+      };
+      const teamsPayload = (await readJson(await fetch("/api/teams", { cache: "no-store" }))) as {
+        teams?: Team[];
+      };
       setUsers(usersPayload.users ?? []);
       setTeams(teamsPayload.teams ?? []);
+
       if (role === "admin" || role === "hr") {
-        const invPayload = raw[2] as { invitations?: TeamInvitation[] } | undefined;
-        setInvitations(invPayload?.invitations ?? []);
+        try {
+          const invPayload = (await readJson(await fetch("/api/invitations", { cache: "no-store" }))) as {
+            invitations?: TeamInvitation[];
+          };
+          setInvitations(invPayload?.invitations ?? []);
+        } catch (err) {
+          // Keep the rest of the Users page functional if invitations backend is temporarily unavailable.
+          console.warn("[team/page] invitations refresh failed", err);
+          setInvitations([]);
+          if (!silent) {
+            setError("Users and teams loaded, but invitations are temporarily unavailable.");
+          }
+        }
       }
     } catch (err) {
       if (!silent) {

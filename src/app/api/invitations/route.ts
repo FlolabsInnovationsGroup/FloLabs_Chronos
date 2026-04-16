@@ -67,18 +67,33 @@ async function getInvitationTeams(invitationIds: string[]) {
 
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user || !canManageInvitations(session.user)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!db) return NextResponse.json({ invitations: [] });
+  try {
+    const session = await auth();
+    if (!session?.user || !canManageInvitations(session.user)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!db) return NextResponse.json({ invitations: [] });
 
-  const rows = await db
-    .select({ id: invitations.id, email: invitations.email, name: invitations.name, role: invitations.role, teamId: invitations.teamId, token: invitations.token, invitedById: invitations.invitedById, expiresAt: invitations.expiresAt, acceptedAt: invitations.acceptedAt, createdAt: invitations.createdAt, team: { id: teams.id, name: teams.name, slug: teams.slug } })
-    .from(invitations)
-    .leftJoin(teams, eq(invitations.teamId, teams.id))
-    .orderBy(desc(invitations.createdAt));
+    const rows = await db
+      .select({ id: invitations.id, email: invitations.email, name: invitations.name, role: invitations.role, teamId: invitations.teamId, token: invitations.token, invitedById: invitations.invitedById, expiresAt: invitations.expiresAt, acceptedAt: invitations.acceptedAt, createdAt: invitations.createdAt, team: { id: teams.id, name: teams.name, slug: teams.slug } })
+      .from(invitations)
+      .leftJoin(teams, eq(invitations.teamId, teams.id))
+      .orderBy(desc(invitations.createdAt));
 
-  const teamsByInvitation = await getInvitationTeams(rows.map((row) => row.id));
-  return NextResponse.json({ invitations: rows.map((invite) => ({ ...invite, teams: teamsByInvitation.get(invite.id) ?? (invite.team ? [invite.team] : []), teamIds: (teamsByInvitation.get(invite.id) ?? []).map((team) => team.id), inviteUrl: buildInviteUrl(invite.token) })) });
+    const teamsByInvitation = await getInvitationTeams(rows.map((row) => row.id));
+    return NextResponse.json({ invitations: rows.map((invite) => ({ ...invite, teams: teamsByInvitation.get(invite.id) ?? (invite.team ? [invite.team] : []), teamIds: (teamsByInvitation.get(invite.id) ?? []).map((team) => team.id), inviteUrl: buildInviteUrl(invite.token) })) });
+  } catch (err) {
+    console.error("[api/invitations GET]", err);
+    const message = err instanceof Error ? err.message : String(err);
+    if (/invitations|column .*invitations|relation .*invitations/i.test(message)) {
+      return NextResponse.json(
+        {
+          error:
+            "Invitations data is temporarily unavailable in this environment. Users and teams are still accessible.",
+        },
+        { status: 503 }
+      );
+    }
+    return NextResponse.json({ error: "Failed to load invitations." }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {

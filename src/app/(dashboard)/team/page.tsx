@@ -162,14 +162,29 @@ export default function TeamPage() {
     }
 
     try {
-      const usersPayload = (await readJson(await fetch("/api/users", { cache: "no-store" }))) as {
-        users?: TeamUser[];
-      };
-      const teamsPayload = (await readJson(await fetch("/api/teams", { cache: "no-store" }))) as {
-        teams?: Team[];
-      };
-      setUsers(usersPayload.users ?? []);
-      setTeams(teamsPayload.teams ?? []);
+      const endpointErrors: string[] = [];
+
+      try {
+        const usersPayload = (await readJson(await fetch("/api/users", { cache: "no-store" }))) as {
+          users?: TeamUser[];
+        };
+        setUsers(usersPayload.users ?? []);
+      } catch (err) {
+        console.warn("[team/page] users refresh failed", err);
+        setUsers([]);
+        endpointErrors.push("Users service unavailable");
+      }
+
+      try {
+        const teamsPayload = (await readJson(await fetch("/api/teams", { cache: "no-store" }))) as {
+          teams?: Team[];
+        };
+        setTeams(teamsPayload.teams ?? []);
+      } catch (err) {
+        console.warn("[team/page] teams refresh failed", err);
+        setTeams([]);
+        endpointErrors.push("Teams service unavailable");
+      }
 
       if (role === "admin" || role === "hr") {
         try {
@@ -178,13 +193,14 @@ export default function TeamPage() {
           };
           setInvitations(invPayload?.invitations ?? []);
         } catch (err) {
-          // Keep the rest of the Users page functional if invitations backend is temporarily unavailable.
           console.warn("[team/page] invitations refresh failed", err);
           setInvitations([]);
-          if (!silent) {
-            setError("Users and teams loaded, but invitations are temporarily unavailable.");
-          }
+          endpointErrors.push("Invitations service unavailable");
         }
+      }
+
+      if (!silent && endpointErrors.length > 0) {
+        setError(endpointErrors.join(" · "));
       }
     } catch (err) {
       if (!silent) {

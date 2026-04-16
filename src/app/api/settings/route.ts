@@ -10,6 +10,10 @@ const nameSchema = z.object({
   name: z.string().min(1),
 });
 
+const profilePictureSchema = z.object({
+  profilePictureUrl: z.string().url().nullable(),
+});
+
 const passwordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(8),
@@ -30,6 +34,17 @@ export async function PATCH(req: Request) {
       .set({ name: nameParsed.data.name, updatedAt: new Date() })
       .where(eq(users.id, session.user.id))
       .returning({ id: users.id, name: users.name, email: users.email });
+    return NextResponse.json({ user });
+  }
+
+  // Profile picture update/remove
+  const pictureParsed = profilePictureSchema.safeParse(body);
+  if (pictureParsed.success && !("currentPassword" in body) && !("name" in body)) {
+    const [user] = await db
+      .update(users)
+      .set({ profilePictureUrl: pictureParsed.data.profilePictureUrl, updatedAt: new Date() })
+      .where(eq(users.id, session.user.id))
+      .returning({ id: users.id, profilePictureUrl: users.profilePictureUrl });
     return NextResponse.json({ user });
   }
 

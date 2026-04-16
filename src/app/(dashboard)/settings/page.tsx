@@ -31,6 +31,7 @@ export default async function SettingsPage() {
           id: session.user.id,
           name: session.user.name,
           email: session.user.email,
+          profilePictureUrl: session.user.profilePictureUrl ?? null,
         }}
       />
     </div>

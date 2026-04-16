@@ -5,6 +5,7 @@ import { useSSE } from '@/hooks/use-sse';
 import { useAutoRefresh } from '@/hooks/use-auto-refresh';
 import { Tooltip } from '@/components/ui/Tooltip';
 import type { EntryDiscussion, DiscussionReply, SSEEvent } from '@/types';
+import { isAdminLikeRole } from '@/lib/role-utils';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -283,7 +284,7 @@ export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: Dis
   const hasAnyUnread = discussions.some((d) => hasUnread(d, seenIds));
 
   const canResolve = (discussion: EntryDiscussion) =>
-    viewerRole === 'admin' || discussion.startedById === viewerId;
+    isAdminLikeRole(viewerRole) || discussion.startedById === viewerId;
 
   const activeDiscussion = activeId ? discussions.find((d) => d.id === activeId) : null;
 

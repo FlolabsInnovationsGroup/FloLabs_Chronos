@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -14,6 +15,7 @@ interface SettingsFormProps {
     id: string;
     name: string;
     email: string;
+    profilePictureUrl?: string | null;
   };
 }
 
@@ -24,6 +26,7 @@ const THEME_SELECT_OPTIONS = [
 ] as const;
 
 export function SettingsForm({ user }: SettingsFormProps) {
+  const { update: updateSession } = useSession();
   const { mode, setMode, mounted: themeMounted } = useChronosTheme();
   const [name, setName] = useState(user.name);
   const [nameLoading, setNameLoading] = useState(false);
@@ -36,6 +39,10 @@ export function SettingsForm({ user }: SettingsFormProps) {
   const [pwLoading, setPwLoading] = useState(false);
   const [pwSuccess, setPwSuccess] = useState(false);
   const [pwError, setPwError] = useState("");
+
+  const [profilePictureUrl, setProfilePictureUrl] = useState(user.profilePictureUrl ?? "");
+  const [pictureLoading, setPictureLoading] = useState(false);
+  const [pictureError, setPictureError] = useState("");
 
   async function handleNameSave(e: React.FormEvent) {
     e.preventDefault();
@@ -91,6 +98,64 @@ export function SettingsForm({ user }: SettingsFormProps) {
       setPwError("Network error");
     } finally {
       setPwLoading(false);
+    }
+  }
+
+  async function handlePictureUpload(file: File) {
+    setPictureLoading(true);
+    setPictureError("");
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      const uploadRes = await fetch("/api/settings/profile-picture", {
+        method: "POST",
+        body: formData,
+      });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) {
+        setPictureError(uploadData.error ?? "Failed to upload profile picture");
+        return;
+      }
+
+      const saveRes = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profilePictureUrl: uploadData.profilePictureUrl }),
+      });
+      const saveData = await saveRes.json();
+      if (!saveRes.ok) {
+        setPictureError(saveData.error ?? "Failed to save profile picture");
+        return;
+      }
+      setProfilePictureUrl(uploadData.profilePictureUrl);
+      await updateSession();
+    } catch {
+      setPictureError("Network error");
+    } finally {
+      setPictureLoading(false);
+    }
+  }
+
+  async function handleRemovePicture() {
+    setPictureLoading(true);
+    setPictureError("");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profilePictureUrl: null }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPictureError(data.error ?? "Failed to remove profile picture");
+        return;
+      }
+      setProfilePictureUrl("");
+      await updateSession();
+    } catch {
+      setPictureError("Network error");
+    } finally {
+      setPictureLoading(false);
     }
   }
 
@@ -167,6 +232,58 @@ export function SettingsForm({ user }: SettingsFormProps) {
             )}
           </div>
         </form>
+
+        <div className="flex flex-col gap-3">
+          <p
+            className="text-sm text-on-surface-variant"
+            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+          >
+            Profile picture
+          </p>
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 overflow-hidden rounded-full bg-surface-container-low">
+              {profilePictureUrl ? (
+                <img src={profilePictureUrl} alt="Profile picture preview" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-xs text-on-surface-variant">
+                  No photo
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="inline-flex cursor-pointer items-center rounded-lg border border-outline px-3 py-1.5 text-sm text-on-background hover:bg-surface-container-low">
+                Upload
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  disabled={pictureLoading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    void handlePictureUpload(file);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              </label>
+              {profilePictureUrl && (
+                <Button type="button" variant="secondary" size="sm" disabled={pictureLoading} onClick={() => void handleRemovePicture()}>
+                  Remove
+                </Button>
+              )}
+            </div>
+          </div>
+          {pictureLoading && (
+            <p className="text-sm text-on-surface-variant" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+              Updating picture…
+            </p>
+          )}
+          {pictureError && (
+            <p className="text-sm text-error" style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}>
+              {pictureError}
+            </p>
+          )}
+        </div>
       </Card>
 
       {/* Password change */}

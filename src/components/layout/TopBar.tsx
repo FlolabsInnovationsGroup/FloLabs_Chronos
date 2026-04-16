@@ -28,6 +28,7 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
 
   const displayName = session?.user?.name?.trim() ?? "";
   const initial = displayName ? displayName.charAt(0).toUpperCase() : "?";
+  const profilePictureUrl = session?.user?.profilePictureUrl?.trim() ?? "";
   const stopValidation = getTimerStopValidation(activeTimer);
   const canStop = !!activeTimer && stopValidation.canStop;
   const timerActionLabel = !activeTimer
@@ -139,11 +140,15 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
           <Tooltip label={displayName || "Settings"} delayMs={400} position="bottom">
             <Link
               href="/settings"
-              className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center text-sm font-semibold select-none transition-colors hover:bg-primary-dim focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className="w-8 h-8 overflow-hidden rounded-full bg-primary text-on-primary flex items-center justify-center text-sm font-semibold select-none transition-colors hover:bg-primary-dim focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               aria-label={displayName ? `Settings (${displayName})` : "Settings"}
             >
-              {initial}
+              {profilePictureUrl ? (
+                <img src={profilePictureUrl} alt={displayName ? `${displayName} profile` : "Profile"} className="h-full w-full object-cover" />
+              ) : (
+                initial
+              )}
             </Link>
           </Tooltip>
         </div>

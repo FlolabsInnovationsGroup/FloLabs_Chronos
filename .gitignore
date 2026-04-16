@@ -47,3 +47,8 @@ next-env.d.ts
 
 .vercel
 .env*.local
+
+# local import artifacts
+scripts/hubspot-import-data.json
+scripts/hubspot-import-data.jsonl
+scripts/hubspot-import.checkpoint

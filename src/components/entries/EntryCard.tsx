@@ -12,6 +12,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { TaskPicker } from "@/components/entries/TaskPicker";
 import { formatDuration, formatTime } from "@/lib/utils";
 import type { TimeEntry } from "@/types";
+import { isAdminLikeRole } from "@/lib/role-utils";
 
 interface Project {
   id: string;
@@ -197,7 +198,7 @@ export function EntryCard({ entry, onResume, onDiscuss, viewerRole, viewerId, is
           <div className="flex items-center justify-between gap-3 sm:shrink-0 sm:justify-end">
             <div className="flex items-center gap-1 shrink-0">
               {onResume && <Tooltip label="Start timer with these values"><button onClick={() => onResume(entry)} className={`p-1.5 rounded-lg text-primary hover:bg-primary-container transition-all duration-150 ${hovered ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"}`} aria-label="Start timer from this entry"><span className="material-symbols-outlined" style={{ fontSize: "18px" }}>play_arrow</span></button></Tooltip>}
-              {onDiscuss && (viewerRole === 'admin' || viewerRole === 'team_lead') && entry.userId !== viewerId && (
+              {onDiscuss && (isAdminLikeRole(viewerRole) || viewerRole === 'team_lead') && entry.userId !== viewerId && (
                 <Tooltip label="Start discussion"><button onClick={() => onDiscuss(entry)} className={`p-1.5 rounded-lg text-primary hover:bg-primary-container transition-all duration-150 ${hovered ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"}`} aria-label="Start discussion"><span className="material-symbols-outlined" style={{ fontSize: "18px" }}>chat_bubble</span></button></Tooltip>
               )}
               <Tooltip label="Edit"><button onClick={openEdit} className={`p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-all duration-150 ${hovered ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"}`} aria-label="Edit this entry"><span className="material-symbols-outlined" style={{ fontSize: "18px" }}>edit</span></button></Tooltip>

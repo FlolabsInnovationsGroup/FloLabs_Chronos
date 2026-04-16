@@ -47,6 +47,7 @@ export const users = pgTable(
     notifyOnStop: boolean("notify_on_stop").default(false),
     dailySummary: boolean("daily_summary").default(false),
     weeklyTargetHours: bigint("weekly_target_hours", { mode: "number" }).default(40),
+    profilePictureUrl: text("profile_picture_url"),
     // Link to the Notion Team Members DB page — used to resolve memberships and time entry relations
     notionTeamMemberId: text("notion_team_member_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),

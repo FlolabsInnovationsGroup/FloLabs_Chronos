@@ -44,6 +44,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             id: user.id,
             email: user.email,
             name: user.name,
+            profilePictureUrl: user.profilePictureUrl ?? null,
             role: user.role as Role,
             teamId: user.teamId,
             isActive: user.isActive,
@@ -63,6 +64,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         t.role = (user as { role?: Role }).role ?? "member";
         t.teamId = (user as { teamId?: string | null }).teamId ?? null;
         t.isActive = (user as { isActive?: boolean }).isActive ?? true;
+        t.profilePictureUrl = (user as { profilePictureUrl?: string | null }).profilePictureUrl ?? null;
         t.roleRefreshedAt = Date.now();
       }
 
@@ -81,7 +83,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           if (db) {
             const [fresh] = await db
-              .select({ role: users.role, teamId: users.teamId, isActive: users.isActive })
+              .select({
+                role: users.role,
+                teamId: users.teamId,
+                isActive: users.isActive,
+                profilePictureUrl: users.profilePictureUrl,
+              })
               .from(users)
               .where(eq(users.id, userId))
               .limit(1);
@@ -90,6 +97,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               t.role = fresh.role as Role;
               t.teamId = fresh.teamId ?? null;
               t.isActive = fresh.isActive;
+              t.profilePictureUrl = fresh.profilePictureUrl ?? null;
               t.roleRefreshedAt = Date.now();
 
               // If the user has been deactivated, invalidate the session.
@@ -111,6 +119,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       (session.user as { role?: Role }).role = (t.role as Role | undefined) ?? "member";
       session.user.teamId = (t.teamId as string | null | undefined) ?? null;
       session.user.isActive = (t.isActive as boolean | undefined) ?? true;
+      session.user.profilePictureUrl = (t.profilePictureUrl as string | null | undefined) ?? null;
       return session;
     },
   },
@@ -125,6 +134,7 @@ declare module "next-auth" {
       role: Role;
       teamId: string | null;
       isActive: boolean;
+      profilePictureUrl?: string | null;
     };
   }
 }

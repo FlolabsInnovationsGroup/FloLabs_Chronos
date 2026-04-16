@@ -2,6 +2,7 @@ import { eq, inArray, isNotNull } from "drizzle-orm";
 import type { Role, Team } from "@/types";
 import { db } from "@/lib/db";
 import { teamMemberships, teams, users } from "@/lib/db/schema";
+import { isAdminLikeRole } from "@/lib/role-utils";
 
 export interface SessionUserLike {
   id: string;
@@ -11,8 +12,10 @@ export interface SessionUserLike {
 }
 
 export function isAdmin(user?: Pick<SessionUserLike, "role"> | null): boolean {
-  return user?.role === "admin" || user?.role === "hr";
+  return isAdminLikeRole(user?.role);
 }
+
+export { isAdminLikeRole } from "@/lib/role-utils";
 
 export function isTeamLead(user?: Pick<SessionUserLike, "role"> | null): boolean {
   return user?.role === "team_lead";

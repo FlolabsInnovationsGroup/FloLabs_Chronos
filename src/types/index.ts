@@ -5,6 +5,7 @@ export interface User {
   email: string;
   alternateEmails?: string[];
   name: string;
+  profilePictureUrl?: string | null;
   role: Role;
   teamId: string | null;
   isActive: boolean;

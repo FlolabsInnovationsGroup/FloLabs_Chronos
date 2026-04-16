@@ -167,8 +167,11 @@ export default function TeamPage() {
       try {
         const usersPayload = (await readJson(await fetch("/api/users", { cache: "no-store" }))) as {
           users?: TeamUser[];
+          warning?: string;
         };
         setUsers(usersPayload.users ?? []);
+        const warn = usersPayload.warning?.trim();
+        if (warn) endpointErrors.push(warn);
       } catch (err) {
         console.warn("[team/page] users refresh failed", err);
         setUsers([]);

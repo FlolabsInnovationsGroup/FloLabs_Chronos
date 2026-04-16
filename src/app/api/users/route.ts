@@ -21,7 +21,12 @@ export async function GET() {
       // Production safety net: if memberships/team joins fail, still return base users.
       console.error("[api/users] getAccessibleUsers failed, falling back to base users query", error);
       if (db) {
-        rows = await db.select().from(usersTable) as Awaited<ReturnType<typeof getAccessibleUsers>>;
+        try {
+          rows = (await db.select().from(usersTable)) as Awaited<ReturnType<typeof getAccessibleUsers>>;
+        } catch (fallbackErr) {
+          console.error("[api/users] base users fallback failed", fallbackErr);
+          rows = [];
+        }
       }
     }
 
@@ -114,7 +119,15 @@ export async function GET() {
     return NextResponse.json({ users });
   } catch (error) {
     console.error("[api/users GET] fatal", error);
-    return NextResponse.json({ users: [], error: "Users data is temporarily unavailable." }, { status: 503 });
+    // Return 200 so authenticated clients using `readJson` do not surface a hard "Users service unavailable"
+    // banner for a recoverable empty state; operators still see the warning in the payload.
+    return NextResponse.json(
+      {
+        users: [],
+        warning: "Users data could not be loaded. Try refreshing in a moment or contact support if this persists.",
+      },
+      { status: 200 },
+    );
   }
 }
 

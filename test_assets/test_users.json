@@ -1,0 +1,15 @@
+{
+  "baseUrl": "https://athensgreecemarathon.com",
+  "users": [
+    {
+      "email": "oliver.abreu@flolabsrd.com",
+      "password": "gq2A1xZ^CdMM#uUpJnfc",
+      "role": "Human Resources"
+    },
+    {
+      "email": "tesororeptilipotermius@gmail.com",
+      "password": "oliverbenjamin",
+      "role": "member"
+    }
+  ]
+}

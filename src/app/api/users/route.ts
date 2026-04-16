@@ -4,8 +4,11 @@ import { getAccessibleUsers } from "@/lib/permissions";
 import { getAllActiveTimers } from "@/lib/redis";
 import { db } from "@/lib/db";
 import { applicants, projects, timeEntries, users as usersTable } from "@/lib/db/schema";
-import { and, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import type { ActiveTimer } from "@/types";
+
+/** Applicants with this `applicants.status` and a linked `chronos_user_id` are shown on the Users page. */
+const JOINED_APPLICANT_STATUS = "joined" as const;
 
 export async function GET() {
   try {
@@ -27,6 +30,23 @@ export async function GET() {
           console.error("[api/users] base users fallback failed", fallbackErr);
           rows = [];
         }
+      }
+    }
+
+    // Users page: only Chronos users linked from applicant rows with status "joined".
+    if (db && rows.length > 0) {
+      try {
+        const joinedApplicantRows = await db
+          .select({ chronosUserId: applicants.chronosUserId })
+          .from(applicants)
+          .where(and(eq(applicants.status, JOINED_APPLICANT_STATUS), isNotNull(applicants.chronosUserId)));
+        const joinedUserIds = new Set(
+          joinedApplicantRows.map((r) => r.chronosUserId).filter((id): id is string => Boolean(id)),
+        );
+        rows = rows.filter((u) => joinedUserIds.has(u.id));
+      } catch (err) {
+        console.error("[api/users] filtering to joined applicants failed", err);
+        rows = [];
       }
     }
 

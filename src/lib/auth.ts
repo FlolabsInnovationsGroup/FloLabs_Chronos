@@ -49,6 +49,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (!user.isActive) return null;
           const valid = await bcrypt.compare(password, user.password);
           if (!valid) return null;
+          const fallbackRole = normalizeRole(user.role);
 
           // Access switch: joined or active, non-terminated applicants can use Chronos.
           if (db) {
@@ -74,7 +75,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                   )
                 )
                 .limit(1);
-              if (!linkedApplicant) return null;
+              if (!linkedApplicant) {
+                // Operational fallback: privileged roles can still access Chronos even when
+                // applicant linkage is missing or not yet migrated.
+                if (fallbackRole === "admin" || fallbackRole === "hr") {
+                  return {
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    profilePictureUrl: user.profilePictureUrl ?? null,
+                    role: fallbackRole,
+                    teamId: user.teamId,
+                    isActive: user.isActive,
+                  };
+                }
+                return null;
+              }
               if (!linkedApplicant.isActive) return null;
 
               return {
@@ -97,7 +113,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               const stage = joinedApplicant.stage?.toLowerCase() ?? "";
               const status = joinedApplicant.status?.toLowerCase() ?? "";
               if (status === "terminated") return null;
-              if (!(stage === "joined" || status === "joined" || status === "active")) return null;
+              if (!(stage === "joined" || status === "joined" || status === "active")) {
+                if (fallbackRole !== "admin" && fallbackRole !== "hr") return null;
+              }
             }
           }
 

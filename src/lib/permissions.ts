@@ -99,19 +99,28 @@ export async function getAccessibleUsers(user: SessionUserLike) {
 
   if (baseUsers.length === 0) return [];
 
-  const membershipRows = await db
-    .select({
-      userId: teamMemberships.userId,
-      team: {
-        id: teams.id,
-        name: teams.name,
-        slug: teams.slug,
-        isActive: teams.isActive,
-      },
-    })
-    .from(teamMemberships)
-    .innerJoin(teams, eq(teamMemberships.teamId, teams.id))
-    .where(inArray(teamMemberships.userId, baseUsers.map((u) => u.id)));
+  let membershipRows: Array<{
+    userId: string;
+    team: { id: string; name: string; slug: string; isActive: boolean };
+  }> = [];
+  try {
+    membershipRows = await db
+      .select({
+        userId: teamMemberships.userId,
+        team: {
+          id: teams.id,
+          name: teams.name,
+          slug: teams.slug,
+          isActive: teams.isActive,
+        },
+      })
+      .from(teamMemberships)
+      .innerJoin(teams, eq(teamMemberships.teamId, teams.id))
+      .where(inArray(teamMemberships.userId, baseUsers.map((u) => u.id)));
+  } catch (error) {
+    // Large `inArray` payloads or transient DB errors must not hide the entire directory.
+    console.error("[permissions] team membership hydrate failed; returning users without teams", error);
+  }
 
   const teamsByUser = new Map<string, Team[]>();
   for (const row of membershipRows) {

@@ -4,10 +4,11 @@ import { getAccessibleUsers } from "@/lib/permissions";
 import { getAllActiveTimers } from "@/lib/redis";
 import { db } from "@/lib/db";
 import { applicants, projects, timeEntries, userEmailAliases, users as usersTable } from "@/lib/db/schema";
-import { and, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { ActiveTimer, ApplicantProgramStatus } from "@/types";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
+import { isAdminLikeRole } from "@/lib/role-utils";
 
 export async function GET() {
   try {
@@ -16,84 +17,105 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    /** Admin/HR directory: JWT role can diverge from `users.role` during migrations — honor both. */
+    let effectiveElevated = isAdminLikeRole(session.user.role);
+    if (db) {
+      const [sessionDbUser] = await db
+        .select({ role: usersTable.role })
+        .from(usersTable)
+        .where(eq(usersTable.id, session.user.id))
+        .limit(1);
+      effectiveElevated = isAdminLikeRole(sessionDbUser?.role) || isAdminLikeRole(session.user.role);
+    }
+
     let rows: Awaited<ReturnType<typeof getAccessibleUsers>> = [];
     if (db) {
       // Ensure applicants with Joined/Active status have linked Chronos users.
-      // Keep this bounded so `/api/users` stays responsive for the dashboard.
-      const joinedApplicants = await db
-        .select({
-          id: applicants.id,
-          email: applicants.email,
-          name: applicants.name,
-          chronosUserId: applicants.chronosUserId,
-        })
-        .from(applicants)
-        .where(
-          sql`lower(coalesce(${applicants.stage}, '')) = 'joined' or lower(coalesce(${applicants.status}, '')) in ('joined', 'active')`,
-        );
-      const missingJoinedApplicants = joinedApplicants.filter((a) => !a.chronosUserId).slice(0, 100);
+      // Multi-pass + bounded batches so more rows link per request without timing out.
+      const joinedWhere = sql`lower(coalesce(${applicants.stage}, '')) = 'joined' or lower(coalesce(${applicants.status}, '')) in ('joined', 'active')`;
       const generatedPasswordHash = await bcrypt.hash(randomBytes(24).toString("hex"), 12);
-      for (const applicant of missingJoinedApplicants) {
-        try {
-          if (applicant.chronosUserId) continue;
-          const normalizedApplicantEmail = applicant.email?.trim().toLowerCase();
-          if (!normalizedApplicantEmail) {
-            // Some legacy/partially-synced applicants may be marked joined without an email.
-            // Skip auto-provision for those rows instead of failing the whole users payload.
+      const PROVISION_PER_PASS = 250;
+      const MAX_PASSES = 3;
+      for (let pass = 0; pass < MAX_PASSES; pass++) {
+        const joinedApplicants = await db
+          .select({
+            id: applicants.id,
+            email: applicants.email,
+            name: applicants.name,
+            chronosUserId: applicants.chronosUserId,
+          })
+          .from(applicants)
+          .where(joinedWhere);
+        const missingJoinedApplicants = joinedApplicants.filter((a) => !a.chronosUserId).slice(0, PROVISION_PER_PASS);
+        if (missingJoinedApplicants.length === 0) break;
+        for (const applicant of missingJoinedApplicants) {
+          try {
+            if (applicant.chronosUserId) continue;
+            const normalizedApplicantEmail = applicant.email?.trim().toLowerCase();
+            if (!normalizedApplicantEmail) {
+              continue;
+            }
+            const [existingUser] = await db
+              .select({ id: usersTable.id, role: usersTable.role })
+              .from(usersTable)
+              .where(sql`lower(${usersTable.email}) = ${normalizedApplicantEmail}`)
+              .limit(1);
+            let userId = existingUser?.id ?? null;
+            if (!userId) {
+              try {
+                userId = (
+                  await db
+                    .insert(usersTable)
+                    .values({
+                      email: normalizedApplicantEmail,
+                      name: applicant.name?.trim() || normalizedApplicantEmail,
+                      password: generatedPasswordHash,
+                      role: "member",
+                      isActive: true,
+                    })
+                    .returning({ id: usersTable.id })
+                )[0]?.id ?? null;
+              } catch {
+                const [retryUser] = await db
+                  .select({ id: usersTable.id })
+                  .from(usersTable)
+                  .where(sql`lower(${usersTable.email}) = ${normalizedApplicantEmail}`)
+                  .limit(1);
+                userId = retryUser?.id ?? null;
+              }
+            }
+            if (!userId) continue;
+            try {
+              await db
+                .update(applicants)
+                .set({ chronosUserId: userId, isActive: true, updatedAt: new Date() })
+                .where(sql`${applicants.id} = ${applicant.id}`);
+            } catch {
+              await db
+                .update(applicants)
+                .set({ chronosUserId: userId, updatedAt: new Date() })
+                .where(sql`${applicants.id} = ${applicant.id}`);
+            }
+          } catch (error) {
+            console.error("[api/users] joined applicant auto-provision skipped", {
+              applicantId: applicant.id,
+              error,
+            });
             continue;
           }
-          const [existingUser] = await db
-            .select({ id: usersTable.id, role: usersTable.role })
-            .from(usersTable)
-            .where(sql`lower(${usersTable.email}) = ${normalizedApplicantEmail}`)
-            .limit(1);
-          let userId = existingUser?.id ?? null;
-          if (!userId) {
-            try {
-              userId = (
-                await db
-                  .insert(usersTable)
-                  .values({
-                    email: normalizedApplicantEmail,
-                    name: applicant.name?.trim() || normalizedApplicantEmail,
-                    password: generatedPasswordHash,
-                    role: "member",
-                    isActive: true,
-                  })
-                  .returning({ id: usersTable.id })
-              )[0]?.id ?? null;
-            } catch {
-              const [retryUser] = await db
-                .select({ id: usersTable.id })
-                .from(usersTable)
-                .where(sql`lower(${usersTable.email}) = ${normalizedApplicantEmail}`)
-                .limit(1);
-              userId = retryUser?.id ?? null;
-            }
-          }
-          if (!userId) continue;
-          try {
-            await db
-              .update(applicants)
-              .set({ chronosUserId: userId, isActive: true, updatedAt: new Date() })
-              .where(sql`${applicants.id} = ${applicant.id}`);
-          } catch {
-            await db
-              .update(applicants)
-              .set({ chronosUserId: userId, updatedAt: new Date() })
-              .where(sql`${applicants.id} = ${applicant.id}`);
-          }
-        } catch (error) {
-          console.error("[api/users] joined applicant auto-provision skipped", {
-            applicantId: applicant.id,
-            error,
-          });
-          continue;
         }
       }
     }
     try {
-      rows = await getAccessibleUsers(session.user);
+      if (db) {
+        if (effectiveElevated) {
+          rows = await getAccessibleUsers({ ...session.user, role: "admin" });
+        } else {
+          rows = await getAccessibleUsers(session.user);
+        }
+      } else {
+        rows = await getAccessibleUsers(session.user);
+      }
     } catch (error) {
       // Production safety net: if memberships/team joins fail, still return base users.
       console.error("[api/users] getAccessibleUsers failed, falling back to base users query", error);
@@ -104,6 +126,15 @@ export async function GET() {
           console.error("[api/users] base users fallback failed", fallbackErr);
           rows = [];
         }
+      }
+    }
+
+    if (db && rows.length === 0 && effectiveElevated) {
+      try {
+        rows = (await db.select().from(usersTable)) as Awaited<ReturnType<typeof getAccessibleUsers>>;
+        console.warn("[api/users] elevated user had empty accessible list; using full users table fallback");
+      } catch (e) {
+        console.error("[api/users] full users fallback for elevated user failed", e);
       }
     }
 
@@ -192,19 +223,50 @@ export async function GET() {
         }
         const joinedUserIds = new Set<string>();
         const emailToUserId = new Map<string, string>();
-        for (const u of rows) {
-          emailToUserId.set(u.email.trim().toLowerCase(), u.id);
-        }
         try {
-          const aliasRowsForScope = await db
-            .select({ userId: userEmailAliases.userId, email: userEmailAliases.email })
-            .from(userEmailAliases)
-            .where(inArray(userEmailAliases.userId, rows.map((u) => u.id)));
-          for (const alias of aliasRowsForScope) {
-            emailToUserId.set(alias.email.trim().toLowerCase(), alias.userId);
+          if (effectiveElevated) {
+            const allUsers = await db
+              .select({ id: usersTable.id, email: usersTable.email })
+              .from(usersTable);
+            for (const u of allUsers) {
+              emailToUserId.set(u.email.trim().toLowerCase(), u.id);
+            }
+            try {
+              const allAliases = await db
+                .select({ userId: userEmailAliases.userId, email: userEmailAliases.email })
+                .from(userEmailAliases);
+              for (const alias of allAliases) {
+                emailToUserId.set(alias.email.trim().toLowerCase(), alias.userId);
+              }
+            } catch {
+              const aliasRowsForScope = await db
+                .select({ userId: userEmailAliases.userId, email: userEmailAliases.email })
+                .from(userEmailAliases)
+                .where(inArray(userEmailAliases.userId, rows.map((u) => u.id)));
+              for (const alias of aliasRowsForScope) {
+                emailToUserId.set(alias.email.trim().toLowerCase(), alias.userId);
+              }
+            }
+          } else {
+            for (const u of rows) {
+              emailToUserId.set(u.email.trim().toLowerCase(), u.id);
+            }
+            try {
+              const aliasRowsForScope = await db
+                .select({ userId: userEmailAliases.userId, email: userEmailAliases.email })
+                .from(userEmailAliases)
+                .where(inArray(userEmailAliases.userId, rows.map((u) => u.id)));
+              for (const alias of aliasRowsForScope) {
+                emailToUserId.set(alias.email.trim().toLowerCase(), alias.userId);
+              }
+            } catch {
+              // Keep primary-email matching only if alias lookup fails.
+            }
           }
         } catch {
-          // Keep primary-email matching only if alias lookup fails.
+          for (const u of rows) {
+            emailToUserId.set(u.email.trim().toLowerCase(), u.id);
+          }
         }
         for (const r of joinedApplicantRows) {
           const applicantEmails = Array.from(
@@ -246,7 +308,12 @@ export async function GET() {
           }
         }
         if (joinedUserIds.size > 0) {
-          rows = rows.filter((u) => joinedUserIds.has(u.id));
+          const filteredRows = rows.filter((u) => joinedUserIds.has(u.id));
+          if (filteredRows.length > 0) {
+            rows = filteredRows;
+          } else {
+            console.warn("[api/users] joined-active links exist but none overlap scoped users; returning scoped users fallback");
+          }
         } else {
           // Keep non-empty user scope if applicant email linkage is incomplete in production data.
           // This avoids the Users page showing an empty list while data is being reconciled.
@@ -254,8 +321,8 @@ export async function GET() {
         }
       } catch (err) {
         console.error("[api/users] filtering to joined applicants failed", err);
-        rows = [];
         programStatusByUserId = new Map();
+        // Keep `rows` from getAccessibleUsers — never return an empty directory because overlay failed.
       }
     }
 
@@ -386,7 +453,9 @@ export async function GET() {
 
     console.info("[api/users] response", {
       requesterRole: session.user.role,
+      effectiveElevated,
       usersCount: users.length,
+      sampleNames: users.slice(0, 25).map((u) => u.name),
       warning: null,
     });
     return NextResponse.json({ users });

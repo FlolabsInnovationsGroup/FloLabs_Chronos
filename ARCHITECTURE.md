@@ -4,6 +4,29 @@
 
 Chronos is FloLabs' internal time-tracking and workforce coordination tool. It replaces Toggl for time capture, but the product is broader than a timer: it manages projects, role-scoped reporting, invite-only onboarding, Notion-backed team data, and downstream sync into Notion for operational visibility.
 
+### Current Users Directory Architecture (2026-04)
+
+- `GET /api/users` powers the Users page (`/team`).
+- Source of truth for inclusion is applicant lifecycle data plus Chronos account scope.
+- Directory inclusion targets applicants that are in program scope:
+  - `stage = joined`, or
+  - `status in (joined, active)`.
+- Applicant -> Chronos account linkage is resolved in this order:
+  1. `applicants.chronosUserId`
+  2. primary user email
+  3. `user_email_aliases`
+  4. applicant `hubspotRawData.emails`
+- If a joined/active applicant is missing `chronosUserId`, `/api/users` performs bounded auto-link/provision work (batch-limited) to avoid request timeouts.
+- Visibility is role-scoped:
+  - admin / HR: global scoped users
+  - team lead: team scope
+  - member: self
+- Session-role drift is handled by server-side DB role checks and role normalization (`admin`, `hr`, `team_lead`, `member`; compatible with legacy strings like `Human Resources`).
+- Users response overlays applicant profile fields on top of `users` fields (name/email/role/team/isActive/notion links) and includes:
+  - `alternateEmails` (aliases + applicant/hubspot known emails)
+  - live timer state
+  - `requiresNotionProfileLink` warning marker.
+
 The current product model is:
 - Projects are global, but only admins can create, modify, archive, restore, or delete them.
 - Users can belong to multiple teams.

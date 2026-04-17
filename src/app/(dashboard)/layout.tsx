@@ -10,7 +10,11 @@ export default async function Layout({ children }: { children: React.ReactNode }
   if (!session?.user) {
     redirect("/login");
   }
-  await markUserWebsiteVisit(session.user.id, session.user.email);
+  try {
+    await markUserWebsiteVisit(session.user.id, session.user.email);
+  } catch (error) {
+    console.error('[dashboard/layout] markUserWebsiteVisit failed', error);
+  }
 
   return (
     <SessionProvider session={session}>

@@ -172,7 +172,7 @@ export async function GET(req: Request) {
       }
     }
 
-    // ── STEP 4: For joined applicants, push applicant canonical profile data to Notion Team Members ─
+    // ── STEP 4: For linked applicants eligible for Team Members refresh, push canonical profile data to Notion ─
     const joinedApplicants = await db
       .select({
         id: applicants.id,
@@ -182,6 +182,8 @@ export async function GET(req: Request) {
         status: applicants.status,
         teamId: applicants.teamId,
         notionTeamMemberId: applicants.notionTeamMemberId,
+        isActive: applicants.isActive,
+        syncedToTeamMembers: applicants.syncedToTeamMembers,
       })
       .from(applicants)
       .where(isNotNull(applicants.chronosUserId));
@@ -189,8 +191,8 @@ export async function GET(req: Request) {
     for (const applicant of joinedApplicants) {
       const stage = applicant.stage?.toLowerCase() ?? "";
       const status = applicant.status?.toLowerCase() ?? "";
-      const isJoined = stage === "joined" || status === "joined";
-      if (!isJoined) continue;
+      const eligibleForRefresh = applicant.syncedToTeamMembers || applicant.isActive || stage === "joined" || stage === "chronos_synced" || status === "joined" || status === "active" || status === "signed";
+      if (!eligibleForRefresh) continue;
       if (!applicant.notionTeamMemberId || !applicant.teamId) continue;
       const notionTeamPageId = notionPageIdByTeamId.get(applicant.teamId);
       if (!notionTeamPageId) continue;

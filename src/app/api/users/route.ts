@@ -4,7 +4,7 @@ import { getAccessibleUsers } from "@/lib/permissions";
 import { getAllActiveTimers } from "@/lib/redis";
 import { db } from "@/lib/db";
 import { applicants, projects, timeEntries, userEmailAliases, users as usersTable } from "@/lib/db/schema";
-import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { ActiveTimer, ApplicantProgramStatus } from "@/types";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
@@ -32,7 +32,7 @@ export async function GET() {
     if (db) {
       // Ensure applicants with Joined/Active status have linked Chronos users.
       // Multi-pass + bounded batches so more rows link per request without timing out.
-      const joinedWhere = sql`lower(coalesce(${applicants.stage}, '')) = 'joined' or lower(coalesce(${applicants.status}, '')) in ('joined', 'active')`;
+      const joinedWhere = sql`lower(coalesce(${applicants.stage}, '')) = 'joined' or lower(coalesce(${applicants.status}, '')) in ('signed', 'joined', 'active')`;
       const generatedPasswordHash = await bcrypt.hash(randomBytes(24).toString("hex"), 12);
       const PROVISION_PER_PASS = 250;
       const MAX_PASSES = 3;
@@ -188,7 +188,7 @@ export async function GET() {
             .from(applicants)
             .where(
             and(
-              sql`lower(coalesce(${applicants.stage}, '')) = 'joined' or lower(coalesce(${applicants.status}, '')) in ('joined', 'active')`,
+              sql`lower(coalesce(${applicants.stage}, '')) = 'joined' or lower(coalesce(${applicants.status}, '')) in ('signed', 'joined', 'active')`,
             ),
             );
         } catch {
@@ -204,7 +204,7 @@ export async function GET() {
             .from(applicants)
             .where(
               and(
-                sql`lower(coalesce(${applicants.stage}, '')) = 'joined' or lower(coalesce(${applicants.status}, '')) in ('joined', 'active')`,
+                sql`lower(coalesce(${applicants.stage}, '')) = 'joined' or lower(coalesce(${applicants.status}, '')) in ('signed', 'joined', 'active')`,
               ),
             );
           joinedApplicantRows = legacyRows.map((row) => ({
@@ -309,7 +309,21 @@ export async function GET() {
         }
         if (joinedUserIds.size > 0) {
           const filteredRows = rows.filter((u) => joinedUserIds.has(u.id));
-          if (filteredRows.length > 0) {
+          const scopedUserIds = new Set(filteredRows.map((u) => u.id));
+          const missingJoinedUserIds = [...joinedUserIds].filter((id) => !scopedUserIds.has(id));
+
+          if (missingJoinedUserIds.length > 0 && effectiveElevated) {
+            try {
+              const supplementalRows = (await db
+                .select()
+                .from(usersTable)
+                .where(inArray(usersTable.id, missingJoinedUserIds))) as Awaited<ReturnType<typeof getAccessibleUsers>>;
+              rows = [...filteredRows, ...supplementalRows.filter((u) => joinedUserIds.has(u.id))];
+            } catch (error) {
+              console.error("[api/users] supplemental joined-active users lookup failed", error);
+              rows = filteredRows;
+            }
+          } else if (filteredRows.length > 0) {
             rows = filteredRows;
           } else {
             console.warn("[api/users] joined-active links exist but none overlap scoped users; returning scoped users fallback");

@@ -15,54 +15,88 @@ type CommandClient = ReturnType<typeof createClient>;
 
 let commandClientPromise: Promise<CommandClient> | null = null;
 let subscriptionPromise: Promise<void> | null = null;
+let redisDisabled = false;
 
 function getRedisClient() {
-  if (!redisUrl) return null;
+  if (!redisUrl || redisDisabled) return null;
   if (!commandClientPromise) {
     const client = createClient({ url: redisUrl });
     client.on("error", () => {});
-    commandClientPromise = client.connect().then(() => client);
+    commandClientPromise = client.connect().then(() => client).catch((error) => {
+      redisDisabled = true;
+      commandClientPromise = null;
+      console.error('[redis] command client connect failed, falling back', error);
+      return Promise.reject(error);
+    });
   }
   return commandClientPromise;
 }
 
 async function kvGet(key: string): Promise<string | null> {
-  const client = getRedisClient();
-  if (client) return (await client).get(key);
-  if (isKvAvailable) return kv.get<string>(key);
+  try {
+    const client = getRedisClient();
+    if (client) return (await client).get(key);
+  } catch {}
+  if (isKvAvailable) {
+    try {
+      return await kv.get<string>(key);
+    } catch (error) {
+      console.error('[redis] kv get failed', error);
+    }
+  }
   return memStore.get(key) ?? null;
 }
 
 async function kvSet(key: string, value: string): Promise<void> {
-  const client = getRedisClient();
-  if (client) {
-    await (await client).set(key, value);
-    return;
-  }
+  try {
+    const client = getRedisClient();
+    if (client) {
+      await (await client).set(key, value);
+      return;
+    }
+  } catch {}
   if (isKvAvailable) {
-    await kv.set(key, value);
-  } else {
-    memStore.set(key, value);
+    try {
+      await kv.set(key, value);
+      return;
+    } catch (error) {
+      console.error('[redis] kv set failed', error);
+    }
   }
+  memStore.set(key, value);
 }
 
 async function kvDel(key: string): Promise<void> {
-  const client = getRedisClient();
-  if (client) {
-    await (await client).del(key);
-    return;
-  }
+  try {
+    const client = getRedisClient();
+    if (client) {
+      await (await client).del(key);
+      return;
+    }
+  } catch {}
   if (isKvAvailable) {
-    await kv.del(key);
-  } else {
-    memStore.delete(key);
+    try {
+      await kv.del(key);
+      return;
+    } catch (error) {
+      console.error('[redis] kv del failed', error);
+    }
   }
+  memStore.delete(key);
 }
 
 async function kvKeys(pattern: string): Promise<string[]> {
-  const client = getRedisClient();
-  if (client) return (await client).keys(pattern);
-  if (isKvAvailable) return kv.keys(pattern);
+  try {
+    const client = getRedisClient();
+    if (client) return (await client).keys(pattern);
+  } catch {}
+  if (isKvAvailable) {
+    try {
+      return await kv.keys(pattern);
+    } catch (error) {
+      console.error('[redis] kv keys failed', error);
+    }
+  }
   const prefix = pattern.replace("*", "");
   return [...memStore.keys()].filter((k) => k.startsWith(prefix));
 }
@@ -112,7 +146,7 @@ export const timerBroadcaster = new TimerBroadcaster();
 timerBroadcaster.setMaxListeners(1000);
 
 export async function ensureTimerSubscription() {
-  if (!redisUrl) return;
+  if (!redisUrl || redisDisabled) return;
   if (!subscriptionPromise) {
     subscriptionPromise = (async () => {
       const subscriber = createClient({ url: redisUrl });
@@ -136,8 +170,12 @@ export async function ensureTimerSubscription() {
 
 export async function broadcastTimerEvent(event: object) {
   timerBroadcaster.emit("timer", event);
-  const client = getRedisClient();
-  if (client) {
-    await (await client).publish(TIMER_CHANNEL, JSON.stringify(event));
+  try {
+    const client = getRedisClient();
+    if (client) {
+      await (await client).publish(TIMER_CHANNEL, JSON.stringify(event));
+    }
+  } catch (error) {
+    console.error('[redis] publish failed', error);
   }
 }

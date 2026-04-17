@@ -20,6 +20,7 @@ type Review = {
 
 export function DuplicateReviewQueue() {
   const [status, setStatus] = useState('pending');
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -55,6 +56,21 @@ export function DuplicateReviewQueue() {
     void load(status);
   }, [status]);
 
+  const visibleReviews = reviews.filter((review) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    const primaryName = review.primaryApplicant?.name?.toLowerCase() ?? '';
+    const primaryEmail = review.primaryApplicant?.email?.toLowerCase() ?? '';
+    const duplicateName = review.duplicateApplicant?.name?.toLowerCase() ?? '';
+    const duplicateEmail = review.duplicateApplicant?.email?.toLowerCase() ?? '';
+    return (
+      primaryName.includes(q) ||
+      primaryEmail.includes(q) ||
+      duplicateName.includes(q) ||
+      duplicateEmail.includes(q)
+    );
+  });
+
   return (
     <Card className="p-6 flex flex-col gap-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -63,6 +79,12 @@ export function DuplicateReviewQueue() {
           <p className="text-sm text-on-surface-variant">Shared applicant duplicate decisions across Chronos and hephaestus.</p>
         </div>
         <div className="flex gap-2">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search name or email…"
+            className="rounded-md border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm"
+          />
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-md border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm">
             <option value="pending">Pending</option>
             <option value="confirmed_duplicate">Confirmed duplicate</option>
@@ -74,10 +96,10 @@ export function DuplicateReviewQueue() {
       </div>
 
       {loading ? <p className="text-sm text-on-surface-variant">Loading reviews…</p> : null}
-      {!loading && reviews.length === 0 ? <p className="text-sm text-on-surface-variant">No reviews in this state.</p> : null}
+      {!loading && visibleReviews.length === 0 ? <p className="text-sm text-on-surface-variant">No reviews match this filter/search.</p> : null}
 
       <div className="grid gap-3">
-        {reviews.map((review) => (
+        {visibleReviews.map((review) => (
           <div key={review.id} className="rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
             <div className="flex items-start justify-between gap-3">
               <div>

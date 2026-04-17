@@ -18,7 +18,8 @@ export async function GET() {
 
     let rows: Awaited<ReturnType<typeof getAccessibleUsers>> = [];
     if (db) {
-      // Ensure every applicant with Joined status has a linked Chronos user.
+      // Ensure applicants with Joined/Active status have linked Chronos users.
+      // Keep this bounded so `/api/users` stays responsive for the dashboard.
       const joinedApplicants = await db
         .select({
           id: applicants.id,
@@ -27,38 +28,67 @@ export async function GET() {
           chronosUserId: applicants.chronosUserId,
         })
         .from(applicants)
-        .where(sql`lower(coalesce(${applicants.status}, '')) = 'joined'`);
-      for (const applicant of joinedApplicants) {
-        if (applicant.chronosUserId) continue;
-        const [existingUser] = await db
-          .select({ id: usersTable.id, role: usersTable.role })
-          .from(usersTable)
-          .where(sql`lower(${usersTable.email}) = ${applicant.email.toLowerCase()}`)
-          .limit(1);
-        const userId =
-          existingUser?.id ??
-          (
-            await db
-              .insert(usersTable)
-              .values({
-                email: applicant.email.toLowerCase(),
-                name: applicant.name,
-                password: await bcrypt.hash(randomBytes(24).toString("hex"), 12),
-                role: "member",
-                isActive: true,
-              })
-              .returning({ id: usersTable.id })
-          )[0].id;
+        .where(
+          sql`lower(coalesce(${applicants.stage}, '')) = 'joined' or lower(coalesce(${applicants.status}, '')) in ('joined', 'active')`,
+        );
+      const missingJoinedApplicants = joinedApplicants.filter((a) => !a.chronosUserId).slice(0, 100);
+      const generatedPasswordHash = await bcrypt.hash(randomBytes(24).toString("hex"), 12);
+      for (const applicant of missingJoinedApplicants) {
         try {
-          await db
-            .update(applicants)
-            .set({ chronosUserId: userId, isActive: true, updatedAt: new Date() })
-            .where(sql`${applicants.id} = ${applicant.id}`);
-        } catch {
-          await db
-            .update(applicants)
-            .set({ chronosUserId: userId, updatedAt: new Date() })
-            .where(sql`${applicants.id} = ${applicant.id}`);
+          if (applicant.chronosUserId) continue;
+          const normalizedApplicantEmail = applicant.email?.trim().toLowerCase();
+          if (!normalizedApplicantEmail) {
+            // Some legacy/partially-synced applicants may be marked joined without an email.
+            // Skip auto-provision for those rows instead of failing the whole users payload.
+            continue;
+          }
+          const [existingUser] = await db
+            .select({ id: usersTable.id, role: usersTable.role })
+            .from(usersTable)
+            .where(sql`lower(${usersTable.email}) = ${normalizedApplicantEmail}`)
+            .limit(1);
+          let userId = existingUser?.id ?? null;
+          if (!userId) {
+            try {
+              userId = (
+                await db
+                  .insert(usersTable)
+                  .values({
+                    email: normalizedApplicantEmail,
+                    name: applicant.name?.trim() || normalizedApplicantEmail,
+                    password: generatedPasswordHash,
+                    role: "member",
+                    isActive: true,
+                  })
+                  .returning({ id: usersTable.id })
+              )[0]?.id ?? null;
+            } catch {
+              const [retryUser] = await db
+                .select({ id: usersTable.id })
+                .from(usersTable)
+                .where(sql`lower(${usersTable.email}) = ${normalizedApplicantEmail}`)
+                .limit(1);
+              userId = retryUser?.id ?? null;
+            }
+          }
+          if (!userId) continue;
+          try {
+            await db
+              .update(applicants)
+              .set({ chronosUserId: userId, isActive: true, updatedAt: new Date() })
+              .where(sql`${applicants.id} = ${applicant.id}`);
+          } catch {
+            await db
+              .update(applicants)
+              .set({ chronosUserId: userId, updatedAt: new Date() })
+              .where(sql`${applicants.id} = ${applicant.id}`);
+          }
+        } catch (error) {
+          console.error("[api/users] joined applicant auto-provision skipped", {
+            applicantId: applicant.id,
+            error,
+          });
+          continue;
         }
       }
     }
@@ -77,7 +107,7 @@ export async function GET() {
       }
     }
 
-    // Users page: Chronos users linked from applicant rows with pipeline stage "joined" (Hephaestus),
+    // Users page: Chronos users linked from applicant rows with status joined/active (Hephaestus),
     // excluding applicant program status "terminated". Status "graduated" still lists here.
     let programStatusByUserId = new Map<string, ApplicantProgramStatus>();
     const applicantProfileByUserId = new Map<
@@ -127,8 +157,7 @@ export async function GET() {
             .from(applicants)
             .where(
             and(
-              isNotNull(applicants.chronosUserId),
-              sql`lower(coalesce(${applicants.status}, '')) = 'joined'`,
+              sql`lower(coalesce(${applicants.stage}, '')) = 'joined' or lower(coalesce(${applicants.status}, '')) in ('joined', 'active')`,
             ),
             );
         } catch {
@@ -144,8 +173,7 @@ export async function GET() {
             .from(applicants)
             .where(
               and(
-                isNotNull(applicants.chronosUserId),
-                sql`lower(coalesce(${applicants.status}, '')) = 'joined'`,
+                sql`lower(coalesce(${applicants.stage}, '')) = 'joined' or lower(coalesce(${applicants.status}, '')) in ('joined', 'active')`,
               ),
             );
           joinedApplicantRows = legacyRows.map((row) => ({
@@ -163,18 +191,48 @@ export async function GET() {
           }));
         }
         const joinedUserIds = new Set<string>();
+        const emailToUserId = new Map<string, string>();
+        for (const u of rows) {
+          emailToUserId.set(u.email.trim().toLowerCase(), u.id);
+        }
+        try {
+          const aliasRowsForScope = await db
+            .select({ userId: userEmailAliases.userId, email: userEmailAliases.email })
+            .from(userEmailAliases)
+            .where(inArray(userEmailAliases.userId, rows.map((u) => u.id)));
+          for (const alias of aliasRowsForScope) {
+            emailToUserId.set(alias.email.trim().toLowerCase(), alias.userId);
+          }
+        } catch {
+          // Keep primary-email matching only if alias lookup fails.
+        }
         for (const r of joinedApplicantRows) {
-          if (!r.chronosUserId) continue;
-          joinedUserIds.add(r.chronosUserId);
+          const applicantEmails = Array.from(
+            new Set(
+              [
+                r.email ?? null,
+                ...(Array.isArray((r.hubspotRawData as { emails?: unknown } | null)?.emails)
+                  ? (((r.hubspotRawData as { emails?: unknown[] }).emails ?? []) as unknown[]).map((v) => String(v))
+                  : []),
+              ]
+                .map((v) => String(v ?? "").trim().toLowerCase())
+                .filter(Boolean),
+            ),
+          );
+          const linkedUserId =
+            r.chronosUserId ??
+            (applicantEmails.map((email) => emailToUserId.get(email) ?? null).find(Boolean) ?? null);
+          if (!linkedUserId) continue;
+          joinedUserIds.add(linkedUserId);
           const s = (r.status ?? "active").toLowerCase();
           /* Legacy `status = joined` marks pipeline position; badge only uses active | graduated | terminated. */
           const normalized: ApplicantProgramStatus =
             s === "graduated" || s === "terminated" ? s : "active";
-          if (!programStatusByUserId.has(r.chronosUserId)) {
-            programStatusByUserId.set(r.chronosUserId, normalized);
+          if (!programStatusByUserId.has(linkedUserId)) {
+            programStatusByUserId.set(linkedUserId, normalized);
           }
-          if (!applicantProfileByUserId.has(r.chronosUserId)) {
-            applicantProfileByUserId.set(r.chronosUserId, {
+          if (!applicantProfileByUserId.has(linkedUserId)) {
+            applicantProfileByUserId.set(linkedUserId, {
               role: r.role,
               teamId: r.teamId,
               isActive: r.isActive,
@@ -187,7 +245,13 @@ export async function GET() {
             });
           }
         }
-        rows = rows.filter((u) => joinedUserIds.has(u.id));
+        if (joinedUserIds.size > 0) {
+          rows = rows.filter((u) => joinedUserIds.has(u.id));
+        } else {
+          // Keep non-empty user scope if applicant email linkage is incomplete in production data.
+          // This avoids the Users page showing an empty list while data is being reconciled.
+          console.warn("[api/users] joined-active matching returned zero links; returning scoped users fallback");
+        }
       } catch (err) {
         console.error("[api/users] filtering to joined applicants failed", err);
         rows = [];
@@ -255,13 +319,17 @@ export async function GET() {
       }
     }
 
-    const aliasRows =
-      db && rows.length > 0
-        ? await db
-            .select({ userId: userEmailAliases.userId, email: userEmailAliases.email })
-            .from(userEmailAliases)
-            .where(inArray(userEmailAliases.userId, rows.map((r) => r.id)))
-        : [];
+    let aliasRows: Array<{ userId: string; email: string }> = [];
+    if (db && rows.length > 0) {
+      try {
+        aliasRows = await db
+          .select({ userId: userEmailAliases.userId, email: userEmailAliases.email })
+          .from(userEmailAliases)
+          .where(inArray(userEmailAliases.userId, rows.map((r) => r.id)));
+      } catch {
+        aliasRows = [];
+      }
+    }
     const aliasesByUserId = new Map<string, string[]>();
     for (const row of aliasRows) {
       const list = aliasesByUserId.get(row.userId) ?? [];
@@ -316,11 +384,20 @@ export async function GET() {
       };
     });
 
+    console.info("[api/users] response", {
+      requesterRole: session.user.role,
+      usersCount: users.length,
+      warning: null,
+    });
     return NextResponse.json({ users });
   } catch (error) {
     console.error("[api/users GET] fatal", error);
     // Return 200 so authenticated clients using `readJson` do not surface a hard "Users service unavailable"
     // banner for a recoverable empty state; operators still see the warning in the payload.
+    console.info("[api/users] response", {
+      usersCount: 0,
+      warning: "Users data could not be loaded. Try refreshing in a moment or contact support if this persists.",
+    });
     return NextResponse.json(
       {
         users: [],

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { applicants, teams, timeEntries, users, tags } from "@/lib/db/schema";
+import { applicants, teams, timeEntries, users, tags, userEmailAliases } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -41,6 +41,7 @@ const updateSchema = z.object({
   dailySummary: z.boolean().optional(),
   /** Updates linked `applicants.status` rows for this Chronos user (admin / HR only). */
   applicantProgramStatus: z.enum(["active", "graduated", "terminated"]).optional(),
+  alternateEmails: z.array(z.string().email()).optional(),
 });
 
 export async function PATCH(
@@ -53,6 +54,7 @@ export async function PATCH(
   }
 
   const userIsAdmin = isAdmin(session.user);
+  const userIsHr = session.user.role === "hr";
   const userIsTeamLead = isTeamLead(session.user);
   const userIsMember = isMember(session.user);
 
@@ -83,8 +85,11 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (parsed.data.applicantProgramStatus !== undefined && !userIsAdmin) {
+  if (parsed.data.applicantProgramStatus !== undefined && !userIsAdmin && !userIsHr) {
     return NextResponse.json({ error: "Only admins and HR can update applicant program status." }, { status: 403 });
+  }
+  if (parsed.data.alternateEmails !== undefined && !userIsAdmin && !userIsHr) {
+    return NextResponse.json({ error: "Only admins and HR can update associated emails." }, { status: 403 });
   }
 
   if (userIsMember && !userIsAdmin && !userIsTeamLead) {
@@ -136,6 +141,18 @@ export async function PATCH(
   const updateData: Record<string, unknown> = {};
   if (parsed.data.role !== undefined) updateData.role = parsed.data.role;
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
+  if (parsed.data.alternateEmails !== undefined) {
+    const normalized = Array.from(
+      new Set(
+        parsed.data.alternateEmails
+          .map((v) => v.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+    if (normalized.length > 0) {
+      updateData.email = normalized[0];
+    }
+  }
   if (parsed.data.teamId !== undefined) updateData.teamId = parsed.data.teamId;
   if (requestedTeamIds !== undefined) updateData.teamId = requestedTeamIds[0] ?? null;
   if (parsed.data.isActive !== undefined) updateData.isActive = parsed.data.isActive;
@@ -182,6 +199,34 @@ export async function PATCH(
     });
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (parsed.data.alternateEmails !== undefined) {
+    const normalized = Array.from(
+      new Set(
+        parsed.data.alternateEmails
+          .map((v) => v.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+    const allKnownEmails = Array.from(new Set([user.email.toLowerCase(), ...normalized]));
+    await db.delete(userEmailAliases).where(eq(userEmailAliases.userId, id));
+    if (allKnownEmails.length > 0) {
+      await db
+        .insert(userEmailAliases)
+        .values(
+          allKnownEmails.map((email, idx) => ({
+            userId: id,
+            email,
+            isPrimary: idx === 0,
+          })),
+        )
+        .onConflictDoNothing();
+    }
+    await db
+      .update(applicants)
+      .set({ email: user.email.toLowerCase(), updatedAt: new Date() })
+      .where(eq(applicants.chronosUserId, id));
+  }
 
   if (parsed.data.applicantProgramStatus !== undefined) {
     await db

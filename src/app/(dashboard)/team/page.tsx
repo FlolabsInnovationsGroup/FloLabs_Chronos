@@ -109,6 +109,7 @@ export default function TeamPage() {
   const [editIsActive, setEditIsActive] = useState(true);
   const [editWeeklyTarget, setEditWeeklyTarget] = useState(40);
   const [editApplicantProgramStatus, setEditApplicantProgramStatus] = useState<ApplicantProgramStatus>("active");
+  const [editAlternateEmails, setEditAlternateEmails] = useState("");
 
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -226,6 +227,11 @@ export default function TeamPage() {
     setEditApplicantProgramStatus(
       ps === "graduated" || ps === "terminated" ? ps : "active",
     );
+    setEditAlternateEmails(
+      Array.from(new Set([editingUser.email, ...(editingUser.alternateEmails ?? [])]))
+        .filter(Boolean)
+        .join(", "),
+    );
   }, [editingUser]);
 
   const currentUser = useMemo(
@@ -318,7 +324,10 @@ export default function TeamPage() {
     if (userSearch.trim()) {
       const q = userSearch.trim().toLowerCase();
       result = result.filter(
-        (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+        (u) =>
+          u.name.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          (u.alternateEmails ?? []).some((email) => email.toLowerCase().includes(q))
       );
     }
     return result;
@@ -350,6 +359,10 @@ export default function TeamPage() {
                   isActive: editIsActive,
                   notionTeamMemberId: editTeamMemberNotion?.id ?? null,
                   applicantProgramStatus: editApplicantProgramStatus,
+                  alternateEmails: editAlternateEmails
+                    .split(",")
+                    .map((value) => value.trim().toLowerCase())
+                    .filter(Boolean),
                 }
               : {}),
             weeklyTargetHours: editWeeklyTarget,
@@ -921,6 +934,12 @@ export default function TeamPage() {
               >
                 Updates the linked applicant record in Chronos. Terminated removes them from this directory; Graduated keeps them visible.
               </p>
+              <Input
+                label="Associated emails"
+                value={editAlternateEmails}
+                onChange={(e) => setEditAlternateEmails(e.target.value)}
+                hint="Comma-separated emails. First one becomes the primary Chronos email."
+              />
             </>
           )}
           <Input

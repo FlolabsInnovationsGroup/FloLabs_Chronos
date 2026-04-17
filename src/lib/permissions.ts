@@ -107,11 +107,6 @@ export async function getAccessibleUsers(user: SessionUserLike) {
         name: teams.name,
         slug: teams.slug,
         isActive: teams.isActive,
-        notionPageId: teams.notionPageId,
-        generalWebhookUrl: teams.generalWebhookUrl,
-        meetingsWebhookUrl: teams.meetingsWebhookUrl,
-        createdAt: teams.createdAt,
-        updatedAt: teams.updatedAt,
       },
     })
     .from(teamMemberships)
@@ -137,11 +132,33 @@ export async function getAccessibleUsers(user: SessionUserLike) {
 
 export async function getAccessibleTeams(user: SessionUserLike) {
   if (!db) return [];
-  if (isAdmin(user)) return db.select().from(teams).where(isNotNull(teams.notionPageId)).orderBy(teams.name);
+  if (isAdmin(user)) {
+    return db
+      .select({
+        id: teams.id,
+        name: teams.name,
+        slug: teams.slug,
+        isActive: teams.isActive,
+        notionPageId: teams.notionPageId,
+      })
+      .from(teams)
+      .where(isNotNull(teams.notionPageId))
+      .orderBy(teams.name);
+  }
 
   const teamIds = await getAccessibleTeamIds(user);
   if (!teamIds || teamIds.length === 0) return [];
-  return db.select().from(teams).where(inArray(teams.id, teamIds)).orderBy(teams.name);
+  return db
+    .select({
+      id: teams.id,
+      name: teams.name,
+      slug: teams.slug,
+      isActive: teams.isActive,
+      notionPageId: teams.notionPageId,
+    })
+    .from(teams)
+    .where(inArray(teams.id, teamIds))
+    .orderBy(teams.name);
 }
 
 /** Admins and team leads can discuss entries of OTHER users they can see. Not own entries. */
@@ -184,11 +201,6 @@ export async function getUserTeams(userId: string) {
       name: teams.name,
       slug: teams.slug,
       isActive: teams.isActive,
-      notionPageId: teams.notionPageId,
-      generalWebhookUrl: teams.generalWebhookUrl,
-      meetingsWebhookUrl: teams.meetingsWebhookUrl,
-      createdAt: teams.createdAt,
-      updatedAt: teams.updatedAt,
     })
     .from(teamMemberships)
     .innerJoin(teams, eq(teamMemberships.teamId, teams.id))

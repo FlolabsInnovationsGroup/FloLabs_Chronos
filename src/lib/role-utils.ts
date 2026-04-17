@@ -3,5 +3,12 @@
  * Keeps parity with {@link isAdmin} in permissions.ts.
  */
 export function isAdminLikeRole(role: string | undefined | null): boolean {
-  return role === "admin" || role === "hr";
+  const value = String(role ?? "").trim().toLowerCase();
+  return (
+    value === "admin" ||
+    value === "administrator" ||
+    value === "hr" ||
+    value === "human resources" ||
+    value === "human_resources"
+  );
 }

@@ -9,6 +9,14 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+function normalizeRole(input: string | null | undefined): Role {
+  const value = String(input ?? "").trim().toLowerCase();
+  if (value === "admin" || value === "administrator") return "admin";
+  if (value === "team_lead" || value === "team lead" || value === "teamlead") return "team_lead";
+  if (value === "hr" || value === "human resources" || value === "human_resources") return "hr";
+  return "member";
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
   session: { strategy: "jwt" },
@@ -42,7 +50,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const valid = await bcrypt.compare(password, user.password);
           if (!valid) return null;
 
-          // Access switch: only joined, non-terminated applicants can use Chronos.
+          // Access switch: joined or active, non-terminated applicants can use Chronos.
           if (db) {
             try {
               const [linkedApplicant] = await db
@@ -61,7 +69,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     ne(applicants.status, "terminated"),
                     or(
                       sql`lower(${applicants.stage}) = 'joined'`,
-                      sql`lower(${applicants.status}) = 'joined'`,
+                      sql`lower(${applicants.status}) in ('joined', 'active')`,
                     ),
                   )
                 )
@@ -74,7 +82,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 email: user.email,
                 name: user.name,
                 profilePictureUrl: linkedApplicant.profilePictureUrl ?? user.profilePictureUrl ?? null,
-                role: (linkedApplicant.role as Role) ?? (user.role as Role),
+                role: normalizeRole(linkedApplicant.role ?? user.role),
                 teamId: linkedApplicant.teamId ?? user.teamId,
                 isActive: linkedApplicant.isActive,
               };
@@ -89,7 +97,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               const stage = joinedApplicant.stage?.toLowerCase() ?? "";
               const status = joinedApplicant.status?.toLowerCase() ?? "";
               if (status === "terminated") return null;
-              if (!(stage === "joined" || status === "joined")) return null;
+              if (!(stage === "joined" || status === "joined" || status === "active")) return null;
             }
           }
 
@@ -98,7 +106,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             email: user.email,
             name: user.name,
             profilePictureUrl: user.profilePictureUrl ?? null,
-            role: user.role as Role,
+            role: normalizeRole(user.role),
             teamId: user.teamId,
             isActive: user.isActive,
           };
@@ -153,7 +161,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     ne(applicants.status, "terminated"),
                     or(
                       sql`lower(${applicants.stage}) = 'joined'`,
-                      sql`lower(${applicants.status}) = 'joined'`,
+                      sql`lower(${applicants.status}) in ('joined', 'active')`,
                     ),
                   ),
                 )
@@ -163,7 +171,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
 
             if (fresh) {
-              t.role = fresh.role as Role;
+              t.role = normalizeRole(fresh.role);
               t.teamId = fresh.teamId ?? null;
               t.isActive = fresh.isActive;
               t.profilePictureUrl = fresh.profilePictureUrl ?? null;
@@ -185,7 +193,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 .where(eq(users.id, userId))
                 .limit(1);
               if (legacy) {
-                t.role = legacy.role as Role;
+                t.role = normalizeRole(legacy.role);
                 t.teamId = legacy.teamId ?? null;
                 t.isActive = legacy.isActive;
                 t.profilePictureUrl = legacy.profilePictureUrl ?? null;

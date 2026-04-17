@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { applicants, timeEntries, users, tags } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { applicants, teams, timeEntries, users, tags } from "@/lib/db/schema";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import {
   canManageTeams,
@@ -20,6 +20,7 @@ import {
   updateTeamMemberRoleInNotion,
   updateTeamMemberTimeCommitment,
   verifyNotionTeamMemberPageRow,
+  ensureTeamMemberPage,
 } from "@/lib/notion";
 
 const deleteUserBodySchema = z.object({
@@ -189,6 +190,26 @@ export async function PATCH(
       .where(eq(applicants.chronosUserId, id));
   }
 
+  // Canonical profile mirror: keep applicant profile fields in sync with admin edits.
+  await db
+    .update(applicants)
+    .set({
+      ...(parsed.data.role !== undefined ? { role: parsed.data.role } : {}),
+      ...(parsed.data.teamId !== undefined
+        ? { teamId: parsed.data.teamId }
+        : requestedTeamIds !== undefined
+          ? { teamId: requestedTeamIds[0] ?? null }
+          : {}),
+      ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
+      ...(parsed.data.weeklyTargetHours !== undefined ? { weeklyTargetHours: parsed.data.weeklyTargetHours } : {}),
+      ...(parsed.data.notionTeamMemberId !== undefined
+        ? { notionTeamMemberId: parsed.data.notionTeamMemberId }
+        : {}),
+      ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(applicants.chronosUserId, id));
+
   const notionTeamMemberId = user.notionTeamMemberId?.trim() || null;
 
   if (parsed.data.name !== undefined && parsed.data.name.trim() !== existingUser.name) {
@@ -215,6 +236,31 @@ export async function PATCH(
     const shouldPreserve = isPromotingToAdmin && requestedTeamIds.length === 0;
     if (!shouldPreserve) {
       await replaceUserTeamMemberships(id, requestedTeamIds);
+    }
+  }
+
+  if (requestedTeamIds !== undefined && notionTeamMemberId) {
+    try {
+      const notionTeams =
+        requestedTeamIds.length > 0
+          ? await db
+              .select({ notionPageId: teams.notionPageId })
+              .from(teams)
+              .where(inArray(teams.id, requestedTeamIds))
+          : [];
+      const notionTeamPageIds = notionTeams
+        .map((row) => row.notionPageId)
+        .filter((v): v is string => Boolean(v));
+      if (notionTeamPageIds.length > 0) {
+        await ensureTeamMemberPage({
+          email: user.email,
+          name: user.name,
+          notionTeamMemberPageId: notionTeamMemberId,
+          notionTeamPageIds,
+        });
+      }
+    } catch {
+      // Non-blocking: user/team update should still succeed if Notion sync fails.
     }
   }
   const userTeams = await getUserTeams(id);

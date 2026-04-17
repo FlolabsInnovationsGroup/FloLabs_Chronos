@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Badge } from "@/components/ui/Badge";
@@ -14,23 +14,15 @@ import { TeamMemberNotionPicker } from "@/components/team/TeamMemberNotionPicker
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useSSE } from "@/hooks/use-sse";
 import { formatDurationHuman } from "@/lib/utils";
-import type { ApplicantProgramStatus, Invitation, Role, SSEEvent, Team, User } from "@/types";
+import type { ApplicantProgramStatus, Role, SSEEvent, Team, User } from "@/types";
 
 interface TeamUser extends User {
   discordWebhookUrl?: string | null;
   notifyOnStart?: boolean | null;
   notifyOnStop?: boolean | null;
   dailySummary?: boolean | null;
+  requiresNotionProfileLink?: boolean;
 }
-
-interface TeamInvitation extends Invitation {
-  inviteUrl: string;
-}
-
-const INVITE_ROLES = [
-  { value: "member", label: "Member" },
-  { value: "team_lead", label: "Team Lead" },
-];
 
 const EDIT_ROLES = [
   { value: "member", label: "Member" },
@@ -50,7 +42,7 @@ const APPLICANT_PROGRAM_STATUS_OPTIONS: { value: ApplicantProgramStatus; label: 
   { value: "terminated", label: "Terminated" },
 ];
 
-/** Re-fetch users/teams (and invites for admins) without blocking the UI — SSE, polling, tab focus. */
+/** Re-fetch users/teams without blocking the UI — SSE, polling, tab focus. */
 const USERS_TEAMS_POLL_MS = 20_000;
 
 type SortKey = "name" | "team" | "weekly" | "live" | "joined";
@@ -58,20 +50,6 @@ type SortDir = "asc" | "desc";
 
 function formatRole(role: Role) {
   return role === "team_lead" ? "Team Lead" : role === "admin" ? "Admin" : role === "hr" ? "Human Resources" : "Member";
-}
-
-function toDatetimeLocal(value: Date | string | null | undefined) {
-  if (!value) return "";
-  const date = new Date(value);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function defaultInviteExpiry() {
-  const date = new Date();
-  date.setDate(date.getDate() + 7);
-  date.setSeconds(0, 0);
-  return toDatetimeLocal(date);
 }
 
 async function readJson(res: Response) {
@@ -114,31 +92,15 @@ export default function TeamPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [teamFilter, setTeamFilter] = useState<string>("");
   const [userSearch, setUserSearch] = useState("");
-  const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [copiedInviteUrl, setCopiedInviteUrl] = useState("");
   const [activeTab, setActiveTab] = useState<"teams" | "users">("users");
   const [now, setNow] = useState(Date.now());
 
-  const [showInvite, setShowInvite] = useState(false);
   const [editingUser, setEditingUser] = useState<TeamUser | null>(null);
-  const [editingInvite, setEditingInvite] = useState<TeamInvitation | null>(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<TeamUser | null>(null);
   const [deleteUserNotionExitStatus, setDeleteUserNotionExitStatus] = useState<"terminated" | "graduated" | "">("");
-  const [confirmDisableInvite, setConfirmDisableInvite] = useState<TeamInvitation | null>(null);
-  const [confirmDeleteInvite, setConfirmDeleteInvite] = useState<TeamInvitation | null>(null);
-
-  const [inviteTeamMemberNotion, setInviteTeamMemberNotion] = useState<{ id: string; title: string } | null>(null);
-  const [inviteCreateNewNotion, setInviteCreateNewNotion] = useState(false);
-  const [inviteNewMemberName, setInviteNewMemberName] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"member" | "team_lead">("member");
-  const [inviteTeamIds, setInviteTeamIds] = useState<string[]>([]);
-  const [inviteExpiresAt, setInviteExpiresAt] = useState(defaultInviteExpiry());
-  const [editInviteExpiresAt, setEditInviteExpiresAt] = useState("");
   const [saving, setSaving] = useState(false);
-  const inviteSubmitLock = useRef(false);
 
   const [editName, setEditName] = useState("");
   const [editTeamMemberNotion, setEditTeamMemberNotion] = useState<{ id: string; title: string } | null>(null);
@@ -196,19 +158,6 @@ export default function TeamPage() {
         endpointErrors.push("Teams service unavailable");
       }
 
-      if (role === "admin" || role === "hr") {
-        try {
-          const invPayload = (await readJson(await fetch("/api/invitations", { cache: "no-store" }))) as {
-            invitations?: TeamInvitation[];
-          };
-          setInvitations(invPayload?.invitations ?? []);
-        } catch (err) {
-          console.warn("[team/page] invitations refresh failed", err);
-          setInvitations([]);
-          endpointErrors.push("Invitations service unavailable");
-        }
-      }
-
       if (!silent && endpointErrors.length > 0) {
         setError(endpointErrors.join(" · "));
       }
@@ -262,19 +211,6 @@ export default function TeamPage() {
   }, [userId, refresh]);
 
   useEffect(() => {
-    if (inviteTeamIds.length === 0 && teams[0]?.id) {
-      setInviteTeamIds([teams[0].id]);
-    }
-  }, [inviteTeamIds.length, teams]);
-
-  useEffect(() => {
-    if (!showInvite) return;
-    setInviteTeamMemberNotion(null);
-    setInviteCreateNewNotion(false);
-    setInviteNewMemberName("");
-  }, [showInvite]);
-
-  useEffect(() => {
     if (!editingUser) return;
     setEditName(editingUser.name);
     setEditTeamMemberNotion(
@@ -292,19 +228,9 @@ export default function TeamPage() {
     );
   }, [editingUser]);
 
-  useEffect(() => {
-    if (!editingInvite) return;
-    setEditInviteExpiresAt(toDatetimeLocal(editingInvite.expiresAt));
-  }, [editingInvite]);
-
   const currentUser = useMemo(
     () => users.find((user) => user.id === userId) ?? null,
     [userId, users]
-  );
-
-  const openInvitations = useMemo(
-    () => invitations.filter((invite) => !invite.acceptedAt && new Date(invite.expiresAt).getTime() > Date.now()),
-    [invitations]
   );
 
   const visibleTeams = useMemo(() => {
@@ -336,9 +262,8 @@ export default function TeamPage() {
         memberCount: users.filter(
           (user) => (user.teams ?? []).some((userTeam) => userTeam.id === team.id) && user.isActive
         ).length,
-        pendingInvites: openInvitations.filter((invite) => (invite.teamIds ?? [invite.teamId]).includes(team.id)).length,
       })),
-    [openInvitations, users, visibleTeams]
+    [users, visibleTeams]
   );
 
   const activeTeamOptions = useMemo(
@@ -399,66 +324,10 @@ export default function TeamPage() {
     return result;
   }, [sortedUsers, teamFilter, userSearch]);
 
-  async function handleInvite(e: React.FormEvent) {
-    e.preventDefault();
-    const nameForInvite = inviteCreateNewNotion
-      ? inviteNewMemberName.trim()
-      : inviteTeamMemberNotion?.title.trim() ?? "";
-    if (!nameForInvite) {
-      setError(inviteCreateNewNotion ? "Enter a name for the new Team Member page." : "Select a Team Member page in Notion.");
-      return;
-    }
-    if (!inviteCreateNewNotion && !inviteTeamMemberNotion) {
-      setError("Select a Team Member page in Notion, or create a new one.");
-      return;
-    }
-    const expiresMs = new Date(inviteExpiresAt).getTime();
-    if (!inviteExpiresAt.trim() || Number.isNaN(expiresMs)) {
-      setError("Choose a valid expiration date and time.");
-      return;
-    }
-    if (inviteSubmitLock.current) return;
-    inviteSubmitLock.current = true;
-
-    setSaving(true);
-    setError("");
-
-    try {
-      const useNotionMemberSource = !inviteCreateNewNotion && Boolean(inviteTeamMemberNotion);
-      const data = (await readJson(
-        await fetch("/api/invitations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: nameForInvite,
-            ...(useNotionMemberSource
-              ? {}
-              : { email: inviteEmail, teamIds: inviteTeamIds }),
-            role: inviteRole,
-            expiresAt: new Date(inviteExpiresAt).toISOString(),
-            ...(inviteCreateNewNotion
-              ? { createNewNotionTeamMember: true }
-              : { notionTeamMemberPageId: inviteTeamMemberNotion!.id }),
-          }),
-        })
-      )) as { inviteUrl?: string };
-      setCopiedInviteUrl(data.inviteUrl ?? "");
-      setInviteTeamMemberNotion(null);
-      setInviteCreateNewNotion(false);
-      setInviteNewMemberName("");
-      setInviteEmail("");
-      setInviteRole("member");
-      setInviteTeamIds([]);
-      setInviteExpiresAt(defaultInviteExpiry());
-      setShowInvite(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create invitation.");
-    } finally {
-      setSaving(false);
-      inviteSubmitLock.current = false;
-    }
-    void refresh({ silent: true });
-  }
+  const usersMissingNotionProfile = useMemo(
+    () => filteredUsers.filter((u) => u.requiresNotionProfileLink),
+    [filteredUsers],
+  );
 
   async function handleEditUser(e: React.FormEvent) {
     e.preventDefault();
@@ -496,28 +365,6 @@ export default function TeamPage() {
     }
   }
 
-  async function handleSaveInviteExpiry(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editingInvite) return;
-    setSaving(true);
-
-    try {
-      await readJson(
-        await fetch(`/api/invitations/${editingInvite.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ expiresAt: new Date(editInviteExpiresAt).toISOString() }),
-        })
-      );
-      setEditingInvite(null);
-      await refresh({ silent: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update invitation expiration.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function handleDeleteUser() {
     if (!confirmDeleteUser) return;
     const linkedNotion = Boolean(confirmDeleteUser.notionTeamMemberId?.trim());
@@ -543,49 +390,6 @@ export default function TeamPage() {
       setError(err instanceof Error ? err.message : "Failed to delete user.");
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleDisableInvite() {
-    if (!confirmDisableInvite) return;
-    setSaving(true);
-    try {
-      await readJson(
-        await fetch(`/api/invitations/${confirmDisableInvite.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ disableNow: true }),
-        })
-      );
-      setConfirmDisableInvite(null);
-      await refresh({ silent: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to disable invitation.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDeleteInvite() {
-    if (!confirmDeleteInvite) return;
-    setSaving(true);
-    try {
-      await readJson(await fetch(`/api/invitations/${confirmDeleteInvite.id}`, { method: "DELETE" }));
-      setConfirmDeleteInvite(null);
-      await refresh({ silent: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete invitation.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleCopyInvite(url: string) {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedInviteUrl(url);
-    } catch {
-      setError("Could not copy the invite link.");
     }
   }
 
@@ -625,7 +429,7 @@ export default function TeamPage() {
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {role === "admin" || role === "hr"
-              ? "Admins and Human Resources can manage teams, invitations, and member roles. The table lists applicants on pipeline stage Joined; Program marks Graduated or Terminated (terminated members drop off this list)."
+              ? "Admins and Human Resources can manage teams and member roles. The table lists applicants on pipeline stage Joined; Program marks Graduated or Terminated (terminated members drop off this list)."
               : role === "team_lead"
                 ? "You can see every member in the teams you belong to and edit their weekly time commitment."
                 : "You see only your account. You can update your weekly time target."}
@@ -646,11 +450,6 @@ export default function TeamPage() {
               </span>
             </div>
           )}
-          {(role === "admin" || role === "hr") && (
-            <Button variant="primary" onClick={() => setShowInvite(true)}>
-              Invite Member
-            </Button>
-          )}
         </div>
       </div>
 
@@ -669,20 +468,6 @@ export default function TeamPage() {
         </button>
       </div>
 
-      {copiedInviteUrl && (
-        <div className="rounded-xl bg-surface-container-low p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <p
-            className="text-sm text-on-background break-all"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
-            {copiedInviteUrl}
-          </p>
-          <Button variant="ghost" size="sm" onClick={() => void handleCopyInvite(copiedInviteUrl)}>
-            Copy Link
-          </Button>
-        </div>
-      )}
-
       {error && (
         <p
           className="text-sm text-error bg-warm-surface px-4 py-3 rounded-xl"
@@ -690,6 +475,21 @@ export default function TeamPage() {
         >
           {error}
         </p>
+      )}
+
+      {(role === "admin" || role === "hr") && usersMissingNotionProfile.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50/60 px-4 py-3 text-amber-900">
+          <p className="text-sm">
+            {usersMissingNotionProfile.length} joined user(s) have no Team Member Notion page linked.
+          </p>
+          <button
+            type="button"
+            className="mt-2 text-sm underline"
+            onClick={() => setEditingUser(usersMissingNotionProfile[0] ?? null)}
+          >
+            Open edit modal to link now
+          </button>
+        </div>
       )}
 
       {activeTab === "teams" && (
@@ -733,35 +533,19 @@ export default function TeamPage() {
                 >
                   {team.slug}
                 </p>
-                <div className="grid grid-cols-2 gap-3 mt-4">
-                  <div className="rounded-xl bg-surface-container-low p-3">
-                    <p
-                      className="text-xs uppercase tracking-wide text-on-surface-variant"
-                      style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                    >
-                      Members
-                    </p>
-                    <p
-                      className="text-2xl font-light italic text-on-background mt-1"
-                      style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
-                    >
-                      {team.memberCount}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-surface-container-low p-3">
-                    <p
-                      className="text-xs uppercase tracking-wide text-on-surface-variant"
-                      style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                    >
-                      Pending
-                    </p>
-                    <p
-                      className="text-2xl font-light italic text-on-background mt-1"
-                      style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
-                    >
-                      {team.pendingInvites}
-                    </p>
-                  </div>
+                <div className="mt-4 rounded-xl bg-surface-container-low p-3">
+                  <p
+                    className="text-xs uppercase tracking-wide text-on-surface-variant"
+                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                  >
+                    Members
+                  </p>
+                  <p
+                    className="text-2xl font-light italic text-on-background mt-1"
+                    style={{ fontFamily: "var(--font-newsreader, 'Newsreader'), serif" }}
+                  >
+                    {team.memberCount}
+                  </p>
                 </div>
               </div>
             ))
@@ -862,12 +646,33 @@ export default function TeamPage() {
                               >
                                 {user.email}
                               </p>
+                              {(user.alternateEmails ?? []).filter((email) => email !== user.email).length > 0 ? (
+                                <p
+                                  className="text-[11px] text-outline-variant mt-0.5"
+                                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                                >
+                                  {`Also: ${(user.alternateEmails ?? []).filter((email) => email !== user.email).join(", ")}`}
+                                </p>
+                              ) : null}
                             </div>
                           </td>
                           <td className={`${compactBodyCellClass} whitespace-nowrap`}>
-                            <Badge color={user.role === "admin" ? "primary" : user.role === "team_lead" ? "secondary" : "tertiary"}>
-                              <span className="whitespace-nowrap">{formatRole(user.role)}</span>
-                            </Badge>
+                            <div className="flex items-center gap-1.5">
+                              <Badge color={user.role === "admin" ? "primary" : user.role === "team_lead" ? "secondary" : "tertiary"}>
+                                <span className="whitespace-nowrap">{formatRole(user.role)}</span>
+                              </Badge>
+                              {user.requiresNotionProfileLink ? (
+                                <Tooltip label="No Team Member Notion page linked">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingUser(user)}
+                                    className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-700"
+                                  >
+                                    !
+                                  </button>
+                                </Tooltip>
+                              ) : null}
+                            </div>
                           </td>
                           <td className={`${compactBodyCellClass} max-xl:min-w-[12rem]`}>
                             <div className="flex flex-wrap gap-1">
@@ -1050,180 +855,8 @@ export default function TeamPage() {
                 </tbody>
               </table>
             </div>
-
-            {(role === "admin" || role === "hr") && (
-              <div className="bg-surface-container-lowest rounded-xl paper-shadow overflow-x-auto overflow-y-visible">
-                <table className="w-full min-w-[680px] border-separate border-spacing-0 lg:min-w-[760px]">
-                  <thead>
-                    <tr className="bg-surface-container-low">
-                      {["Invitee", "Role", "Teams", "Expires", "Actions"].map((heading) => (
-                        <th
-                          key={heading}
-                          className={`${compactHeadCellClass} ${heading === "Actions" ? tableActionsHeadClass : ""}`}
-                          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                        >
-                          <span>{heading}</span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {openInvitations.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={5}
-                          className={compactEmptyCellClass}
-                          style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                        >
-                          No invitations yet.
-                        </td>
-                      </tr>
-                    ) : (
-                      openInvitations.map((invite, index) => (
-                        <tr key={invite.id} className={index % 2 === 0 ? "" : "bg-background"}>
-                          <td className={compactBodyCellClass}>
-                            <p
-                              className="text-sm font-medium text-on-background"
-                              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                            >
-                              {invite.name}
-                            </p>
-                            <p
-                              className="text-xs text-outline-variant"
-                              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                            >
-                              {invite.email}
-                            </p>
-                          </td>
-                          <td className={`${compactBodyCellClass} whitespace-nowrap`}>
-                            <Badge color={invite.role === "team_lead" ? "secondary" : "tertiary"}>
-                              <span className="whitespace-nowrap">{formatRole(invite.role)}</span>
-                            </Badge>
-                          </td>
-                          <td className={compactBodyCellClass}>
-                            <span
-                              className="text-sm text-on-surface-variant"
-                              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                            >
-                              {(invite.teams ?? []).map((team) => team.name).join(", ") || "Unknown"}
-                            </span>
-                          </td>
-                          <td className={compactBodyCellClass}>
-                            <span
-                              className="text-sm text-on-surface-variant"
-                              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                            >
-                              {new Date(invite.expiresAt).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              })}
-                            </span>
-                          </td>
-                          <td className={`${compactBodyCellClass} ${tableActionsCellClass(index % 2 !== 0)}`}>
-                            <div className="flex w-fit max-w-full flex-wrap gap-2 md:ml-auto md:flex-nowrap md:justify-end">
-                              <Button variant="ghost" size="sm" onClick={() => void handleCopyInvite(invite.inviteUrl)}>
-                                Copy Link
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => setEditingInvite(invite)}>
-                                Edit Expiry
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => setConfirmDisableInvite(invite)}>
-                                Disable
-                              </Button>
-                              <Button variant="danger" size="sm" onClick={() => setConfirmDeleteInvite(invite)}>
-                                Delete
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </>
         )}
-
-      <Modal open={showInvite} onClose={() => setShowInvite(false)} title="Invite Member">
-        <form onSubmit={handleInvite} className="flex flex-col gap-4">
-          <TeamMemberNotionPicker
-            variant="invite"
-            value={inviteTeamMemberNotion}
-            onChange={(next) => {
-              setInviteTeamMemberNotion(next);
-              setInviteCreateNewNotion(false);
-              if (next?.title) setInviteNewMemberName(next.title);
-              if (next) {
-                setInviteEmail("");
-                setInviteTeamIds([]);
-              }
-            }}
-            createNewActive={inviteCreateNewNotion}
-            onBeginCreateNew={() => {
-              setInviteCreateNewNotion(true);
-              setInviteTeamMemberNotion(null);
-            }}
-            onCancelCreateNew={() => setInviteCreateNewNotion(false)}
-          />
-          {inviteCreateNewNotion && (
-            <Input
-              label="Name for new Notion page"
-              value={inviteNewMemberName}
-              onChange={(e) => setInviteNewMemberName(e.target.value)}
-              placeholder="Jane Smith"
-              hint="Used as the Team Member title in Notion and as the invite name in Chronos."
-            />
-          )}
-          {inviteTeamMemberNotion && !inviteCreateNewNotion ? (
-            <p
-              className="text-sm text-on-surface-variant"
-              style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-            >
-              Email and teams are read from this Team Member row in the Notion Team Members database when you create the
-              invitation.
-            </p>
-          ) : (
-            <>
-              <Input label="Email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="jane@example.com" />
-              <div className="flex flex-col gap-1.5">
-                <label
-                  className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
-                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                >
-                  Teams
-                </label>
-                <MultiSelect options={activeTeamOptions} value={inviteTeamIds} onChange={setInviteTeamIds} placeholder="Choose one or more teams" />
-              </div>
-            </>
-          )}
-          <Select label="Role" options={INVITE_ROLES} value={inviteRole} onChange={(value) => setInviteRole(value as "member" | "team_lead")} />
-          <Input label="Expiration" type="datetime-local" value={inviteExpiresAt} onChange={(e) => setInviteExpiresAt(e.target.value)} hint="Default is 7 days from now, but you can change it here." />
-          <div className="flex justify-end gap-3">
-            <Button variant="ghost" type="button" onClick={() => setShowInvite(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" type="submit" loading={saving}>
-              Create Invitation
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal open={!!editingInvite} onClose={() => setEditingInvite(null)} title="Edit invitation expiration" size="sm">
-        <form onSubmit={handleSaveInviteExpiry} className="flex flex-col gap-4">
-          <Input label="Expiration" type="datetime-local" value={editInviteExpiresAt} onChange={(e) => setEditInviteExpiresAt(e.target.value)} />
-          <div className="flex justify-end gap-3">
-            <Button variant="ghost" type="button" onClick={() => setEditingInvite(null)}>
-              Cancel
-            </Button>
-            <Button variant="primary" type="submit" loading={saving}>
-              Save
-            </Button>
-          </div>
-        </form>
-      </Modal>
 
       <Modal
         open={!!editingUser}
@@ -1369,44 +1002,6 @@ export default function TeamPage() {
               }
             >
               Delete member
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal open={!!confirmDisableInvite} onClose={() => setConfirmDisableInvite(null)} title="Disable invitation link" size="sm">
-        <div className="flex flex-col gap-4">
-          <p
-            className="text-sm text-on-surface-variant"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
-            Disable the invitation link for {confirmDisableInvite?.email}? Existing links will stop working immediately.
-          </p>
-          <div className="flex justify-end gap-3">
-            <Button variant="primary" type="button" onClick={() => setConfirmDisableInvite(null)}>
-              Cancel
-            </Button>
-            <Button variant="danger" type="button" onClick={() => void handleDisableInvite()} loading={saving}>
-              Disable link
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal open={!!confirmDeleteInvite} onClose={() => setConfirmDeleteInvite(null)} title="Delete invitation link" size="sm">
-        <div className="flex flex-col gap-4">
-          <p
-            className="text-sm text-on-surface-variant"
-            style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-          >
-            Delete the invitation for {confirmDeleteInvite?.email}? This cannot be undone.
-          </p>
-          <div className="flex justify-end gap-3">
-            <Button variant="primary" type="button" onClick={() => setConfirmDeleteInvite(null)}>
-              Cancel
-            </Button>
-            <Button variant="danger" type="button" onClick={() => void handleDeleteInvite()} loading={saving}>
-              Delete link
             </Button>
           </div>
         </div>

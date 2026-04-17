@@ -31,14 +31,67 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // Dynamic import to avoid DB init at build time
         try {
           const { findUserByAnyEmail } = await import("./user-email-aliases");
+          const { db } = await import("./db");
+          const { applicants } = await import("./db/schema");
+          const { and, eq, ne, or, sql } = await import("drizzle-orm");
 
           const user = await findUserByAnyEmail(email.toLowerCase());
 
           if (!user) return null;
           if (!user.isActive) return null;
-
           const valid = await bcrypt.compare(password, user.password);
           if (!valid) return null;
+
+          // Access switch: only joined, non-terminated applicants can use Chronos.
+          if (db) {
+            try {
+              const [linkedApplicant] = await db
+                .select({
+                  stage: applicants.stage,
+                  status: applicants.status,
+                  role: applicants.role,
+                  teamId: applicants.teamId,
+                  isActive: applicants.isActive,
+                  profilePictureUrl: applicants.profilePictureUrl,
+                })
+                .from(applicants)
+                .where(
+                  and(
+                    eq(applicants.chronosUserId, user.id),
+                    ne(applicants.status, "terminated"),
+                    or(
+                      sql`lower(${applicants.stage}) = 'joined'`,
+                      sql`lower(${applicants.status}) = 'joined'`,
+                    ),
+                  )
+                )
+                .limit(1);
+              if (!linkedApplicant) return null;
+              if (!linkedApplicant.isActive) return null;
+
+              return {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                profilePictureUrl: linkedApplicant.profilePictureUrl ?? user.profilePictureUrl ?? null,
+                role: (linkedApplicant.role as Role) ?? (user.role as Role),
+                teamId: linkedApplicant.teamId ?? user.teamId,
+                isActive: linkedApplicant.isActive,
+              };
+            } catch {
+              // Compatibility fallback while applicant profile columns are being migrated.
+              const [joinedApplicant] = await db
+                .select({ stage: applicants.stage, status: applicants.status })
+                .from(applicants)
+                .where(eq(applicants.chronosUserId, user.id))
+                .limit(1);
+              if (!joinedApplicant) return null;
+              const stage = joinedApplicant.stage?.toLowerCase() ?? "";
+              const status = joinedApplicant.status?.toLowerCase() ?? "";
+              if (status === "terminated") return null;
+              if (!(stage === "joined" || status === "joined")) return null;
+            }
+          }
 
           return {
             id: user.id,
@@ -78,20 +131,36 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (userId && (trigger === "update" || Date.now() - lastRefresh > REFRESH_INTERVAL_MS)) {
         try {
           const { db } = await import("./db");
-          const { users } = await import("./db/schema");
-          const { eq } = await import("drizzle-orm");
+          const { applicants, users } = await import("./db/schema");
+          const { and, eq, ne, or, sql } = await import("drizzle-orm");
 
           if (db) {
-            const [fresh] = await db
-              .select({
-                role: users.role,
-                teamId: users.teamId,
-                isActive: users.isActive,
-                profilePictureUrl: users.profilePictureUrl,
-              })
-              .from(users)
-              .where(eq(users.id, userId))
-              .limit(1);
+            let fresh:
+              | { role: string | null; teamId: string | null; isActive: boolean; profilePictureUrl: string | null }
+              | undefined;
+            try {
+              [fresh] = await db
+                .select({
+                  role: applicants.role,
+                  teamId: applicants.teamId,
+                  isActive: applicants.isActive,
+                  profilePictureUrl: applicants.profilePictureUrl,
+                })
+                .from(applicants)
+                .where(
+                  and(
+                    eq(applicants.chronosUserId, userId),
+                    ne(applicants.status, "terminated"),
+                    or(
+                      sql`lower(${applicants.stage}) = 'joined'`,
+                      sql`lower(${applicants.status}) = 'joined'`,
+                    ),
+                  ),
+                )
+                .limit(1);
+            } catch {
+              // Keep fallback below.
+            }
 
             if (fresh) {
               t.role = fresh.role as Role;
@@ -103,6 +172,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               // If the user has been deactivated, invalidate the session.
               if (!fresh.isActive) {
                 return null as unknown as typeof token;
+              }
+            } else {
+              const [legacy] = await db
+                .select({
+                  role: users.role,
+                  teamId: users.teamId,
+                  isActive: users.isActive,
+                  profilePictureUrl: users.profilePictureUrl,
+                })
+                .from(users)
+                .where(eq(users.id, userId))
+                .limit(1);
+              if (legacy) {
+                t.role = legacy.role as Role;
+                t.teamId = legacy.teamId ?? null;
+                t.isActive = legacy.isActive;
+                t.profilePictureUrl = legacy.profilePictureUrl ?? null;
+                t.roleRefreshedAt = Date.now();
               }
             }
           }

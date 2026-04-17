@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
+import { applicants, timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
 import { isNull, isNotNull, and, or, eq, lt, inArray } from "drizzle-orm";
 import {
   syncEntryToNotionFull,
@@ -49,10 +49,16 @@ export async function GET(req: Request) {
         discordWebhookUrl: users.discordWebhookUrl,
         notionTeamMemberId: users.notionTeamMemberId,
       },
+      applicant: {
+        name: applicants.name,
+        email: applicants.email,
+        notionTeamMemberId: applicants.notionTeamMemberId,
+      },
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
+    .leftJoin(applicants, eq(applicants.chronosUserId, users.id))
     .where(
       and(
         isNotNull(timeEntries.stoppedAt),
@@ -92,7 +98,14 @@ export async function GET(req: Request) {
       ...row.entry,
       project: row.project ?? undefined,
       tags: entryTags,
-      user: row.user ?? undefined,
+      user: row.user
+        ? {
+            ...row.user,
+            name: row.applicant?.name ?? row.user.name,
+            email: row.applicant?.email ?? row.user.email,
+            notionTeamMemberId: row.applicant?.notionTeamMemberId ?? row.user.notionTeamMemberId,
+          }
+        : undefined,
     };
 
     try {

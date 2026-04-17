@@ -106,7 +106,21 @@ export async function GET(request: Request) {
     .leftJoin(users, eq(applicants.chronosUserId, users.id))
     .orderBy(desc(applicants.joinedAt));
 
-  return NextResponse.json({ applicants: rows });
+  const normalized = rows.map((row) => {
+    const raw = row.hubspotRawData;
+    const emailsFromRaw =
+      raw && typeof raw === "object" && Array.isArray((raw as { emails?: unknown }).emails)
+        ? ((raw as { emails?: unknown[] }).emails ?? [])
+            .map((value) => String(value).trim().toLowerCase())
+            .filter(Boolean)
+        : [];
+    return {
+      ...row,
+      emails: Array.from(new Set([row.email.toLowerCase(), ...emailsFromRaw])),
+    };
+  });
+
+  return NextResponse.json({ applicants: normalized });
 }
 
 export async function POST(request: Request) {
@@ -170,6 +184,12 @@ export async function POST(request: Request) {
       hubspotLastModifiedAt: body.hubspotLastModifiedAt ? new Date(body.hubspotLastModifiedAt) : null,
       hubspotRawData: mergedRawData,
       syncedToTeamMembers: Boolean(body.syncedToTeamMembers),
+      role: body.role ?? "member",
+      teamId: body.teamId ?? null,
+      isActive: body.isActive ?? (body.stage === "joined" || body.stage === "Joined"),
+      weeklyTargetHours: body.weeklyTargetHours ?? 40,
+      profilePictureUrl: body.profilePictureUrl ?? null,
+      notionTeamMemberId: body.notionTeamMemberId ?? null,
       chronosUserId: body.chronosUserId ?? null,
     })
     .onConflictDoUpdate({
@@ -202,6 +222,12 @@ export async function POST(request: Request) {
         hubspotLastModifiedAt: body.hubspotLastModifiedAt ? new Date(body.hubspotLastModifiedAt) : null,
         hubspotRawData: mergedRawData,
         syncedToTeamMembers: Boolean(body.syncedToTeamMembers),
+        role: body.role ?? "member",
+        teamId: body.teamId ?? null,
+        isActive: body.isActive ?? (body.stage === "joined" || body.stage === "Joined"),
+        weeklyTargetHours: body.weeklyTargetHours ?? 40,
+        profilePictureUrl: body.profilePictureUrl ?? null,
+        notionTeamMemberId: body.notionTeamMemberId ?? null,
         chronosUserId: body.chronosUserId ?? null,
       },
     })
@@ -244,9 +270,11 @@ export async function POST(request: Request) {
             email: String(body.email).toLowerCase(),
             name,
             password: await bcrypt.hash(randomBytes(24).toString('hex'), 12),
-            role: 'member',
+            role: body.role ?? 'member',
             teamId: teamIds[0] ?? null,
-            isActive: true,
+            isActive: body.isActive ?? true,
+            weeklyTargetHours: body.weeklyTargetHours ?? 40,
+            profilePictureUrl: body.profilePictureUrl ?? null,
             notionTeamMemberId: teamMemberPage?.pageId ?? null,
           })
           .returning())[0];
@@ -268,6 +296,12 @@ export async function POST(request: Request) {
         .set({
           chronosUserId: ensuredUser.id,
           syncedToTeamMembers: true,
+          role: (body.role ?? ensuredUser.role ?? "member"),
+          teamId: teamIds[0] ?? ensuredUser.teamId ?? null,
+          isActive: Boolean(body.isActive ?? ensuredUser.isActive ?? true),
+          weeklyTargetHours: body.weeklyTargetHours ?? ensuredUser.weeklyTargetHours ?? 40,
+          profilePictureUrl: body.profilePictureUrl ?? ensuredUser.profilePictureUrl ?? null,
+          notionTeamMemberId: teamMemberPage?.pageId ?? ensuredUser.notionTeamMemberId ?? null,
           updatedAt: new Date(),
         })
         .where(eq(applicants.id, applicant.id));

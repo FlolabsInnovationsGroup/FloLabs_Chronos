@@ -3,12 +3,11 @@ import { auth } from "@/lib/auth";
 import { getAccessibleUsers } from "@/lib/permissions";
 import { getAllActiveTimers } from "@/lib/redis";
 import { db } from "@/lib/db";
-import { applicants, projects, timeEntries, users as usersTable } from "@/lib/db/schema";
+import { applicants, projects, timeEntries, userEmailAliases, users as usersTable } from "@/lib/db/schema";
 import { and, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { ActiveTimer, ApplicantProgramStatus } from "@/types";
-
-/** Pipeline stage in `applicants.stage` for team members who should appear on the Users page. */
-const JOINED_PIPELINE_STAGE = "joined";
+import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 
 export async function GET() {
   try {
@@ -18,6 +17,51 @@ export async function GET() {
     }
 
     let rows: Awaited<ReturnType<typeof getAccessibleUsers>> = [];
+    if (db) {
+      // Ensure every applicant with Joined status has a linked Chronos user.
+      const joinedApplicants = await db
+        .select({
+          id: applicants.id,
+          email: applicants.email,
+          name: applicants.name,
+          chronosUserId: applicants.chronosUserId,
+        })
+        .from(applicants)
+        .where(sql`lower(coalesce(${applicants.status}, '')) = 'joined'`);
+      for (const applicant of joinedApplicants) {
+        if (applicant.chronosUserId) continue;
+        const [existingUser] = await db
+          .select({ id: usersTable.id, role: usersTable.role })
+          .from(usersTable)
+          .where(sql`lower(${usersTable.email}) = ${applicant.email.toLowerCase()}`)
+          .limit(1);
+        const userId =
+          existingUser?.id ??
+          (
+            await db
+              .insert(usersTable)
+              .values({
+                email: applicant.email.toLowerCase(),
+                name: applicant.name,
+                password: await bcrypt.hash(randomBytes(24).toString("hex"), 12),
+                role: "member",
+                isActive: true,
+              })
+              .returning({ id: usersTable.id })
+          )[0].id;
+        try {
+          await db
+            .update(applicants)
+            .set({ chronosUserId: userId, isActive: true, updatedAt: new Date() })
+            .where(sql`${applicants.id} = ${applicant.id}`);
+        } catch {
+          await db
+            .update(applicants)
+            .set({ chronosUserId: userId, updatedAt: new Date() })
+            .where(sql`${applicants.id} = ${applicant.id}`);
+        }
+      }
+    }
     try {
       rows = await getAccessibleUsers(session.user);
     } catch (error) {
@@ -36,21 +80,88 @@ export async function GET() {
     // Users page: Chronos users linked from applicant rows with pipeline stage "joined" (Hephaestus),
     // excluding applicant program status "terminated". Status "graduated" still lists here.
     let programStatusByUserId = new Map<string, ApplicantProgramStatus>();
+    const applicantProfileByUserId = new Map<
+      string,
+      {
+        role: string | null;
+        teamId: string | null;
+        isActive: boolean;
+        weeklyTargetHours: number | null;
+        profilePictureUrl: string | null;
+        notionTeamMemberId: string | null;
+        name: string | null;
+        email: string | null;
+        hubspotRawData: unknown;
+      }
+    >();
     if (db && rows.length > 0) {
       try {
-        const joinedApplicantRows = await db
-          .select({ chronosUserId: applicants.chronosUserId, status: applicants.status })
-          .from(applicants)
-          .where(
+        let joinedApplicantRows: Array<{
+          chronosUserId: string | null;
+          status: string | null;
+          role: string | null;
+          teamId: string | null;
+          isActive: boolean;
+          weeklyTargetHours: number | null;
+          profilePictureUrl: string | null;
+          notionTeamMemberId: string | null;
+          name: string | null;
+          email: string | null;
+          hubspotRawData: unknown;
+        }> = [];
+        try {
+          joinedApplicantRows = await db
+            .select({
+              chronosUserId: applicants.chronosUserId,
+              status: applicants.status,
+              role: applicants.role,
+              teamId: applicants.teamId,
+              isActive: applicants.isActive,
+              weeklyTargetHours: applicants.weeklyTargetHours,
+              profilePictureUrl: applicants.profilePictureUrl,
+              notionTeamMemberId: applicants.notionTeamMemberId,
+              name: applicants.name,
+              email: applicants.email,
+              hubspotRawData: applicants.hubspotRawData,
+            })
+            .from(applicants)
+            .where(
             and(
               isNotNull(applicants.chronosUserId),
-              sql`lower(coalesce(${applicants.status}, '')) <> 'terminated'`,
-              or(
-                sql`lower(${applicants.stage}) = ${JOINED_PIPELINE_STAGE}`,
+              sql`lower(coalesce(${applicants.status}, '')) = 'joined'`,
+            ),
+            );
+        } catch {
+          // Compatibility fallback for DBs that haven't migrated applicant profile columns yet.
+          const legacyRows = await db
+            .select({
+              chronosUserId: applicants.chronosUserId,
+              status: applicants.status,
+              name: applicants.name,
+              email: applicants.email,
+              hubspotRawData: applicants.hubspotRawData,
+            })
+            .from(applicants)
+            .where(
+              and(
+                isNotNull(applicants.chronosUserId),
                 sql`lower(coalesce(${applicants.status}, '')) = 'joined'`,
               ),
-            ),
-          );
+            );
+          joinedApplicantRows = legacyRows.map((row) => ({
+            chronosUserId: row.chronosUserId,
+            status: row.status,
+            role: null,
+            teamId: null,
+            isActive: true,
+            weeklyTargetHours: null,
+            profilePictureUrl: null,
+            notionTeamMemberId: null,
+            name: row.name,
+            email: row.email,
+            hubspotRawData: row.hubspotRawData,
+          }));
+        }
         const joinedUserIds = new Set<string>();
         for (const r of joinedApplicantRows) {
           if (!r.chronosUserId) continue;
@@ -61,6 +172,19 @@ export async function GET() {
             s === "graduated" || s === "terminated" ? s : "active";
           if (!programStatusByUserId.has(r.chronosUserId)) {
             programStatusByUserId.set(r.chronosUserId, normalized);
+          }
+          if (!applicantProfileByUserId.has(r.chronosUserId)) {
+            applicantProfileByUserId.set(r.chronosUserId, {
+              role: r.role,
+              teamId: r.teamId,
+              isActive: r.isActive,
+              weeklyTargetHours: r.weeklyTargetHours,
+              profilePictureUrl: r.profilePictureUrl,
+              notionTeamMemberId: r.notionTeamMemberId,
+              name: r.name,
+              email: r.email,
+              hubspotRawData: r.hubspotRawData,
+            });
           }
         }
         rows = rows.filter((u) => joinedUserIds.has(u.id));
@@ -131,11 +255,45 @@ export async function GET() {
       }
     }
 
+    const aliasRows =
+      db && rows.length > 0
+        ? await db
+            .select({ userId: userEmailAliases.userId, email: userEmailAliases.email })
+            .from(userEmailAliases)
+            .where(inArray(userEmailAliases.userId, rows.map((r) => r.id)))
+        : [];
+    const aliasesByUserId = new Map<string, string[]>();
+    for (const row of aliasRows) {
+      const list = aliasesByUserId.get(row.userId) ?? [];
+      list.push(row.email);
+      aliasesByUserId.set(row.userId, list);
+    }
+
     const users = rows.map((user) => {
       const activeTimer = activeTimers[user.id];
+      const profile = applicantProfileByUserId.get(user.id);
 
       return {
         ...user,
+        name: profile?.name?.trim() || user.name,
+        email: profile?.email?.trim() || user.email,
+        role: (profile?.role as typeof user.role | undefined) ?? user.role,
+        teamId: profile?.teamId ?? user.teamId,
+        isActive: profile?.isActive ?? user.isActive,
+        weeklyTargetHours: profile?.weeklyTargetHours ?? user.weeklyTargetHours,
+        profilePictureUrl: profile?.profilePictureUrl ?? user.profilePictureUrl,
+        notionTeamMemberId: profile?.notionTeamMemberId ?? user.notionTeamMemberId,
+        requiresNotionProfileLink: !(profile?.notionTeamMemberId ?? user.notionTeamMemberId),
+        alternateEmails: Array.from(
+          new Set([
+            ...(aliasesByUserId.get(user.id) ?? []),
+            ...(Array.isArray((profile as { hubspotRawData?: { emails?: unknown } } | undefined)?.hubspotRawData?.emails)
+              ? (((profile as { hubspotRawData?: { emails?: unknown[] } }).hubspotRawData?.emails ?? []) as unknown[])
+                  .map((v) => String(v).trim().toLowerCase())
+                  .filter(Boolean)
+              : []),
+          ]),
+        ),
         applicantProgramStatus: programStatusByUserId.get(user.id) ?? null,
         applicantCount: applicantCounts.get(user.id) ?? 0,
         activeTimer: activeTimer
@@ -175,7 +333,7 @@ export async function GET() {
 
 export async function POST() {
   return NextResponse.json(
-    { error: "Direct user creation is disabled. Use invitations instead." },
+    { error: "Direct user creation is disabled. Provision users through FloLabs / Hephaestus or your internal process." },
     { status: 405 }
   );
 }

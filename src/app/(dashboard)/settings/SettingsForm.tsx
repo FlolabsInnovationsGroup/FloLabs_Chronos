@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/Card";
@@ -15,6 +15,7 @@ interface SettingsFormProps {
     id: string;
     name: string;
     email: string;
+    alternateEmails?: string[];
     profilePictureUrl?: string | null;
   };
 }
@@ -41,8 +42,23 @@ export function SettingsForm({ user }: SettingsFormProps) {
   const [pwError, setPwError] = useState("");
 
   const [profilePictureUrl, setProfilePictureUrl] = useState(user.profilePictureUrl ?? "");
+  const [knownEmails, setKnownEmails] = useState<string[]>(user.alternateEmails ?? [user.email]);
   const [pictureLoading, setPictureLoading] = useState(false);
   const [pictureError, setPictureError] = useState("");
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/settings/emails", { cache: "no-store" });
+        const data = (await res.json()) as { emails?: string[] };
+        if (res.ok && Array.isArray(data.emails) && data.emails.length > 0) {
+          setKnownEmails(data.emails);
+        }
+      } catch {
+        // Keep initial values.
+      }
+    })();
+  }, []);
 
   async function handleNameSave(e: React.FormEvent) {
     e.preventDefault();
@@ -206,8 +222,23 @@ export function SettingsForm({ user }: SettingsFormProps) {
           </p>
         </div>
 
-        {/* Email (read-only) */}
-        <Input label="Email" value={user.email} disabled />
+        {/* Email(s) (read-only) */}
+        <Input label="Primary Email" value={user.email} disabled />
+        {knownEmails.length > 1 && (
+          <div className="rounded-xl bg-surface-container-low p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-on-surface-variant mb-1">Known Emails</p>
+            <div className="flex flex-wrap gap-2">
+              {knownEmails.map((email) => (
+                <span
+                  key={email}
+                  className="inline-flex items-center rounded-full bg-surface-container px-2.5 py-1 text-xs text-on-background"
+                >
+                  {email}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleNameSave} className="flex flex-col gap-4">
           <Input

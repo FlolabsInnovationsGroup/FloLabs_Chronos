@@ -298,6 +298,13 @@ export const applicants = pgTable(
     hubspotLastModifiedAt: timestamp("hubspot_last_modified_at", { withTimezone: true }),
     hubspotRawData: jsonb("hubspot_raw_data"),
     syncedToTeamMembers: boolean("synced_to_team_members").notNull().default(false),
+    /** Canonical Chronos profile fields (migration: keep auth credentials in `users`). */
+    role: text("role").notNull().default("member"),
+    teamId: uuid("team_id").references(() => teams.id),
+    isActive: boolean("is_active").notNull().default(false),
+    weeklyTargetHours: bigint("weekly_target_hours", { mode: "number" }).default(40),
+    profilePictureUrl: text("profile_picture_url"),
+    notionTeamMemberId: text("notion_team_member_id"),
     chronosUserId: uuid("chronos_user_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),

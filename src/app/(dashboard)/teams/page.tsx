@@ -651,6 +651,14 @@ export default function TeamsPage() {
                             >
                               {member.email}
                             </p>
+                            {(member.alternateEmails ?? []).filter((email) => email !== member.email).length > 0 ? (
+                              <p
+                                className="text-[11px] text-outline-variant mt-0.5"
+                                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                              >
+                                {`Also: ${(member.alternateEmails ?? []).filter((email) => email !== member.email).join(", ")}`}
+                              </p>
+                            ) : null}
                           </div>
                           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                             <Badge

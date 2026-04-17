@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { teamMemberships, teams, users } from "@/lib/db/schema";
+import { applicants, teamMemberships, teams, users } from "@/lib/db/schema";
 import { and, eq, isNotNull, notInArray } from "drizzle-orm";
 import { createTeamSlug } from "@/lib/invitations";
 import { getNotionConfig } from "@/lib/app-config";
+import { ensureTeamMemberPage } from "@/lib/notion";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -70,6 +71,7 @@ export async function GET(req: Request) {
   let usersSyncedFromNotion = 0;
   let pagesMissingInNotion = 0;
   let membershipsSynced = 0;
+  let applicantsSyncedToTeamMembers = 0;
   const errors: string[] = [];
   const seenNotionPageIds: string[] = [];
 
@@ -124,8 +126,12 @@ export async function GET(req: Request) {
     // ── STEP 2: Chronos team rows keyed by Notion team page id ───────────────
     const allTeams = await db.select({ id: teams.id, notionPageId: teams.notionPageId }).from(teams).where(isNotNull(teams.notionPageId));
     const teamIdByNotionPageId = new Map<string, string>();
+    const notionPageIdByTeamId = new Map<string, string>();
     for (const team of allTeams) {
-      if (team.notionPageId) teamIdByNotionPageId.set(team.notionPageId, team.id);
+      if (team.notionPageId) {
+        teamIdByNotionPageId.set(team.notionPageId, team.id);
+        notionPageIdByTeamId.set(team.id, team.notionPageId);
+      }
     }
 
     const memberPageById = new Map<string, NotionPage>();
@@ -165,6 +171,46 @@ export async function GET(req: Request) {
         errors.push(`User ${user.email} (page ${user.notionTeamMemberId}): ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+
+    // ── STEP 4: For joined applicants, push applicant canonical profile data to Notion Team Members ─
+    const joinedApplicants = await db
+      .select({
+        id: applicants.id,
+        email: applicants.email,
+        name: applicants.name,
+        stage: applicants.stage,
+        status: applicants.status,
+        teamId: applicants.teamId,
+        notionTeamMemberId: applicants.notionTeamMemberId,
+      })
+      .from(applicants)
+      .where(isNotNull(applicants.chronosUserId));
+
+    for (const applicant of joinedApplicants) {
+      const stage = applicant.stage?.toLowerCase() ?? "";
+      const status = applicant.status?.toLowerCase() ?? "";
+      const isJoined = stage === "joined" || status === "joined";
+      if (!isJoined) continue;
+      if (!applicant.notionTeamMemberId || !applicant.teamId) continue;
+      const notionTeamPageId = notionPageIdByTeamId.get(applicant.teamId);
+      if (!notionTeamPageId) continue;
+
+      try {
+        await ensureTeamMemberPage({
+          email: applicant.email,
+          name: applicant.name,
+          notionTeamPageIds: [notionTeamPageId],
+          notionTeamMemberPageId: applicant.notionTeamMemberId,
+        });
+        await db
+          .update(applicants)
+          .set({ syncedToTeamMembers: true, updatedAt: new Date() })
+          .where(eq(applicants.id, applicant.id));
+        applicantsSyncedToTeamMembers++;
+      } catch (err) {
+        errors.push(`Applicant ${applicant.email} Team Member sync: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   } catch (err) {
     errors.push(err instanceof Error ? err.message : String(err));
   }
@@ -173,6 +219,7 @@ export async function GET(req: Request) {
     upserted,
     deactivated,
     usersSyncedFromNotion,
+    applicantsSyncedToTeamMembers,
     pagesMissingInNotion,
     membershipsSynced,
     errors: errors.length > 0 ? errors : undefined,

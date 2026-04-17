@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { applicants, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -34,6 +34,10 @@ export async function PATCH(req: Request) {
       .set({ name: nameParsed.data.name, updatedAt: new Date() })
       .where(eq(users.id, session.user.id))
       .returning({ id: users.id, name: users.name, email: users.email });
+    await db
+      .update(applicants)
+      .set({ name: nameParsed.data.name, updatedAt: new Date() })
+      .where(eq(applicants.chronosUserId, session.user.id));
     return NextResponse.json({ user });
   }
 
@@ -45,6 +49,14 @@ export async function PATCH(req: Request) {
       .set({ profilePictureUrl: pictureParsed.data.profilePictureUrl, updatedAt: new Date() })
       .where(eq(users.id, session.user.id))
       .returning({ id: users.id, profilePictureUrl: users.profilePictureUrl });
+    try {
+      await db
+        .update(applicants)
+        .set({ profilePictureUrl: pictureParsed.data.profilePictureUrl, updatedAt: new Date() })
+        .where(eq(applicants.chronosUserId, session.user.id));
+    } catch {
+      // Compatibility: applicant profilePictureUrl may not exist before migration.
+    }
     return NextResponse.json({ user });
   }
 

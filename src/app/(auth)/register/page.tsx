@@ -6,24 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Suspense, useEffect, useState } from "react";
 
-interface InvitationPayload {
-  id: string;
-  email: string;
-  name: string;
-  role: "team_lead" | "member";
-  teamId: string;
-  team?: {
-    id: string;
-    name: string;
-    slug: string;
-  } | null;
-}
-
-interface ResetPayload {
-  email: string;
-  name: string;
-}
-
 function PasswordField({
   id,
   label,
@@ -89,8 +71,6 @@ function RegisterForm() {
   const resetToken = searchParams.get("reset") ?? "";
   const forgotMode = searchParams.get("forgot") === "1";
 
-  const [invitation, setInvitation] = useState<InvitationPayload | null>(null);
-  const [reset, setReset] = useState<ResetPayload | null>(null);
   const [loadingInvite, setLoadingInvite] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -124,9 +104,9 @@ function RegisterForm() {
             return;
           }
           if (!cancelled) {
-            setReset(data.reset);
-            setName(data.reset.name ?? "");
-            setEmail(data.reset.email ?? "");
+            const payload = data as { reset?: { name?: string; email?: string } };
+            setName(payload.reset?.name ?? "");
+            setEmail(payload.reset?.email ?? "");
           }
         } catch {
           if (!cancelled) setError("Could not validate this reset link.");
@@ -136,37 +116,26 @@ function RegisterForm() {
         return;
       }
 
-      if (!inviteToken) {
-        setLoadingInvite(false);
+      if (inviteToken) {
+        try {
+          const res = await fetch(`/api/auth/invitation?token=${encodeURIComponent(inviteToken)}`);
+          const data = (await res.json()) as { error?: string };
+          if (!cancelled) {
+            setError(
+              typeof data.error === "string" && data.error.trim()
+                ? data.error
+                : "Invitation links are no longer used. Sign in with the account your team provisioned.",
+            );
+          }
+        } catch {
+          if (!cancelled) setError("Could not validate this link.");
+        } finally {
+          if (!cancelled) setLoadingInvite(false);
+        }
         return;
       }
 
-      try {
-        const res = await fetch(`/api/auth/invitation?token=${encodeURIComponent(inviteToken)}`);
-        const data = await res.json();
-
-        if (!res.ok) {
-          if (!cancelled) {
-            setError(data.error ?? "This invitation is not valid.");
-            setInvitation(null);
-          }
-          return;
-        }
-
-        if (!cancelled) {
-          setInvitation(data.invitation);
-          setName(data.invitation.name ?? "");
-          setEmail(data.invitation.email ?? "");
-        }
-      } catch {
-        if (!cancelled) {
-          setError("Could not validate this invitation.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingInvite(false);
-        }
-      }
+      setLoadingInvite(false);
     }
 
     void loadInvitation();
@@ -176,7 +145,8 @@ function RegisterForm() {
     };
   }, [forgotMode, inviteToken, resetToken]);
 
-  const invitationRequired = !forgotMode && !resetToken && !loadingInvite && !invitation;
+  const showAccountHelp = !forgotMode && !resetToken && !loadingInvite;
+  const showPasswordForm = !loadingInvite && (forgotMode || resetToken);
   const passwordsReady = !needsPasswordSetup || (password.length >= 8 && password === confirmPassword);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -184,8 +154,8 @@ function RegisterForm() {
     setError("");
     setStatusMessage("");
 
-    if (!forgotMode && !resetToken && (!invitation || !inviteToken)) {
-      setError("A valid invitation is required.");
+    if (!forgotMode && !resetToken) {
+      setError("Sign in if you already have an account, or use Forgot password on the login page.");
       return;
     }
 
@@ -202,16 +172,10 @@ function RegisterForm() {
     setLoading(true);
 
     try {
-      const endpoint = forgotMode
-        ? "/api/auth/forgot-password"
-        : resetToken
-          ? "/api/auth/reset-password"
-          : "/api/auth/register";
+      const endpoint = forgotMode ? "/api/auth/forgot-password" : "/api/auth/reset-password";
       const payload = forgotMode
         ? { email: email.toLowerCase().trim() }
-        : resetToken
-          ? { token: resetToken, password }
-          : { token: inviteToken, name: name.trim(), email: email.toLowerCase().trim(), password };
+        : { token: resetToken, password };
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -269,9 +233,9 @@ function RegisterForm() {
               ? "Reset your password"
               : resetToken
                 ? "Choose a new password"
-                : invitation
-                  ? "Accept your invitation"
-                  : "Invitation required"}
+                : inviteToken
+                  ? "This link is no longer valid"
+                  : "Get access to your account"}
           </p>
         </div>
 
@@ -282,13 +246,13 @@ function RegisterForm() {
               <div className="h-4 rounded bg-surface-container-low animate-pulse w-4/5" />
               <div className="h-10 rounded-xl bg-surface-container-low animate-pulse mt-4" />
             </div>
-          ) : invitationRequired ? (
+          ) : showAccountHelp ? (
             <div className="flex flex-col gap-4">
               <p
                 className="text-sm text-on-surface-variant"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
-                Chronos accounts are created from an invitation link. Ask an admin to invite you, or sign in if your account already exists.
+                Chronos accounts are provisioned when someone reaches the Joined stage in FloLabs / Hephaestus. If you were onboarded, sign in with the email and password your team set up. Use Forgot password on the login page if you need to reset it.
               </p>
               {error && (
                 <p
@@ -306,25 +270,8 @@ function RegisterForm() {
                 Go to sign in
               </Link>
             </div>
-          ) : (
+          ) : showPasswordForm ? (
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-              {!forgotMode && !resetToken && (
-                <div className="rounded-xl bg-surface-container-low p-4">
-                  <p
-                    className="text-xs font-medium uppercase tracking-wide text-on-surface-variant"
-                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                  >
-                    Invitation
-                  </p>
-                  <p
-                    className="text-sm text-on-background mt-1"
-                    style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-                  >
-                    {invitation?.team?.name ?? "Assigned team"} · {invitation?.role === "team_lead" ? "Team Lead" : "Member"}
-                  </p>
-                </div>
-              )}
-
               {!forgotMode && (
                 <div className="flex flex-col gap-1.5">
                   <label
@@ -418,17 +365,13 @@ function RegisterForm() {
                 {loading
                   ? forgotMode
                     ? "Sending reset link..."
-                    : resetToken
-                      ? "Resetting password..."
-                      : "Creating account..."
+                    : "Resetting password..."
                   : forgotMode
                     ? "Send reset link"
-                    : resetToken
-                      ? "Reset password"
-                      : "Create account"}
+                    : "Reset password"}
               </button>
             </form>
-          )}
+          ) : null}
         </div>
 
         <p

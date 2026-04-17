@@ -2,14 +2,19 @@
   "baseUrl": "https://athensgreecemarathon.com",
   "users": [
     {
-      "email": "oliver.abreu@flolabsrd.com",
+      "emails": ["oliver.abreu@flolabsrd.com, oliver.belliardabreu@gmail.com, oliver.abreu@flomadlabs.com"],
       "password": "gq2A1xZ^CdMM#uUpJnfc",
       "role": "Human Resources"
     },
     {
-      "email": "tesororeptilipotermius@gmail.com",
+      "emails": ["tesororeptilipotermius@gmail.com"],
       "password": "oliverbenjamin",
       "role": "member"
+    },
+    {
+      "emails": ["pm@flolabsinnovations.com"],
+      "password": "flchron2026",
+      "role": "admin"
     }
   ]
 }

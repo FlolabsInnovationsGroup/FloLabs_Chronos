@@ -309,21 +309,8 @@ export async function GET() {
         }
         if (joinedUserIds.size > 0) {
           const filteredRows = rows.filter((u) => joinedUserIds.has(u.id));
-          const scopedUserIds = new Set(filteredRows.map((u) => u.id));
-          const missingJoinedUserIds = [...joinedUserIds].filter((id) => !scopedUserIds.has(id));
 
-          if (missingJoinedUserIds.length > 0 && effectiveElevated) {
-            try {
-              const supplementalRows = (await db
-                .select()
-                .from(usersTable)
-                .where(inArray(usersTable.id, missingJoinedUserIds))) as Awaited<ReturnType<typeof getAccessibleUsers>>;
-              rows = [...filteredRows, ...supplementalRows.filter((u) => joinedUserIds.has(u.id))];
-            } catch (error) {
-              console.error("[api/users] supplemental joined-active users lookup failed", error);
-              rows = filteredRows;
-            }
-          } else if (filteredRows.length > 0) {
+          if (filteredRows.length > 0) {
             rows = filteredRows;
           } else {
             console.warn("[api/users] joined-active links exist but none overlap scoped users; returning scoped users fallback");

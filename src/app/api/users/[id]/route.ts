@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, users, tags } from "@/lib/db/schema";
+import { applicants, timeEntries, users, tags } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -38,6 +38,8 @@ const updateSchema = z.object({
   notifyOnStart: z.boolean().optional(),
   notifyOnStop: z.boolean().optional(),
   dailySummary: z.boolean().optional(),
+  /** Updates linked `applicants.status` rows for this Chronos user (admin / HR only). */
+  applicantProgramStatus: z.enum(["active", "graduated", "terminated"]).optional(),
 });
 
 export async function PATCH(
@@ -78,6 +80,10 @@ export async function PATCH(
 
   if (!existingUser) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (parsed.data.applicantProgramStatus !== undefined && !userIsAdmin) {
+    return NextResponse.json({ error: "Only admins and HR can update applicant program status." }, { status: 403 });
   }
 
   if (userIsMember && !userIsAdmin && !userIsTeamLead) {
@@ -175,6 +181,13 @@ export async function PATCH(
     });
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (parsed.data.applicantProgramStatus !== undefined) {
+    await db
+      .update(applicants)
+      .set({ status: parsed.data.applicantProgramStatus, updatedAt: new Date() })
+      .where(eq(applicants.chronosUserId, id));
+  }
 
   const notionTeamMemberId = user.notionTeamMemberId?.trim() || null;
 

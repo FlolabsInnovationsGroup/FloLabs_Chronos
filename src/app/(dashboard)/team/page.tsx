@@ -14,7 +14,7 @@ import { TeamMemberNotionPicker } from "@/components/team/TeamMemberNotionPicker
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useSSE } from "@/hooks/use-sse";
 import { formatDurationHuman } from "@/lib/utils";
-import type { Invitation, Role, SSEEvent, Team, User } from "@/types";
+import type { ApplicantProgramStatus, Invitation, Role, SSEEvent, Team, User } from "@/types";
 
 interface TeamUser extends User {
   discordWebhookUrl?: string | null;
@@ -42,6 +42,12 @@ const EDIT_ROLES = [
 const TEAM_MEMBER_DELETE_EXIT_OPTIONS = [
   { value: "terminated", label: "Terminated" },
   { value: "graduated", label: "Graduated" },
+];
+
+const APPLICANT_PROGRAM_STATUS_OPTIONS: { value: ApplicantProgramStatus; label: string }[] = [
+  { value: "active", label: "Active (in program)" },
+  { value: "graduated", label: "Graduated" },
+  { value: "terminated", label: "Terminated" },
 ];
 
 /** Re-fetch users/teams (and invites for admins) without blocking the UI — SSE, polling, tab focus. */
@@ -140,6 +146,7 @@ export default function TeamPage() {
   const [editTeamIds, setEditTeamIds] = useState<string[]>([]);
   const [editIsActive, setEditIsActive] = useState(true);
   const [editWeeklyTarget, setEditWeeklyTarget] = useState(40);
+  const [editApplicantProgramStatus, setEditApplicantProgramStatus] = useState<ApplicantProgramStatus>("active");
 
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -279,6 +286,10 @@ export default function TeamPage() {
     setEditTeamIds((editingUser.teams ?? []).map((team) => team.id));
     setEditIsActive(editingUser.isActive);
     setEditWeeklyTarget(editingUser.weeklyTargetHours ?? 40);
+    const ps = editingUser.applicantProgramStatus;
+    setEditApplicantProgramStatus(
+      ps === "graduated" || ps === "terminated" ? ps : "active",
+    );
   }, [editingUser]);
 
   useEffect(() => {
@@ -469,6 +480,7 @@ export default function TeamPage() {
                   ...(editRole !== "admin" ? { teamIds: editTeamIds } : {}),
                   isActive: editIsActive,
                   notionTeamMemberId: editTeamMemberNotion?.id ?? null,
+                  applicantProgramStatus: editApplicantProgramStatus,
                 }
               : {}),
             weeklyTargetHours: editWeeklyTarget,
@@ -584,6 +596,7 @@ export default function TeamPage() {
     { label: "Live", key: "live" },
     { label: "Weekly", key: "weekly" },
     { label: "Status", key: null },
+    { label: "Program", key: null },
     { label: "Joined", key: "joined" },
     ...(role === "admin" || role === "hr" || role === "team_lead" || role === "member" ? [{ label: "Actions", key: null }] : []),
   ];
@@ -612,7 +625,7 @@ export default function TeamPage() {
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {role === "admin" || role === "hr"
-              ? "Admins and Human Resources can manage teams, invitations, and member roles."
+              ? "Admins and Human Resources can manage teams, invitations, and member roles. The table lists applicants on pipeline stage Joined; Program marks Graduated or Terminated (terminated members drop off this list)."
               : role === "team_lead"
                 ? "You can see every member in the teams you belong to and edit their weekly time commitment."
                 : "You see only your account. You can update your weekly time target."}
@@ -948,6 +961,23 @@ export default function TeamPage() {
                             </Badge>
                           </td>
                           <td className={compactBodyCellClass}>
+                            <Badge
+                              color={
+                                user.applicantProgramStatus === "graduated"
+                                  ? "secondary"
+                                  : user.applicantProgramStatus === "terminated"
+                                    ? "secondary"
+                                    : "primary"
+                              }
+                            >
+                              {user.applicantProgramStatus === "graduated"
+                                ? "Graduated"
+                                : user.applicantProgramStatus === "terminated"
+                                  ? "Terminated"
+                                  : "Active"}
+                            </Badge>
+                          </td>
+                          <td className={compactBodyCellClass}>
                             <span
                               className="text-sm text-on-surface-variant"
                               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -1242,6 +1272,22 @@ export default function TeamPage() {
                   Active account
                 </span>
               </label>
+              <Select
+                label="Applicant program (Joined pipeline)"
+                options={APPLICANT_PROGRAM_STATUS_OPTIONS}
+                value={editApplicantProgramStatus}
+                onChange={(v) => {
+                  if (v === "active" || v === "graduated" || v === "terminated") {
+                    setEditApplicantProgramStatus(v);
+                  }
+                }}
+              />
+              <p
+                className="text-xs text-on-surface-variant -mt-2"
+                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+              >
+                Updates the linked applicant record in Chronos. Terminated removes them from this directory; Graduated keeps them visible.
+              </p>
             </>
           )}
           <Input

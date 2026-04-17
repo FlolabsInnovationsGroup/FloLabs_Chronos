@@ -1,5 +1,8 @@
 export type Role = "admin" | "team_lead" | "member" | "hr";
 
+/** Linked `applicants.status` for Chronos users shown on the Users page (joined pipeline). */
+export type ApplicantProgramStatus = "active" | "graduated" | "terminated";
+
 export interface User {
   id: string;
   email: string;
@@ -24,6 +27,8 @@ export interface User {
   } | null;
   /** Linked Notion Team Members database row (set at invite acceptance or by admin). */
   notionTeamMemberId?: string | null;
+  /** From `applicants` when `chronos_user_id` matches; drives program completion labels on Users. */
+  applicantProgramStatus?: ApplicantProgramStatus | null;
 }
 
 export interface Team {

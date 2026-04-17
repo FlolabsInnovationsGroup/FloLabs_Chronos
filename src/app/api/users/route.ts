@@ -4,11 +4,11 @@ import { getAccessibleUsers } from "@/lib/permissions";
 import { getAllActiveTimers } from "@/lib/redis";
 import { db } from "@/lib/db";
 import { applicants, projects, timeEntries, users as usersTable } from "@/lib/db/schema";
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
-import type { ActiveTimer } from "@/types";
+import { and, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import type { ActiveTimer, ApplicantProgramStatus } from "@/types";
 
-/** Applicants with this `applicants.status` and a linked `chronos_user_id` are shown on the Users page. */
-const JOINED_APPLICANT_STATUS = "joined" as const;
+/** Pipeline stage in `applicants.stage` for team members who should appear on the Users page. */
+const JOINED_PIPELINE_STAGE = "joined";
 
 export async function GET() {
   try {
@@ -33,20 +33,41 @@ export async function GET() {
       }
     }
 
-    // Users page: only Chronos users linked from applicant rows with status "joined".
+    // Users page: Chronos users linked from applicant rows with pipeline stage "joined" (Hephaestus),
+    // excluding applicant program status "terminated". Status "graduated" still lists here.
+    let programStatusByUserId = new Map<string, ApplicantProgramStatus>();
     if (db && rows.length > 0) {
       try {
         const joinedApplicantRows = await db
-          .select({ chronosUserId: applicants.chronosUserId })
+          .select({ chronosUserId: applicants.chronosUserId, status: applicants.status })
           .from(applicants)
-          .where(and(eq(applicants.status, JOINED_APPLICANT_STATUS), isNotNull(applicants.chronosUserId)));
-        const joinedUserIds = new Set(
-          joinedApplicantRows.map((r) => r.chronosUserId).filter((id): id is string => Boolean(id)),
-        );
+          .where(
+            and(
+              isNotNull(applicants.chronosUserId),
+              sql`lower(coalesce(${applicants.status}, '')) <> 'terminated'`,
+              or(
+                sql`lower(${applicants.stage}) = ${JOINED_PIPELINE_STAGE}`,
+                sql`lower(coalesce(${applicants.status}, '')) = 'joined'`,
+              ),
+            ),
+          );
+        const joinedUserIds = new Set<string>();
+        for (const r of joinedApplicantRows) {
+          if (!r.chronosUserId) continue;
+          joinedUserIds.add(r.chronosUserId);
+          const s = (r.status ?? "active").toLowerCase();
+          /* Legacy `status = joined` marks pipeline position; badge only uses active | graduated | terminated. */
+          const normalized: ApplicantProgramStatus =
+            s === "graduated" || s === "terminated" ? s : "active";
+          if (!programStatusByUserId.has(r.chronosUserId)) {
+            programStatusByUserId.set(r.chronosUserId, normalized);
+          }
+        }
         rows = rows.filter((u) => joinedUserIds.has(u.id));
       } catch (err) {
         console.error("[api/users] filtering to joined applicants failed", err);
         rows = [];
+        programStatusByUserId = new Map();
       }
     }
 
@@ -115,6 +136,7 @@ export async function GET() {
 
       return {
         ...user,
+        applicantProgramStatus: programStatusByUserId.get(user.id) ?? null,
         applicantCount: applicantCounts.get(user.id) ?? 0,
         activeTimer: activeTimer
           ? (() => {

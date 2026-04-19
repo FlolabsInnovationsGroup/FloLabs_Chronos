@@ -1,23 +1,18 @@
-import { neon } from "@neondatabase/serverless";
 import fs from "node:fs";
 import path from "node:path";
+import { createPool, loadEnvFiles } from "./db-utils";
 
-function readDatabaseUrl(): string {
-  const envPath = path.resolve(".env.production.local");
-  const envRaw = fs.readFileSync(envPath, "utf8");
-  const match = envRaw.match(/^DATABASE_URL="?([^"\r\n]+)"?/m);
-  if (!match) {
-    throw new Error("DATABASE_URL not found in .env.production.local");
-  }
-  return match[1];
-}
+loadEnvFiles([".env.production.local"]);
 
 async function main() {
-  const databaseUrl = readDatabaseUrl();
-  const sqlText = fs.readFileSync(path.resolve("scripts/migrate-projects-created-by.sql"), "utf8");
-  const db = neon(databaseUrl);
-  await db.query(sqlText);
-  console.log("projects.created_by_id migration applied");
+  const pool = createPool();
+  try {
+    const sqlText = fs.readFileSync(path.resolve("scripts/migrate-projects-created-by.sql"), "utf8");
+    await pool.query(sqlText);
+    console.log("projects.created_by_id migration applied");
+  } finally {
+    await pool.end();
+  }
 }
 
 main().catch((err) => {

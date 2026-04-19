@@ -45,6 +45,7 @@ docker compose -f docker-compose.local.yml down
 ## Environment
 
 Chronos reads from `.env.local` for local runs and `.env.production.local` for AWS deploy input.
+The canonical production target is AWS RDS Postgres plus AWS Redis, not Neon.
 
 Minimum local env requirements:
 - `DATABASE_URL`
@@ -56,6 +57,7 @@ Minimum local env requirements:
 
 Important:
 - do not wrap env values in quotes when using Docker locally
+- remove old provider-specific fallback vars from production env files when standardizing an environment
 - App Runner deployment now rewrites the checked-in AWS runtime DB/Redis values into the deploy env source before publishing
 
 ## AWS deployment

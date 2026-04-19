@@ -2,7 +2,7 @@
  * scripts/import-notion-entries.ts
  *
  * ONE-TIME migration script: imports all entries from the Notion Time Entries
- * database into Chronos (Neon Postgres via Drizzle).
+ * database into Chronos (Postgres via Drizzle).
  *
  * Safety: It is IDEMPOTENT. Each Notion page ID is stored in time_entries.notion_page_id.
  * Re-running the script will skip entries that are already imported.
@@ -16,47 +16,16 @@
  * Requirements:
  *   - NOTION_API_KEY must be set (in .env.local or as env var)
  *   - NOTION_DATABASE_ID must be set (the Time Entries database)
- *   - DATABASE_URL must be set (Neon Postgres connection string)
- *
- * What it does:
- *   1. Fetches all pages from the Notion Time Entries DB (paginated).
- *   2. Builds a lookup: Notion Team Member page ID → Chronos user ID
- *      (via users.notion_team_member_id or email fallback against Team Members DB).
- *   3. Resolves Chronos project IDs by name. Unknown projects are auto-created
- *      (unless --dry-run). This mirrors the behaviour of the normal sync cron.
- *   4. Inserts time entries that don't already exist (by notion_page_id).
- *   5. Prints a summary at the end.
+ *   - DATABASE_URL must be set (Postgres connection string)
  */
 
-// Load .env.local manually (no dotenv dep needed — use fs)
-import { readFileSync } from "fs";
-import { resolve } from "path";
-function loadEnvFile(filePath: string) {
-  try {
-    const content = readFileSync(filePath, "utf8");
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eqIdx = trimmed.indexOf("=");
-      if (eqIdx < 1) continue;
-      const key = trimmed.slice(0, eqIdx).trim();
-      const val = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, "");
-      if (!process.env[key]) process.env[key] = val;
-    }
-  } catch {
-    // file may not exist
-  }
-}
-loadEnvFile(resolve(process.cwd(), ".env.local"));
-loadEnvFile(resolve(process.cwd(), ".env.production.local"));
-
-import { drizzle } from "drizzle-orm/neon-http";
-import { neon } from "@neondatabase/serverless";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { createDrizzle, createPool, loadEnvFiles } from "./db-utils";
 import { timeEntries, projects, users, timeEntryTags, tags } from "../src/lib/db/schema";
 import type { NewTimeEntry } from "../src/lib/db/schema";
 
-// ── CLI args ──────────────────────────────────────────────────────────────────
+loadEnvFiles([".env.local", ".env.production.local"]);
+
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes("--dry-run");
 const SKIP_IGNORED = args.includes("--skip-ignored");
@@ -64,11 +33,10 @@ const limitArg = args.find((a) => a.startsWith("--limit=") || a === "--limit");
 const LIMIT: number | null = limitArg
   ? parseInt(
       limitArg.startsWith("--limit=") ? limitArg.slice(8) : (args[args.indexOf("--limit") + 1] ?? ""),
-      10
+      10,
     ) || null
   : null;
 
-// ── Notion helpers ────────────────────────────────────────────────────────────
 const NOTION_API_KEY = process.env.NOTION_API_KEY;
 const NOTION_DATABASE_ID = process.env.NOTION_DATABASE_ID;
 const NOTION_TEAM_MEMBERS_DB_ID = process.env.NOTION_TEAM_MEMBERS_DB_ID;
@@ -88,7 +56,6 @@ interface NotionPage {
   properties: Record<string, NotionProp>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type NotionProp = Record<string, any>;
 
 function getPropText(prop: NotionProp | undefined): string {
@@ -126,7 +93,6 @@ function getPropMultiSelect(prop: NotionProp | undefined): string[] {
   return (prop.multi_select as Array<{ name: string }>).map((r) => r.name);
 }
 
-/** Paginate through all Notion DB query results. */
 async function queryAllNotionPages(databaseId: string, filter?: Record<string, unknown>): Promise<NotionPage[]> {
   const pages: NotionPage[] = [];
   let cursor: string | undefined;
@@ -153,7 +119,7 @@ async function queryAllNotionPages(databaseId: string, filter?: Record<string, u
     pages.push(...data.results);
     cursor = data.has_more && data.next_cursor ? data.next_cursor : undefined;
 
-    console.log(`  Fetched page ${pageNum}: ${data.results.length} records (total so far: ${pages.length})${data.has_more ? " — more to come…" : ""}`);
+    console.log(`  Fetched page ${pageNum}: ${data.results.length} records (total so far: ${pages.length})${data.has_more ? " - more to come." : ""}`);
 
     if (LIMIT && pages.length >= LIMIT) {
       console.log(`  Hit --limit ${LIMIT}, stopping early.`);
@@ -164,308 +130,271 @@ async function queryAllNotionPages(databaseId: string, filter?: Record<string, u
   return pages;
 }
 
-// ── Normalise a Notion page ID (strip dashes, lowercase) ──────────────────────
 function normalizeId(id: string): string {
   return id.replace(/-/g, "").toLowerCase();
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log(`\n🚀  Notion → Chronos one-time import`);
-  console.log(`   DRY_RUN: ${DRY_RUN}`);
-  console.log(`   SKIP_IGNORED: ${SKIP_IGNORED}`);
-  console.log(`   LIMIT: ${LIMIT ?? "none"}\n`);
+  console.log("\nNotion -> Chronos one-time import");
+  console.log(`  DRY_RUN: ${DRY_RUN}`);
+  console.log(`  SKIP_IGNORED: ${SKIP_IGNORED}`);
+  console.log(`  LIMIT: ${LIMIT ?? "none"}\n`);
 
-  // ── Connect to DB ──────────────────────────────────────────────────────────
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) throw new Error("DATABASE_URL is not set");
-  const sql = neon(databaseUrl);
-  const db = drizzle(sql);
+  const pool = createPool();
+  const db = createDrizzle(pool);
 
-  // ── 1. Load existing Chronos state ─────────────────────────────────────────
-  console.log("📦  Loading Chronos users and projects…");
+  try {
+    console.log("Loading Chronos users and projects.");
 
-  const chronosUsers = await db.select({
-    id: users.id,
-    email: users.email,
-    name: users.name,
-    notionTeamMemberId: users.notionTeamMemberId,
-  }).from(users);
+    const chronosUsers = await db.select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      notionTeamMemberId: users.notionTeamMemberId,
+    }).from(users);
 
-  const chronosProjects = await db.select({
-    id: projects.id,
-    name: projects.name,
-    archived: projects.archived,
-  }).from(projects);
+    const chronosProjects = await db.select({
+      id: projects.id,
+      name: projects.name,
+      archived: projects.archived,
+    }).from(projects);
 
-  // Build lookup: normalised Notion Team Member page ID → Chronos user id
-  const notionMemberIdToUserId = new Map<string, string>();
-  for (const u of chronosUsers) {
-    if (u.notionTeamMemberId?.trim()) {
-      notionMemberIdToUserId.set(normalizeId(u.notionTeamMemberId), u.id);
-    }
-  }
-
-  // Build email → user id fallback
-  const emailToUserId = new Map<string, string>();
-  for (const u of chronosUsers) {
-    emailToUserId.set(u.email.toLowerCase().trim(), u.id);
-  }
-
-  // Build project name → project id (case-insensitive)
-  const projectByName = new Map<string, string>();
-  for (const p of chronosProjects) {
-    projectByName.set(p.name.toLowerCase().trim(), p.id);
-  }
-
-  // Load Notion Team Members emails for fallback resolution
-  const notionMemberEmailToChronosUserId = new Map<string, string>();
-  if (NOTION_TEAM_MEMBERS_DB_ID) {
-    console.log("📋  Loading Notion Team Members for email fallback…");
-    const tmPages = await queryAllNotionPages(NOTION_TEAM_MEMBERS_DB_ID);
-    for (const page of tmPages) {
-      const emailProp = (page.properties["Email"] ?? page.properties["Personal Email"]) as
-        | { type: "email"; email?: string | null }
-        | undefined;
-      const emails: string[] = [];
-      if (emailProp?.type === "email" && emailProp.email) {
-        emails.push(emailProp.email);
+    const notionMemberIdToUserId = new Map<string, string>();
+    for (const u of chronosUsers) {
+      if (u.notionTeamMemberId?.trim()) {
+        notionMemberIdToUserId.set(normalizeId(u.notionTeamMemberId), u.id);
       }
-      // Some entries have multiple emails in a text field
-      for (const e of emails) {
-        for (const part of e.split(",").map((s) => s.trim()).filter(Boolean)) {
-          const chronosUserId = emailToUserId.get(part.toLowerCase());
-          if (chronosUserId) {
-            notionMemberEmailToChronosUserId.set(normalizeId(page.id), chronosUserId);
+    }
+
+    const emailToUserId = new Map<string, string>();
+    for (const u of chronosUsers) {
+      emailToUserId.set(u.email.toLowerCase().trim(), u.id);
+    }
+
+    const projectByName = new Map<string, string>();
+    for (const p of chronosProjects) {
+      projectByName.set(p.name.toLowerCase().trim(), p.id);
+    }
+
+    const notionMemberEmailToChronosUserId = new Map<string, string>();
+    if (NOTION_TEAM_MEMBERS_DB_ID) {
+      console.log("Loading Notion Team Members for email fallback.");
+      const tmPages = await queryAllNotionPages(NOTION_TEAM_MEMBERS_DB_ID);
+      for (const page of tmPages) {
+        const emailProp = (page.properties["Email"] ?? page.properties["Personal Email"]) as
+          | { type: "email"; email?: string | null }
+          | undefined;
+        const emails: string[] = [];
+        if (emailProp?.type === "email" && emailProp.email) {
+          emails.push(emailProp.email);
+        }
+        for (const e of emails) {
+          for (const part of e.split(",").map((s) => s.trim()).filter(Boolean)) {
+            const chronosUserId = emailToUserId.get(part.toLowerCase());
+            if (chronosUserId) {
+              notionMemberEmailToChronosUserId.set(normalizeId(page.id), chronosUserId);
+            }
           }
         }
       }
-    }
-    console.log(`  Resolved ${notionMemberEmailToChronosUserId.size} Notion Team Member pages to Chronos users via email.\n`);
-  }
-
-  // ── 2. Fetch all Notion Time Entries ──────────────────────────────────────
-  console.log("📥  Fetching all Notion Time Entries (this may take a while)…");
-  const allNotionPages = await queryAllNotionPages(NOTION_DATABASE_ID!);
-  console.log(`\n  Total Notion entries fetched: ${allNotionPages.length}\n`);
-
-  // ── 3. Load existing notion_page_ids in Chronos to skip duplicates ─────────
-  const existingNotionPageIds = new Set<string>();
-  const existingRows = await db.select({ notionPageId: timeEntries.notionPageId }).from(timeEntries);
-  for (const r of existingRows) {
-    if (r.notionPageId) existingNotionPageIds.add(normalizeId(r.notionPageId));
-  }
-  console.log(`📊  Chronos already has ${existingNotionPageIds.size} entries with a notion_page_id.\n`);
-
-  // ── 4. Process and insert ─────────────────────────────────────────────────
-  let skippedAlreadyExists = 0;
-  let skippedNoUser = 0;
-  let skippedNoDate = 0;
-  let skippedIgnored = 0;
-  let skippedNoDuration = 0;
-  let projectsCreated = 0;
-  let inserted = 0;
-  let errors = 0;
-
-  // Batch creation: collect new projects to create
-  const projectsToCreate: string[] = [];
-
-  // Pre-pass: collect unknown projects
-  for (const page of allNotionPages) {
-    const projectName = getPropSelect(page.properties["Project"])?.trim();
-    if (projectName && !projectByName.has(projectName.toLowerCase())) {
-      if (!projectsToCreate.includes(projectName)) projectsToCreate.push(projectName);
-    }
-  }
-
-  if (projectsToCreate.length > 0) {
-    console.log(`🔨  ${DRY_RUN ? "[DRY-RUN] Would create" : "Creating"} ${projectsToCreate.length} new project(s): ${projectsToCreate.join(", ")}`);
-    if (!DRY_RUN) {
-      for (const name of projectsToCreate) {
-        const [newProject] = await db.insert(projects).values({ name }).returning();
-        projectByName.set(name.toLowerCase().trim(), newProject.id);
-        projectsCreated++;
-        console.log(`  ✅ Created project: "${name}" (${newProject.id})`);
-      }
-    }
-  }
-
-  // Also collect tags we might need to create per user
-  // We'll do this on demand during entry creation
-
-  for (const page of allNotionPages) {
-    if (page.archived) continue;
-
-    const notionPageId = normalizeId(page.id);
-
-    // Skip already-imported
-    if (existingNotionPageIds.has(notionPageId)) {
-      skippedAlreadyExists++;
-      continue;
+      console.log(`  Resolved ${notionMemberEmailToChronosUserId.size} Notion Team Member pages to Chronos users via email.\n`);
     }
 
-    const status = getPropSelect(page.properties["Status"]);
+    console.log("Fetching all Notion Time Entries (this may take a while).");
+    const allNotionPages = await queryAllNotionPages(NOTION_DATABASE_ID!);
+    console.log(`\n  Total Notion entries fetched: ${allNotionPages.length}\n`);
 
-    // Optionally skip "Ignored" entries (Toggl Imports that are known bad)
-    if (SKIP_IGNORED && status === "Ignored") {
-      skippedIgnored++;
-      continue;
+    const existingNotionPageIds = new Set<string>();
+    const existingRows = await db.select({ notionPageId: timeEntries.notionPageId }).from(timeEntries);
+    for (const r of existingRows) {
+      if (r.notionPageId) existingNotionPageIds.add(normalizeId(r.notionPageId));
     }
+    console.log(`Chronos already has ${existingNotionPageIds.size} entries with a notion_page_id.\n`);
 
-    // Resolve dates
-    const { start: startRaw, end: endRaw } = getPropDate(page.properties["Date"]);
-    if (!startRaw) {
-      skippedNoDate++;
-      continue;
-    }
+    let skippedAlreadyExists = 0;
+    let skippedNoUser = 0;
+    let skippedNoDate = 0;
+    let skippedIgnored = 0;
+    let skippedNoDuration = 0;
+    let projectsCreated = 0;
+    let inserted = 0;
+    let errors = 0;
 
-    const startedAt = new Date(startRaw);
-    const stoppedAt = endRaw ? new Date(endRaw) : null;
-    if (!stoppedAt) {
-      // Skip still-running or malformed entries
-      skippedNoDate++;
-      continue;
-    }
+    const projectsToCreate: string[] = [];
 
-    // Duration — prefer stored value, compute as fallback
-    const durationSecs = getPropNumber(page.properties["Duration"]);
-    const durationMs =
-      durationSecs != null && durationSecs > 0
-        ? durationSecs * 1000
-        : stoppedAt.getTime() - startedAt.getTime();
-
-    if (durationMs <= 0) {
-      skippedNoDuration++;
-      continue;
-    }
-
-    // Resolve user
-    const teamMemberIds = getPropRelation(page.properties["Team Member"]);
-    let chronosUserId: string | null = null;
-
-    for (const tmId of teamMemberIds) {
-      const normalized = normalizeId(tmId);
-      const uid = notionMemberIdToUserId.get(normalized) ?? notionMemberEmailToChronosUserId.get(normalized);
-      if (uid) {
-        chronosUserId = uid;
-        break;
+    for (const page of allNotionPages) {
+      const projectName = getPropSelect(page.properties["Project"])?.trim();
+      if (projectName && !projectByName.has(projectName.toLowerCase())) {
+        if (!projectsToCreate.includes(projectName)) projectsToCreate.push(projectName);
       }
     }
 
-    if (!chronosUserId) {
-      // Fallback: try matching by User Key (person name)
-      const userKey = getPropText(page.properties["User Key"]).trim();
-      if (userKey) {
-        // Search users by name (case-insensitive)
-        const matchedUser = chronosUsers.find(
-          (u) => u.name.toLowerCase() === userKey.toLowerCase()
-        );
-        if (matchedUser) chronosUserId = matchedUser.id;
-      }
-    }
-
-    if (!chronosUserId) {
-      const userKey = getPropText(page.properties["User Key"]);
-      console.warn(`  ⚠️  No user found for Notion page ${page.id} (User Key: "${userKey}") — skipping.`);
-      skippedNoUser++;
-      continue;
-    }
-
-    // Resolve project
-    const projectName = getPropSelect(page.properties["Project"])?.trim() ?? null;
-    const projectId = projectName ? (projectByName.get(projectName.toLowerCase()) ?? null) : null;
-
-    // Description
-    const descriptionRaw = getPropText(page.properties["Description"]).trim();
-    // Strip Notion markdown links: [text](url) → text
-    const description = descriptionRaw.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").trim() || "Imported entry";
-
-    // Tags
-    const tagNames = getPropMultiSelect(page.properties["Tags"]);
-
-    const notionPageIdFormatted = page.id; // keep original dashed format for storage
-
-    if (DRY_RUN) {
-      const userObj = chronosUsers.find((u) => u.id === chronosUserId);
-      console.log(
-        `  [DRY-RUN] Would import: "${description}" | ${userObj?.name ?? chronosUserId} | ${projectName ?? "no project"} | ${startedAt.toISOString().split("T")[0]} | ${(durationMs / 3_600_000).toFixed(2)}h`
-      );
-      inserted++;
-      continue;
-    }
-
-    // ── Resolve or create tags for this user ────────────────────────────────
-    const tagIds: string[] = [];
-    for (const tagName of tagNames) {
-      // Fetch existing tags for this user
-      const tagRows = await db
-        .select({ id: tags.id, name: tags.name })
-        .from(tags)
-        .where(eq(tags.userId, chronosUserId));
-      const existingTag = tagRows.find((t) => t.name.toLowerCase() === tagName.toLowerCase());
-
-      if (existingTag) {
-        tagIds.push(existingTag.id);
-      } else {
-        // Create tag
-        try {
-          const [newTag] = await db
-            .insert(tags)
-            .values({ name: tagName, userId: chronosUserId })
-            .onConflictDoNothing()
-            .returning();
-          if (newTag) tagIds.push(newTag.id);
-        } catch {
-          // ignore tag creation failures
+    if (projectsToCreate.length > 0) {
+      console.log(`${DRY_RUN ? "[DRY-RUN] Would create" : "Creating"} ${projectsToCreate.length} new project(s): ${projectsToCreate.join(", ")}`);
+      if (!DRY_RUN) {
+        for (const name of projectsToCreate) {
+          const [newProject] = await db.insert(projects).values({ name }).returning();
+          projectByName.set(name.toLowerCase().trim(), newProject.id);
+          projectsCreated++;
+          console.log(`  Created project: "${name}" (${newProject.id})`);
         }
       }
     }
 
-    // ── Insert time entry ────────────────────────────────────────────────────
-    try {
-      const newEntry: NewTimeEntry = {
-        userId: chronosUserId,
-        projectId: projectId ?? undefined,
-        description,
-        startedAt,
-        stoppedAt,
-        durationMs,
-        notionPageId: notionPageIdFormatted,
-        syncedAt: new Date(), // mark as already synced
-      };
+    for (const page of allNotionPages) {
+      if (page.archived) continue;
 
-      const [entry] = await db.insert(timeEntries).values(newEntry).returning();
-
-      // Insert tag associations
-      if (tagIds.length > 0) {
-        await db
-          .insert(timeEntryTags)
-          .values(tagIds.map((tagId) => ({ timeEntryId: entry.id, tagId })))
-          .onConflictDoNothing();
+      const notionPageId = normalizeId(page.id);
+      if (existingNotionPageIds.has(notionPageId)) {
+        skippedAlreadyExists++;
+        continue;
       }
 
-      inserted++;
-      if (inserted % 50 === 0) {
-        console.log(`  ✅  Imported ${inserted} entries so far…`);
+      const status = getPropSelect(page.properties["Status"]);
+      if (SKIP_IGNORED && status === "Ignored") {
+        skippedIgnored++;
+        continue;
       }
-    } catch (err) {
-      console.error(`  ❌  Failed to insert entry for page ${page.id}: ${err instanceof Error ? err.message : String(err)}`);
-      errors++;
+
+      const { start: startRaw, end: endRaw } = getPropDate(page.properties["Date"]);
+      if (!startRaw) {
+        skippedNoDate++;
+        continue;
+      }
+
+      const startedAt = new Date(startRaw);
+      const stoppedAt = endRaw ? new Date(endRaw) : null;
+      if (!stoppedAt) {
+        skippedNoDate++;
+        continue;
+      }
+
+      const durationSecs = getPropNumber(page.properties["Duration"]);
+      const durationMs =
+        durationSecs != null && durationSecs > 0
+          ? durationSecs * 1000
+          : stoppedAt.getTime() - startedAt.getTime();
+
+      if (durationMs <= 0) {
+        skippedNoDuration++;
+        continue;
+      }
+
+      const teamMemberIds = getPropRelation(page.properties["Team Member"]);
+      let chronosUserId: string | null = null;
+
+      for (const tmId of teamMemberIds) {
+        const normalized = normalizeId(tmId);
+        const uid = notionMemberIdToUserId.get(normalized) ?? notionMemberEmailToChronosUserId.get(normalized);
+        if (uid) {
+          chronosUserId = uid;
+          break;
+        }
+      }
+
+      if (!chronosUserId) {
+        const userKey = getPropText(page.properties["User Key"]).trim();
+        if (userKey) {
+          const matchedUser = chronosUsers.find((u) => u.name.toLowerCase() === userKey.toLowerCase());
+          if (matchedUser) chronosUserId = matchedUser.id;
+        }
+      }
+
+      if (!chronosUserId) {
+        const userKey = getPropText(page.properties["User Key"]);
+        console.warn(`  No user found for Notion page ${page.id} (User Key: "${userKey}") - skipping.`);
+        skippedNoUser++;
+        continue;
+      }
+
+      const projectName = getPropSelect(page.properties["Project"])?.trim() ?? null;
+      const projectId = projectName ? (projectByName.get(projectName.toLowerCase()) ?? null) : null;
+
+      const descriptionRaw = getPropText(page.properties["Description"]).trim();
+      const description = descriptionRaw.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").trim() || "Imported entry";
+
+      const tagNames = getPropMultiSelect(page.properties["Tags"]);
+      const notionPageIdFormatted = page.id;
+
+      if (DRY_RUN) {
+        const userObj = chronosUsers.find((u) => u.id === chronosUserId);
+        console.log(
+          `  [DRY-RUN] Would import: "${description}" | ${userObj?.name ?? chronosUserId} | ${projectName ?? "no project"} | ${startedAt.toISOString().split("T")[0]} | ${(durationMs / 3_600_000).toFixed(2)}h`,
+        );
+        inserted++;
+        continue;
+      }
+
+      const tagIds: string[] = [];
+      const existingTagRows = await db
+        .select({ id: tags.id, name: tags.name })
+        .from(tags)
+        .where(eq(tags.userId, chronosUserId));
+
+      for (const tagName of tagNames) {
+        const existingTag = existingTagRows.find((t) => t.name.toLowerCase() === tagName.toLowerCase());
+
+        if (existingTag) {
+          tagIds.push(existingTag.id);
+        } else {
+          try {
+            const [newTag] = await db
+              .insert(tags)
+              .values({ name: tagName, userId: chronosUserId })
+              .onConflictDoNothing()
+              .returning();
+            if (newTag) tagIds.push(newTag.id);
+          } catch {
+            // ignore tag creation failures
+          }
+        }
+      }
+
+      try {
+        const newEntry: NewTimeEntry = {
+          userId: chronosUserId,
+          projectId: projectId ?? undefined,
+          description,
+          startedAt,
+          stoppedAt,
+          durationMs,
+          notionPageId: notionPageIdFormatted,
+          syncedAt: new Date(),
+        };
+
+        const [entry] = await db.insert(timeEntries).values(newEntry).returning();
+
+        if (tagIds.length > 0) {
+          await db
+            .insert(timeEntryTags)
+            .values(tagIds.map((tagId) => ({ timeEntryId: entry.id, tagId })))
+            .onConflictDoNothing();
+        }
+
+        inserted++;
+        if (inserted % 50 === 0) {
+          console.log(`  Imported ${inserted} entries so far.`);
+        }
+      } catch (err) {
+        console.error(`  Failed to insert entry for page ${page.id}: ${err instanceof Error ? err.message : String(err)}`);
+        errors++;
+      }
     }
-  }
 
-  // ── Summary ───────────────────────────────────────────────────────────────
-  console.log(`\n${"─".repeat(60)}`);
-  console.log(`✅  Import complete${DRY_RUN ? " (dry run)" : ""}!`);
-  console.log(`   Inserted:               ${inserted}`);
-  console.log(`   Projects created:       ${projectsCreated}`);
-  console.log(`   Skipped (exists):       ${skippedAlreadyExists}`);
-  console.log(`   Skipped (no user):      ${skippedNoUser}`);
-  console.log(`   Skipped (no date/end):  ${skippedNoDate}`);
-  console.log(`   Skipped (no duration):  ${skippedNoDuration}`);
-  if (SKIP_IGNORED) console.log(`   Skipped (Ignored):      ${skippedIgnored}`);
-  console.log(`   Errors:                 ${errors}`);
-  console.log(`${"─".repeat(60)}\n`);
+    console.log("\n" + "=".repeat(60));
+    console.log(`Import complete${DRY_RUN ? " (dry run)" : ""}!`);
+    console.log(`  Inserted:               ${inserted}`);
+    console.log(`  Projects created:       ${projectsCreated}`);
+    console.log(`  Skipped (exists):       ${skippedAlreadyExists}`);
+    console.log(`  Skipped (no user):      ${skippedNoUser}`);
+    console.log(`  Skipped (no date/end):  ${skippedNoDate}`);
+    console.log(`  Skipped (no duration):  ${skippedNoDuration}`);
+    if (SKIP_IGNORED) console.log(`  Skipped (Ignored):      ${skippedIgnored}`);
+    console.log(`  Errors:                 ${errors}`);
+    console.log("=".repeat(60) + "\n");
+  } finally {
+    await pool.end();
+  }
 }
 
 main().catch((err) => {

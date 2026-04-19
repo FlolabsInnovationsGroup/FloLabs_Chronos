@@ -1,6 +1,4 @@
-import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
 import { drizzle as drizzleNode } from "drizzle-orm/node-postgres";
-import { neon } from "@neondatabase/serverless";
 import { Pool } from "pg";
 import * as schema from "./schema";
 
@@ -16,13 +14,6 @@ function createDb() {
   if (!connectionString) {
     console.warn("DATABASE_URL not set, DB calls will fail at runtime");
     return null as never;
-  }
-
-  const isNeon = /neon\.tech/i.test(connectionString);
-
-  if (isNeon) {
-    const sql = neon(connectionString);
-    return drizzleNeon(sql, { schema });
   }
 
   const needsRelaxedSsl = /sslmode=require/i.test(connectionString);

@@ -6,3 +6,9 @@ test-results
 coverage
 *.log
 .env*
+assets
+stitch
+test_assets
+deploy/aws/provision-output.json
+tmp-*.cjs
+tmp-*.py

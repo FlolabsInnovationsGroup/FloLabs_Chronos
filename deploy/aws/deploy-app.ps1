@@ -36,6 +36,36 @@ function Get-EnvMap {
   return $map
 }
 
+function Set-OrReplaceEnvValue {
+  param(
+    [string]$Path,
+    [string]$Key,
+    [string]$Value
+  )
+
+  $lines = if (Test-Path $Path) { Get-Content $Path } else { @() }
+  $escaped = [Regex]::Escape($Key)
+  $replacement = "$Key=$Value"
+  $matched = $false
+  $updated = foreach ($line in $lines) {
+    if ($line -match "^${escaped}=") {
+      $matched = $true
+      $replacement
+    } else {
+      $line
+    }
+  }
+
+  if (-not $matched) {
+    if ($updated.Count -gt 0 -and $updated[-1] -ne '') {
+      $updated += ''
+    }
+    $updated += $replacement
+  }
+
+  Set-Content -Path $Path -Value $updated -Encoding utf8
+}
+
 function Wait-AppRunnerOperation {
   param([string]$OperationArn)
   if (-not $OperationArn) { return }
@@ -74,6 +104,21 @@ if ($Provision.redisUrl) {
 }
 $envFromFile['CRON_SECRET'] = [string]$Provision.cronSecret
 $envFromFile['NODE_ENV'] = 'production'
+
+$localEnvPath = Join-Path $ProjectRoot '.env.production.local'
+if (-not (Test-Path $localEnvPath)) {
+  $localEnvPath = Join-Path $ProjectRoot '.env.local'
+}
+if ($localEnvPath) {
+  Set-OrReplaceEnvValue -Path $localEnvPath -Key 'DATABASE_URL' -Value ([string]$Provision.databaseUrl)
+  Set-OrReplaceEnvValue -Path $localEnvPath -Key 'FL_CHRONOS_DATABASE_URL' -Value ([string]$Provision.databaseUrl)
+  Set-OrReplaceEnvValue -Path $localEnvPath -Key 'FL_CHRONOS_DATABASE_URL_UNPOOLED' -Value ([string]$Provision.databaseUrl)
+  if ($Provision.redisUrl) {
+    Set-OrReplaceEnvValue -Path $localEnvPath -Key 'KV_URL' -Value ([string]$Provision.redisUrl)
+    Set-OrReplaceEnvValue -Path $localEnvPath -Key 'FL_KV_REDIS_URL' -Value ([string]$Provision.redisUrl)
+  }
+  Set-OrReplaceEnvValue -Path $localEnvPath -Key 'CRON_SECRET' -Value ([string]$Provision.cronSecret)
+}
 
 aws ecr get-login-password --region $Region | docker login --username AWS --password-stdin "${AccountId}.dkr.ecr.${Region}.amazonaws.com"
 docker build -t "${RepositoryName}:${ImageTag}" $ProjectRoot

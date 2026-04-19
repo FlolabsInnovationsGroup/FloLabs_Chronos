@@ -75,7 +75,7 @@ export async function POST(req: Request) {
             updatedAt: new Date(stoppedAt),
           })
           .where(eq(timeEntries.id, activeEntry.id))
-          .returning({ id: timeEntries.id })
+          .returning()
       : [];
 
     const tagIds: string[] = Array.isArray(timer.tagIds) ? timer.tagIds : [];

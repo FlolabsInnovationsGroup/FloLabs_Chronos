@@ -119,7 +119,7 @@ export async function GET(req: Request) {
     }
 
     if (seenNotionPageIds.length > 0) {
-      const result = await db.update(teams).set({ isActive: false, updatedAt: new Date() }).where(and(isNotNull(teams.notionPageId), notInArray(teams.notionPageId, seenNotionPageIds))).returning({ id: teams.id });
+      const result = await db.update(teams).set({ isActive: false, updatedAt: new Date() }).where(and(isNotNull(teams.notionPageId), notInArray(teams.notionPageId, seenNotionPageIds))).returning();
       deactivated = result.length;
     }
 

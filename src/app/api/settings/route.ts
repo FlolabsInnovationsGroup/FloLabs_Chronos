@@ -33,7 +33,7 @@ export async function PATCH(req: Request) {
       .update(users)
       .set({ name: nameParsed.data.name, updatedAt: new Date() })
       .where(eq(users.id, session.user.id))
-      .returning({ id: users.id, name: users.name, email: users.email });
+      .returning();
     await db
       .update(applicants)
       .set({ name: nameParsed.data.name, updatedAt: new Date() })
@@ -48,7 +48,7 @@ export async function PATCH(req: Request) {
       .update(users)
       .set({ profilePictureUrl: pictureParsed.data.profilePictureUrl, updatedAt: new Date() })
       .where(eq(users.id, session.user.id))
-      .returning({ id: users.id, profilePictureUrl: users.profilePictureUrl });
+      .returning();
     try {
       await db
         .update(applicants)

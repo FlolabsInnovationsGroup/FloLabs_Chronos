@@ -182,21 +182,7 @@ export async function PATCH(
     .update(users)
     .set(updateData)
     .where(eq(users.id, id))
-    .returning({
-      id: users.id,
-      email: users.email,
-      name: users.name,
-      role: users.role,
-      teamId: users.teamId,
-      isActive: users.isActive,
-      weeklyTargetHours: users.weeklyTargetHours,
-      notionTeamMemberId: users.notionTeamMemberId,
-      discordWebhookUrl: users.discordWebhookUrl,
-      notifyOnStart: users.notifyOnStart,
-      notifyOnStop: users.notifyOnStop,
-      dailySummary: users.dailySummary,
-      createdAt: users.createdAt,
-    });
+    .returning();
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

@@ -73,7 +73,7 @@ export async function GET() {
                       role: "member",
                       isActive: true,
                     })
-                    .returning({ id: usersTable.id })
+                    .returning()
                 )[0]?.id ?? null;
               } catch {
                 const [retryUser] = await db

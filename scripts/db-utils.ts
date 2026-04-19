@@ -37,9 +37,10 @@ export function getDatabaseUrl() {
 
 export function createPool(connectionString = getDatabaseUrl()) {
   const needsRelaxedSsl = /sslmode=require/i.test(connectionString);
+  const shouldRelaxSsl = needsRelaxedSsl || /rds\.amazonaws\.com/i.test(connectionString);
   return new Pool({
     connectionString,
-    ...(needsRelaxedSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+    ...(shouldRelaxSsl ? { ssl: { rejectUnauthorized: false } } : {}),
   });
 }
 

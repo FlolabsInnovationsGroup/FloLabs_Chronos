@@ -83,7 +83,7 @@ $envFromFile = Get-EnvMap -Path (Join-Path $ProjectRoot '.env.production.local')
 if ($envFromFile.Count -eq 0) {
   $envFromFile = Get-EnvMap -Path (Join-Path $ProjectRoot '.env.local')
 }
-+$envFromFile = [ordered]@{} + $envFromFile
+$envFromFile = [ordered]@{} + $envFromFile
 
 $skipEnvKeys = @(
   'VERCEL', 'VERCEL_ENV', 'VERCEL_URL', 'VERCEL_OIDC_TOKEN', 'VERCEL_TARGET_ENV',
@@ -129,6 +129,14 @@ if (-not (Test-Path $localEnvPath)) {
   $localEnvPath = Join-Path $ProjectRoot '.env.local'
 }
 if ($localEnvPath) {
+  foreach ($key in $neonEnvKeys) {
+    if ((Get-EnvMap -Path $localEnvPath).Contains($key)) {
+      $lines = Get-Content $localEnvPath
+      $escaped = [Regex]::Escape($key)
+      $lines = $lines | Where-Object { $_ -notmatch "^${escaped}=" }
+      Set-Content -Path $localEnvPath -Value $lines -Encoding utf8
+    }
+  }
   Set-OrReplaceEnvValue -Path $localEnvPath -Key 'DATABASE_URL' -Value ([string]$Provision.databaseUrl)
   Set-OrReplaceEnvValue -Path $localEnvPath -Key 'FL_CHRONOS_DATABASE_URL' -Value ([string]$Provision.databaseUrl)
   Set-OrReplaceEnvValue -Path $localEnvPath -Key 'FL_CHRONOS_DATABASE_URL_UNPOOLED' -Value ([string]$Provision.databaseUrl)
@@ -189,6 +197,11 @@ if (-not $serviceArn -or $serviceArn -eq 'None') {
   $serviceArn = $create.Service.ServiceArn
   $operationArn = $create.OperationId
 } else {
+  while ($true) {
+    $serviceStatus = (aws apprunner describe-service --service-arn $serviceArn --query 'Service.Status' --output text --region $Region).Trim()
+    if ($serviceStatus -notin @('OPERATION_IN_PROGRESS', 'CREATE_FAILED', 'DELETE_FAILED')) { break }
+    Start-Sleep -Seconds 10
+  }
   $update = aws apprunner update-service --service-arn $serviceArn --source-configuration "file://$SourceConfigPath" --instance-configuration "file://$ServiceConfigPath" --network-configuration "EgressConfiguration={EgressType=VPC,VpcConnectorArn=$($Provision.vpcConnectorArn)}" --region $Region | ConvertFrom-Json
   $operationArn = $update.OperationId
 }
@@ -219,6 +232,11 @@ $finalRuntimeEnv['APP_URL'] = "https://$serviceUrl"
   }
 } | ConvertTo-Json -Depth 10 | Set-Content -Path $SourceConfigPath -Encoding ascii
 
+while ($true) {
+  $serviceStatus = (aws apprunner describe-service --service-arn $serviceArn --query 'Service.Status' --output text --region $Region).Trim()
+  if ($serviceStatus -notin @('OPERATION_IN_PROGRESS', 'CREATE_FAILED', 'DELETE_FAILED')) { break }
+  Start-Sleep -Seconds 10
+}
 $updateFinal = aws apprunner update-service --service-arn $serviceArn --source-configuration "file://$SourceConfigPath" --instance-configuration "file://$ServiceConfigPath" --network-configuration "EgressConfiguration={EgressType=VPC,VpcConnectorArn=$($Provision.vpcConnectorArn)}" --region $Region | ConvertFrom-Json
 Wait-AppRunnerOperation -OperationArn $updateFinal.OperationId
 

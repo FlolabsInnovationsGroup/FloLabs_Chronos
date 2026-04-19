@@ -6,7 +6,8 @@ Project context for coding agents working on this repository.
 
 1. `ARCHITECTURE.md` — source of truth for product model, data model, and access rules
 2. `GAME_MASTER.md` — current implementation status, completed work, and next steps
-3. Then inspect the actual code before changing behavior
+3. This `CLAUDE.md` handoff section, especially “Current Mission” and “Access / Credentials Context”
+4. Then inspect the actual code before changing behavior
 
 ## Workflow
 
@@ -16,6 +17,74 @@ Project context for coding agents working on this repository.
 - **Default: push after work.** When you finish a coherent change (code, docs, or both), commit with a clear message and **`git push`** to `origin` so the remote stays current. Skip pushing only if the user explicitly asks you not to, or if there is nothing to commit.
 
 When starting a session, check `GAME_MASTER.md` first for current status and handoff notes.
+
+---
+
+## Current Mission
+
+The immediate goal is to make Chronos fully portable, production-ready on AWS, and easy to run locally in Docker, while removing old Neon-specific deployment/runtime coupling.
+
+What has already been achieved:
+- Chronos builds successfully with `pnpm build`
+- local Docker flow exists and works
+- README has local setup + Docker setup + AWS deployment guidance
+- Hermes docs were updated to point to the real Chronos repo and include portability/backup notes
+- Chronos runtime and scripts were migrated away from Neon-specific code paths to standard Postgres / `pg`
+- App Runner was redeployed and the live runtime environment was cleaned so old Neon env vars are no longer present in the running AWS service
+- AWS is now the canonical production runtime target for the app layer
+
+What is still being pursued:
+- create and store a local backup of the old Neon database, if access becomes possible again
+- migrate any missing historical production data into AWS RDS
+- finish any remaining operational cleanup such as custom domain cutover
+- keep Hermes as the operations/backup/control repo for portability work
+
+The biggest current blocker is data extraction from the legacy Neon source. Direct `pg_dump` currently fails because Neon returns a data transfer quota error.
+
+---
+
+## Access / Credentials Context
+
+Future sessions should know where access currently comes from and how to continue without re-discovering everything.
+
+### Repo locations
+- Chronos app repo: `C:\Users\olire\Documents\workspace_python\FloLabs_Chronos`
+- Hermes ops repo: `C:\Users\olire\Documents\workspace_python\FloLabs_Hermes`
+- Hephaestus repo: `C:\Users\olire\Documents\workspace_python\hephaestus-international`
+
+### Environment / secret sources
+- `.env.local` and `.env.production.local` in the Chronos repo contain the runtime values used for local/dev and deploy scripting
+- these files include AWS runtime values and also historically contained Neon values
+- do not commit secrets
+- use the existing env files for operational continuity, but prefer AWS-backed values for runtime/deploy decisions
+
+### AWS access context
+- AWS CLI is already authenticated in this environment
+- App Runner service: `flolabs-chronos`
+- Service ARN: `arn:aws:apprunner:us-east-1:975049954782:service/flolabs-chronos/b6416d84200e4c5a9d884f8f4c134aaf`
+- Service URL: `https://hcmsmnfq5q.us-east-1.awsapprunner.com`
+- RDS + Redis details are available through `deploy/aws/provision-output.json` and the local env files
+- deployment entry point: `deploy/aws/deploy-app.ps1`
+
+### Vercel access context
+A Vercel token is already present in local env files for domain/API operations.
+- Team ID: `team_6Y3HFbsxBOKvTmB6Hft71t5G`
+- Project ID: `prj_3MFDCbI5X7AEOozfYWvlNd5wwUL7`
+- Custom domain in play: `athensgreecemarathon.com`
+
+### Neon access context
+Legacy Neon credentials still exist in local env files and were enough to attempt direct access, but backup/export is currently blocked by Neon quota.
+- direct `pg_dump` attempt failed with: `Your project has exceeded the data transfer quota. Upgrade your plan to increase limits.`
+- local record of this failed attempt exists in:
+  `backups\chronos-neon-backup-attempt-20260420-010019.txt`
+
+### How to regain "full access"
+If a future session needs the full historical source DB contents, one of these must happen:
+1. Neon quota is increased or reset, then rerun `pg_dump`
+2. a human downloads/export shares a Neon backup artifact
+3. another authoritative source DB dump is provided
+
+Until then, AWS app/runtime access is available, but full legacy data extraction is not.
 
 ---
 

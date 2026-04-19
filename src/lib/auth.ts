@@ -76,20 +76,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 )
                 .limit(1);
               if (!linkedApplicant) {
-                // Operational fallback: privileged roles can still access Chronos even when
-                // applicant linkage is missing or not yet migrated.
-                if (fallbackRole === "admin" || fallbackRole === "hr") {
-                  return {
-                    id: user.id,
-                    email: user.email,
-                    name: user.name,
-                    profilePictureUrl: user.profilePictureUrl ?? null,
-                    role: fallbackRole,
-                    teamId: user.teamId,
-                    isActive: user.isActive,
-                  };
-                }
-                return null;
+                // Operational fallback: when applicants are not yet migrated into the current
+                // environment, allow active Chronos users to authenticate from the users table.
+                return {
+                  id: user.id,
+                  email: user.email,
+                  name: user.name,
+                  profilePictureUrl: user.profilePictureUrl ?? null,
+                  role: fallbackRole,
+                  teamId: user.teamId,
+                  isActive: user.isActive,
+                };
               }
               if (!linkedApplicant.isActive) return null;
 
@@ -103,19 +100,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 isActive: linkedApplicant.isActive,
               };
             } catch {
-              // Compatibility fallback while applicant profile columns are being migrated.
-              const [joinedApplicant] = await db
-                .select({ stage: applicants.stage, status: applicants.status })
-                .from(applicants)
-                .where(eq(applicants.chronosUserId, user.id))
-                .limit(1);
-              if (!joinedApplicant) return null;
-              const stage = joinedApplicant.stage?.toLowerCase() ?? "";
-              const status = joinedApplicant.status?.toLowerCase() ?? "";
-              if (status === "terminated") return null;
-              if (!(stage === "joined" || status === "joined" || status === "active")) {
-                if (fallbackRole !== "admin" && fallbackRole !== "hr") return null;
-              }
+              // Compatibility fallback while applicant data is missing or partially migrated.
+              return {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                profilePictureUrl: user.profilePictureUrl ?? null,
+                role: fallbackRole,
+                teamId: user.teamId,
+                isActive: user.isActive,
+              };
             }
           }
 

@@ -25,7 +25,11 @@ function createDb() {
     return drizzleNeon(sql, { schema });
   }
 
-  pool = new Pool({ connectionString });
+  const needsRelaxedSsl = /sslmode=require/i.test(connectionString);
+  pool = new Pool({
+    connectionString,
+    ...(needsRelaxedSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+  });
   return drizzleNode(pool, { schema });
 }
 

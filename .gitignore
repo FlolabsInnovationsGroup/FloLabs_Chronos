@@ -52,3 +52,9 @@ next-env.d.ts
 scripts/hubspot-import-data.json
 scripts/hubspot-import-data.jsonl
 scripts/hubspot-import.checkpoint
+
+# AWS deploy artifacts
+/deploy/aws/provision-output.json
+/deploy/aws/apprunner-source.json
+/deploy/aws/apprunner-service.json
+/deploy/aws/apprunner-ecr-trust-policy.json

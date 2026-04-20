@@ -41,6 +41,19 @@ What is still being pursued:
 
 The biggest current blocker is data extraction from the legacy Neon source. Direct `pg_dump` currently fails because Neon returns a data transfer quota error.
 
+### Restart Handoff Note
+
+If a session resumes after an OpenClaw or gateway restart, continue from this exact operational purpose first:
+- patch the installed OpenClaw WhatsApp watchdog so idle sessions do not force-reconnect every 30 minutes
+- restart the OpenClaw gateway
+- verify the repeating `status 499` WhatsApp disconnect loop stops
+- then continue normal Chronos and Hephaestus deployment work without re-investigating the disconnect issue from scratch
+
+Root cause already confirmed in installed OpenClaw dist files:
+- `...openclaw\\dist\\extensions\\whatsapp\\login-BPCVMYVA.js`
+- hardcoded `messageTimeoutMs = 1800 * 1e3`
+- watchdog forces reconnect with status `499` after 30m without inbound messages
+
 ---
 
 ## Access / Credentials Context

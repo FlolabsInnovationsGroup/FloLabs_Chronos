@@ -195,6 +195,9 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 
 ## Recent Updates
 
+- 2026-04-21: Verified AWS Chronos transfer readiness. Live App Runner is running, AWS RDS holds 17,802 time entries across 106 projects, and CSV-to-RDS verification found only 12 missing unique source `Entry ID`s. Verification note saved at `notes/transfer-verification-2026-04-21.md`.
+- 2026-04-21: Backfilled `user_email_aliases` from current `users.email` values in AWS so all migrated users can sign in with their current Chronos email and existing password. Note: legacy alternate emails beyond the current primary email still require a later authoritative alias backfill if needed.
+
 - Added phase-1 duplicate-person detection contract for shared applicant data: Chronos/Hephaestus now surface likely duplicate accounts for HR review using strong signals first (phone, LinkedIn) and supporting profile overlap signals, without auto-merging records.
 - Added phase-2 duplicate review persistence in Chronos with shared review statuses so hephaestus can consume maintained duplicate decisions instead of relying on local-only heuristics.
 

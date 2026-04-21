@@ -4,6 +4,36 @@
 
 Chronos is FloLabs' internal time-tracking and workforce coordination tool. It replaces Toggl for time capture, but the product is broader than a timer: it manages projects, role-scoped reporting, invite-only onboarding, Notion-backed team data, and downstream sync into Notion for operational visibility.
 
+### Hetzner + Plesk target deployment architecture (2026-04)
+
+The current target production direction is to run Chronos on the existing Hetzner server that already hosts multiple domains through Plesk, while keeping Chronos operationally isolated from those hosted sites.
+
+Chosen deployment principles:
+- Plesk remains the control plane for domain management, TLS certificates, and reverse-proxy ingress.
+- Chronos runs as an isolated application stack on the same host, not as a shared in-Plesk app mixed with other hosted sites.
+- Chronos data services must stay logically separate from unrelated workloads already on the server.
+- Resource consumption should stay modest enough for a base Hetzner plan.
+
+Preferred stack shape for this host:
+- one isolated Chronos app service running under its own system user
+- one isolated Chronos Postgres service/database local to the host
+- one isolated Chronos Redis service local to the host
+- persistent storage dedicated to Chronos data
+- Plesk reverse proxy forwarding the Chronos domain/subdomain to the Chronos app's internal port
+
+Runtime preference on this specific host:
+- prefer host-level system services over Docker to minimize moving parts on a Plesk-managed multi-domain server where Docker is not already installed
+- keep Chronos bound to localhost or a private host port and expose it only through Plesk-managed ingress
+- use dedicated service names, data directories, and least-privilege users so Chronos remains operationally separate from the other hosted sites
+
+Operational rules for this topology:
+- do not disturb the 13 existing hosted domains
+- do not replace or bypass Plesk for ingress, certificates, or domain ownership
+- minimize host-level changes outside the isolated Chronos stack and the required runtime dependencies
+- keep backup/export procedures explicit for Chronos DB and KV data
+- prefer low-RAM, low-CPU defaults and only scale upward if real usage requires it
+- initial migration strategy should separate deployment from data reconstruction: bring up the app first, then reconstruct historical data from the Notion export and reconcile live state from the current production database if needed
+
 ### Current Users Directory Architecture (2026-04)
 
 - `GET /api/users` powers the Users page (`/team`).
@@ -72,6 +102,12 @@ The current product model is:
 
 Chronos supports **multiple teams per user**.
 
+#### Canonical identity vs Chronos `users` (Phase 2)
+
+- **Applicants / leads** (`applicants`) are the canonical source for: NextAuth session identity (`session.user.id` is the applicant id), access gating from applicant stage/status, session profile fields (name, role, team pointer, profile image), forgot-password identity, and **Notion Team Member linkage** (`applicants.notion_team_member_id`).
+- **`users`** remains a compatibility layer for foreign keys that still target `users.id`: credentials (password hash), `user_email_aliases`, `team_memberships`, time entries, tags, entry discussions, timers in Redis, and related authored records.
+- **`session.user.chronosUserId`** holds the linked Chronos `users.id`. Server routes that touch ownership or membership must use `chronosUserId` (or helpers built on it), not `session.user.id`, when querying those tables.
+
 Key rules:
 - `team_memberships` is the source of truth for Chronos' internal user ↔ team mapping.
 - `users.team_id` remains as a legacy/default team pointer for compatibility with older logic and UI assumptions.
@@ -85,7 +121,7 @@ Key rules:
 Chronos should be treated as **read-only for team memberships** from a product perspective.
 
 That means:
-- Notion Team Members data is the operational source of truth for **which teams** a **linked** user belongs to (the `Team` relation on their Team Member page), once `users.notion_team_member_id` is set.
+- Notion Team Members data is the operational source of truth for **which teams** a **linked** person belongs to (the `Team` relation on their Team Member page), once **`applicants.notion_team_member_id`** is set. The teams cron mirrors the same page id onto `users.notion_team_member_id` so legacy joins keep working until ownership FKs migrate off `users`.
 - Chronos must **not** infer or match Team Member pages by user email or by name. Admins explicitly pick a Team Members row (search) or choose **create new** when inviting; that page id is stored on `invitations.notion_team_member_id` and copied to `users.notion_team_member_id` on registration. Admins can also set or clear the link when editing a member.
 - When Chronos creates a **new** Team Member page from an invitation, it must populate the invited teams into the `Team` relation at creation time.
 - Chronos now attempts to apply a Notion template during that Team Member create call: it uses `NOTION_TEAM_MEMBER_TEMPLATE_ID` when configured, otherwise it asks Notion to use the Team Members data source's default template.

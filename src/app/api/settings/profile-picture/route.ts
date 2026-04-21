@@ -1,6 +1,7 @@
 import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -14,6 +15,10 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const chronosUserId = chronosUserIdFromSessionUser(session.user);
+  if (!chronosUserId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -45,7 +50,7 @@ export async function POST(request: Request) {
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
   try {
-    const blob = await put(`chronos/profile-pictures/${session.user.id}/${Date.now()}-${safeName}`, file, {
+    const blob = await put(`chronos/profile-pictures/${chronosUserId}/${Date.now()}-${safeName}`, file, {
       access: "public",
       addRandomSuffix: true,
       token,

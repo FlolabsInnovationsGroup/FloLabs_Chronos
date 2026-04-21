@@ -50,109 +50,40 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const { email, password } = parsed.data;
 
-        // Dynamic import to avoid DB init at build time
         try {
+          const { findApplicantForCredentialEmail } = await import("./applicant-auth");
           const { findUserByAnyEmail } = await import("./user-email-aliases");
           const { db } = await import("./db");
-          const { applicants } = await import("./db/schema");
-          const { and, eq, ne, or, sql } = await import("drizzle-orm");
+          const { users } = await import("./db/schema");
+          const { eq } = await import("drizzle-orm");
 
-          const user = await findUserByAnyEmail(email.toLowerCase());
+          if (!db) return null;
 
-          if (!user) return null;
-          if (!user.isActive) return null;
+          const applicant = await findApplicantForCredentialEmail(email.toLowerCase());
+          if (!applicant || !applicantAccessEnabled(applicant)) return null;
+
+          let user =
+            applicant.chronosUserId
+              ? (await db.select().from(users).where(eq(users.id, applicant.chronosUserId)).limit(1))[0]
+              : undefined;
+          if (!user) {
+            const byEmail = await findUserByAnyEmail(applicant.email.toLowerCase());
+            if (byEmail) user = byEmail;
+          }
+          if (!user?.isActive) return null;
+
           const valid = await bcrypt.compare(password, user.password);
           if (!valid) return null;
-          const fallbackRole = normalizeRole(user.role);
-
-          if (db) {
-            try {
-              const [canonicalApplicant] = await db
-                .select({
-                  id: applicants.id,
-                  email: applicants.email,
-                  name: applicants.name,
-                  stage: applicants.stage,
-                  status: applicants.status,
-                  role: applicants.role,
-                  teamId: applicants.teamId,
-                  isActive: applicants.isActive,
-                  profilePictureUrl: applicants.profilePictureUrl,
-                })
-                .from(applicants)
-                .where(eq(applicants.email, email.toLowerCase()))
-                .limit(1);
-
-              if (canonicalApplicant) {
-                if (!applicantAccessEnabled(canonicalApplicant)) return null;
-                return {
-                  id: canonicalApplicant.id,
-                  email: canonicalApplicant.email,
-                  name: canonicalApplicant.name,
-                  profilePictureUrl: canonicalApplicant.profilePictureUrl ?? user.profilePictureUrl ?? null,
-                  role: normalizeRole(canonicalApplicant.role ?? user.role),
-                  teamId: canonicalApplicant.teamId ?? user.teamId,
-                  isActive: Boolean(canonicalApplicant.isActive),
-                  applicantStatus: normalizeApplicantStatus(canonicalApplicant.status),
-                  chronosUserId: user.id,
-                };
-              }
-
-              const [linkedApplicant] = await db
-                .select({
-                  id: applicants.id,
-                  email: applicants.email,
-                  name: applicants.name,
-                  stage: applicants.stage,
-                  status: applicants.status,
-                  role: applicants.role,
-                  teamId: applicants.teamId,
-                  isActive: applicants.isActive,
-                  profilePictureUrl: applicants.profilePictureUrl,
-                })
-                .from(applicants)
-                .where(and(eq(applicants.chronosUserId, user.id), ne(applicants.status, "terminated")))
-                .limit(1);
-
-              if (linkedApplicant && applicantAccessEnabled(linkedApplicant)) {
-                return {
-                  id: linkedApplicant.id,
-                  email: linkedApplicant.email,
-                  name: linkedApplicant.name,
-                  profilePictureUrl: linkedApplicant.profilePictureUrl ?? user.profilePictureUrl ?? null,
-                  role: normalizeRole(linkedApplicant.role ?? user.role),
-                  teamId: linkedApplicant.teamId ?? user.teamId,
-                  isActive: Boolean(linkedApplicant.isActive),
-                  applicantStatus: normalizeApplicantStatus(linkedApplicant.status),
-                  chronosUserId: user.id,
-                };
-              }
-
-              return null;
-            } catch {
-              return {
-                id: user.id,
-                email: user.email,
-                name: user.name,
-                profilePictureUrl: user.profilePictureUrl ?? null,
-                role: fallbackRole,
-                teamId: user.teamId,
-                isActive: user.isActive,
-                applicantStatus: null,
-                chronosUserId: user.id,
-              };
-            }
-          }
 
           return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            profilePictureUrl: user.profilePictureUrl ?? null,
-            role: normalizeRole(user.role),
-            teamId: user.teamId,
-            isActive: user.isActive,
-            applicantStatus: null,
+            id: applicant.id,
+            email: applicant.email,
+            name: applicant.name,
+            profilePictureUrl: applicant.profilePictureUrl ?? user.profilePictureUrl ?? null,
+            role: normalizeRole(applicant.role ?? user.role),
+            teamId: applicant.teamId ?? user.teamId,
+            isActive: Boolean(applicant.isActive),
+            applicantStatus: normalizeApplicantStatus(applicant.status),
             chronosUserId: user.id,
           };
         } catch {
@@ -163,7 +94,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user, trigger }) {
-      // On initial sign-in, seed the token from the authorize() return value.
       if (user) {
         const t = token as Record<string, unknown>;
         t.id = user.id;
@@ -176,27 +106,49 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         t.roleRefreshedAt = Date.now();
       }
 
-      // On subsequent calls (session refresh, "update" trigger), re-read role/isActive
-      // from the DB so that admin-applied role changes take effect without re-login.
       const t = token as Record<string, unknown>;
       const applicantId = t.id as string | undefined;
+      const chronosFromToken = t.chronosUserId as string | undefined;
       const lastRefresh = (t.roleRefreshedAt as number | undefined) ?? 0;
-      const lastRefresh = (t.roleRefreshedAt as number | undefined) ?? 0;
-      const REFRESH_INTERVAL_MS = 30_000; // re-check DB every 30 seconds
+      const REFRESH_INTERVAL_MS = 30_000;
 
       if (applicantId && (trigger === "update" || Date.now() - lastRefresh > REFRESH_INTERVAL_MS)) {
         try {
           const { db } = await import("./db");
           const { applicants, users } = await import("./db/schema");
-          const { and, eq, ne, or, sql } = await import("drizzle-orm");
+          const { eq } = await import("drizzle-orm");
 
           if (db) {
-            let fresh:
-              | { role: string | null; teamId: string | null; isActive: boolean; profilePictureUrl: string | null; status: string | null; chronosUserId: string | null }
-              | undefined;
-            try {
-              [fresh] = await db
+            type FreshRow = {
+              id: string;
+              role: string | null;
+              teamId: string | null;
+              isActive: boolean;
+              profilePictureUrl: string | null;
+              status: string | null;
+              chronosUserId: string | null;
+            };
+
+            let fresh: FreshRow | undefined;
+            const [byPk] = await db
+              .select({
+                id: applicants.id,
+                role: applicants.role,
+                teamId: applicants.teamId,
+                isActive: applicants.isActive,
+                profilePictureUrl: applicants.profilePictureUrl,
+                status: applicants.status,
+                chronosUserId: applicants.chronosUserId,
+              })
+              .from(applicants)
+              .where(eq(applicants.id, applicantId))
+              .limit(1);
+            fresh = byPk;
+
+            if (!fresh && chronosFromToken) {
+              const [byChronos] = await db
                 .select({
+                  id: applicants.id,
                   role: applicants.role,
                   teamId: applicants.teamId,
                   isActive: applicants.isActive,
@@ -205,26 +157,43 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                   chronosUserId: applicants.chronosUserId,
                 })
                 .from(applicants)
-                .where(eq(applicants.id, applicantId))
+                .where(eq(applicants.chronosUserId, chronosFromToken))
                 .limit(1);
-            } catch {
-              // Keep fallback below.
+              fresh = byChronos;
+            }
+
+            if (!fresh && !chronosFromToken) {
+              const [legacy] = await db
+                .select({
+                  id: applicants.id,
+                  role: applicants.role,
+                  teamId: applicants.teamId,
+                  isActive: applicants.isActive,
+                  profilePictureUrl: applicants.profilePictureUrl,
+                  status: applicants.status,
+                  chronosUserId: applicants.chronosUserId,
+                })
+                .from(applicants)
+                .where(eq(applicants.chronosUserId, applicantId))
+                .limit(1);
+              fresh = legacy;
             }
 
             if (fresh) {
+              t.id = fresh.id;
               t.role = normalizeRole(fresh.role);
               t.teamId = fresh.teamId ?? null;
               t.isActive = fresh.isActive;
               t.profilePictureUrl = fresh.profilePictureUrl ?? null;
               t.applicantStatus = normalizeApplicantStatus(fresh.status);
-              t.chronosUserId = fresh.chronosUserId ?? null;
+              t.chronosUserId = fresh.chronosUserId ?? chronosFromToken ?? null;
               t.roleRefreshedAt = Date.now();
 
               if (!applicantAccessEnabled({ status: fresh.status, isActive: fresh.isActive })) {
                 return null as unknown as typeof token;
               }
             } else {
-              const legacyUserId = t.chronosUserId as string | undefined;
+              const legacyUserId = chronosFromToken ?? applicantId;
               if (legacyUserId) {
                 const [legacy] = await db
                   .select({
@@ -241,6 +210,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                   t.teamId = legacy.teamId ?? null;
                   t.isActive = legacy.isActive;
                   t.profilePictureUrl = legacy.profilePictureUrl ?? null;
+                  t.chronosUserId = legacyUserId;
                   t.roleRefreshedAt = Date.now();
                 }
               }
@@ -282,4 +252,3 @@ declare module "next-auth" {
     };
   }
 }
-

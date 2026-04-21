@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { canManageProjects } from "@/lib/permissions";
 import { broadcastDataChange } from "@/lib/realtime";
+import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 export async function GET() {
   const session = await auth();
@@ -54,13 +55,16 @@ export async function POST(req: Request) {
   }
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
 
+  const chronosUserId = chronosUserIdFromSessionUser(session.user);
+  if (!chronosUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json();
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
 
   const [project] = await db
     .insert(projects)
-    .values({ ...parsed.data, createdById: session.user.id })
+    .values({ ...parsed.data, createdById: chronosUserId })
     .returning();
   broadcastDataChange("projects");
   return NextResponse.json({ project }, { status: 201 });

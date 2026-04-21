@@ -9,6 +9,7 @@ import { sendDiscordEmbed, buildTimerStopEmbed } from "@/lib/discord";
 import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 import { setNotionLinkedTaskInProgressOnStop } from "@/lib/notion";
 import { getTimerStopValidation } from "@/lib/timer-rules";
+import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 const stopSchema = z.object({ discard: z.boolean().optional() });
 
@@ -16,9 +17,12 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const chronosUserId = chronosUserIdFromSessionUser(session.user);
+  if (!chronosUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json().catch(() => ({}));
   const { discard } = stopSchema.parse(body);
-  const userId = session.user.id;
+  const userId = chronosUserId;
 
   const timer = await getActiveTimer(userId);
   if (!timer) return NextResponse.json({ error: "No active timer" }, { status: 404 });

@@ -13,6 +13,7 @@ import {
 import { broadcastDiscussionChange } from "@/lib/realtime";
 import { fetchRepliesForDiscussions } from "@/app/api/discussions/[id]/replies/route";
 import type { EntryDiscussion } from "@/types";
+import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 function toDiscussion(row: {
   discussion: typeof entryDiscussions.$inferSelect;
@@ -43,6 +44,10 @@ export async function GET() {
   if (!db) return NextResponse.json({ discussions: [] });
 
   const viewer = session.user;
+  const viewerChronosId = chronosUserIdFromSessionUser(viewer);
+  if (!isAdmin(viewer) && !viewerChronosId) {
+    return NextResponse.json({ discussions: [] });
+  }
 
   // Build query for unresolved discussions visible to this viewer
   const startedByAlias = users;
@@ -90,15 +95,16 @@ export async function GET() {
     // Filter: started by viewer OR entry owner is in accessible scope
     rows = rows.filter(
       (r) =>
-        r.discussion.startedById === viewer.id ||
+        (viewerChronosId && r.discussion.startedById === viewerChronosId) ||
         (r.entry?.userId && accessibleUserIds.includes(r.entry.userId))
     );
   } else {
     // Member: only discussions on their own entries
+    if (!viewerChronosId) return NextResponse.json({ discussions: [] });
     const myEntries = await db
       .select({ id: timeEntries.id })
       .from(timeEntries)
-      .where(eq(timeEntries.userId, viewer.id));
+      .where(eq(timeEntries.userId, viewerChronosId));
 
     if (myEntries.length === 0) return NextResponse.json({ discussions: [] });
 
@@ -151,6 +157,8 @@ export async function POST(req: NextRequest) {
 
   const { entryId, message } = parsed.data;
   const viewer = session.user;
+  const viewerChronosId = chronosUserIdFromSessionUser(viewer);
+  if (!viewerChronosId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // Load entry to check ownership
   const [entry] = await db.select().from(timeEntries).where(eq(timeEntries.id, entryId)).limit(1);
@@ -161,7 +169,7 @@ export async function POST(req: NextRequest) {
 
   const [discussion] = await db
     .insert(entryDiscussions)
-    .values({ entryId, startedById: viewer.id, message })
+    .values({ entryId, startedById: viewerChronosId, message })
     .returning();
 
   broadcastDiscussionChange(entryId);
@@ -170,7 +178,7 @@ export async function POST(req: NextRequest) {
   const [startedByUser] = await db
     .select({ id: users.id, name: users.name })
     .from(users)
-    .where(eq(users.id, viewer.id))
+    .where(eq(users.id, viewerChronosId))
     .limit(1);
 
   const [project] = entry.projectId

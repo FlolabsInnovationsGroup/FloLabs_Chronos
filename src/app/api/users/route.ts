@@ -19,11 +19,11 @@ export async function GET() {
 
     /** Admin/HR directory: JWT role can diverge from `users.role` during migrations — honor both. */
     let effectiveElevated = isAdminLikeRole(session.user.role);
-    if (db) {
+    if (db && session.user.chronosUserId) {
       const [sessionDbUser] = await db
         .select({ role: usersTable.role })
         .from(usersTable)
-        .where(eq(usersTable.id, session.user.id))
+        .where(eq(usersTable.id, session.user.chronosUserId))
         .limit(1);
       effectiveElevated = isAdminLikeRole(sessionDbUser?.role) || isAdminLikeRole(session.user.role);
     }

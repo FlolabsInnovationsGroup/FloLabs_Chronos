@@ -4,21 +4,26 @@ import { auth } from "@/lib/auth";
 import { TimerProvider } from "@/hooks/use-timer";
 import { redirect } from "next/navigation";
 import { markUserWebsiteVisit } from "@/lib/user-activity";
+import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user) {
     redirect("/login");
   }
+  const chronosUserId = chronosUserIdFromSessionUser(session.user);
+  if (!chronosUserId) {
+    redirect("/login");
+  }
   try {
-    await markUserWebsiteVisit(session.user.id, session.user.email);
+    await markUserWebsiteVisit(chronosUserId, session.user.email);
   } catch (error) {
     console.error('[dashboard/layout] markUserWebsiteVisit failed', error);
   }
 
   return (
     <SessionProvider session={session}>
-      <TimerProvider userId={session.user.id}>
+      <TimerProvider userId={chronosUserId}>
         <DashboardLayout>{children}</DashboardLayout>
       </TimerProvider>
     </SessionProvider>

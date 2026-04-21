@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getActiveTimer, getAllActiveTimers } from "@/lib/redis";
+import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -14,6 +15,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ timers });
   }
 
-  const timer = await getActiveTimer(session.user.id);
+  const chronosUserId = chronosUserIdFromSessionUser(session.user);
+  if (!chronosUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const timer = await getActiveTimer(chronosUserId);
   return NextResponse.json({ timer });
 }

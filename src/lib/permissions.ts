@@ -5,10 +5,20 @@ import { teamMemberships, teams, users } from "@/lib/db/schema";
 import { isAdminLikeRole } from "@/lib/role-utils";
 
 export interface SessionUserLike {
+  /** Canonical applicant id (leads pipeline). */
   id: string;
+  /** Chronos `users.id` for FKs, timers, tags, and team_memberships. */
+  chronosUserId?: string | null;
   role: Role;
   teamId: string | null;
   isActive: boolean;
+}
+
+/** Map session identity to Chronos user rows (`users.id`). */
+export function sessionOwnershipUserId(user: SessionUserLike): string {
+  const linked = user.chronosUserId;
+  if (typeof linked === "string" && linked.length > 0) return linked;
+  return user.id;
 }
 
 export function isAdmin(user?: Pick<SessionUserLike, "role"> | null): boolean {
@@ -45,10 +55,11 @@ export async function getAccessibleTeamIds(user: SessionUserLike): Promise<strin
   if (isAdmin(user)) return null;
   if (!db) return user.teamId ? [user.teamId] : [];
 
+  const ownerId = sessionOwnershipUserId(user);
   const rows = await db
     .select({ teamId: teamMemberships.teamId })
     .from(teamMemberships)
-    .where(eq(teamMemberships.userId, user.id));
+    .where(eq(teamMemberships.userId, ownerId));
 
   if (rows.length > 0) {
     return rows.map((row) => row.teamId);
@@ -59,11 +70,12 @@ export async function getAccessibleTeamIds(user: SessionUserLike): Promise<strin
 
 export async function getAccessibleUserIds(user: SessionUserLike): Promise<string[] | null> {
   if (isAdmin(user)) return null;
-  if (!db) return [user.id];
-  if (isMember(user)) return [user.id];
+  const ownerId = sessionOwnershipUserId(user);
+  if (!db) return [ownerId];
+  if (isMember(user)) return [ownerId];
 
   const teamIds = await getAccessibleTeamIds(user);
-  if (!teamIds || teamIds.length === 0) return [user.id];
+  if (!teamIds || teamIds.length === 0) return [ownerId];
 
   const rows = await db
     .selectDistinct({ id: teamMemberships.userId })
@@ -71,7 +83,7 @@ export async function getAccessibleUserIds(user: SessionUserLike): Promise<strin
     .where(inArray(teamMemberships.teamId, teamIds));
 
   const ids = rows.map((row) => row.id);
-  return ids.length > 0 ? ids : [user.id];
+  return ids.length > 0 ? ids : [ownerId];
 }
 
 export async function canAccessUser(user: SessionUserLike, targetUserId: string): Promise<boolean> {
@@ -82,7 +94,7 @@ export async function canAccessUser(user: SessionUserLike, targetUserId: string)
 /** Admins, entry owners, and team leads (for teammates in scope) may edit/delete time entries. */
 export async function canManageTimeEntry(user: SessionUserLike, entryOwnerUserId: string): Promise<boolean> {
   if (isAdmin(user)) return true;
-  if (user.id === entryOwnerUserId) return true;
+  if (sessionOwnershipUserId(user) === entryOwnerUserId) return true;
   if (isTeamLead(user)) return canAccessUser(user, entryOwnerUserId);
   return false;
 }
@@ -172,7 +184,7 @@ export async function getAccessibleTeams(user: SessionUserLike) {
 
 /** Admins and team leads can discuss entries of OTHER users they can see. Not own entries. */
 export async function canStartDiscussion(viewer: SessionUserLike, entryOwnerUserId: string): Promise<boolean> {
-  if (viewer.id === entryOwnerUserId) return false;
+  if (sessionOwnershipUserId(viewer) === entryOwnerUserId) return false;
   if (isAdmin(viewer)) return true;
   if (isTeamLead(viewer)) return canAccessUser(viewer, entryOwnerUserId);
   return false;
@@ -184,14 +196,14 @@ export function canResolveDiscussion(
   discussion: { startedById: string }
 ): boolean {
   if (isAdmin(viewer)) return true;
-  return viewer.id === discussion.startedById;
+  return sessionOwnershipUserId(viewer) === discussion.startedById;
 }
 
 /** Who can view discussions on an entry */
 export async function canViewDiscussions(viewer: SessionUserLike, entryOwnerUserId: string): Promise<boolean> {
   if (isAdmin(viewer)) return true;
   if (isTeamLead(viewer)) return canAccessUser(viewer, entryOwnerUserId);
-  return viewer.id === entryOwnerUserId;
+  return sessionOwnershipUserId(viewer) === entryOwnerUserId;
 }
 
 export async function replaceUserTeamMemberships(userId: string, teamIds: string[]) {

@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, timeEntryTags, projects, tags, users } from "@/lib/db/schema";
+import { timeEntries, timeEntryTags, projects, tags } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { deleteAndNotifyEntry, syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 import { canManageTimeEntry } from "@/lib/permissions";
+import { chronosUserDisplayAndNotionTeamMemberId } from "@/lib/chronos-user-notion";
 
 const patchSchema = z.object({
   description: z.string().optional(),
@@ -200,14 +201,14 @@ export async function DELETE(
   const [projectRow] = entry.projectId
     ? await db.select({ name: projects.name }).from(projects).where(eq(projects.id, entry.projectId)).limit(1)
     : [];
-  const [userRow] = await db.select({ name: users.name, notionTeamMemberId: users.notionTeamMemberId }).from(users).where(eq(users.id, entry.userId)).limit(1);
+  const profile = await chronosUserDisplayAndNotionTeamMemberId(entry.userId);
 
   await db.delete(timeEntries).where(eq(timeEntries.id, id));
 
   await deleteAndNotifyEntry({
     notionPageId: entry.notionPageId,
-    notionTeamMemberId: userRow?.notionTeamMemberId ?? null,
-    userName: userRow?.name ?? "Unknown",
+    notionTeamMemberId: profile?.notionTeamMemberId ?? null,
+    userName: profile?.name ?? "Unknown",
     project: projectRow?.name ?? "No project",
     tags: tagNames,
     description: entry.description ?? "",

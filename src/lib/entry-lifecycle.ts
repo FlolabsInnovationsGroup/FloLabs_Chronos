@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { projects, tags, timeEntries, timeEntryTags, users } from "@/lib/db/schema";
+import { applicants, projects, tags, timeEntries, timeEntryTags, users } from "@/lib/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { markEntryDeleted, syncEntryToNotionFull, updateEntryStatus } from "@/lib/notion";
 import {
@@ -20,15 +20,29 @@ async function loadEntry(entryId: string) {
         email: users.email,
         notionTeamMemberId: users.notionTeamMemberId,
       },
+      applicantName: applicants.name,
+      applicantNotionTeamMemberId: applicants.notionTeamMemberId,
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
+    .leftJoin(applicants, eq(applicants.chronosUserId, users.id))
     .where(eq(timeEntries.id, entryId))
     .limit(1);
 
   const row = rows[0];
   if (!row) return null;
+
+  const resolvedName = row.applicantName?.trim() || row.user?.name;
+  const resolvedNotion =
+    row.applicantNotionTeamMemberId?.trim() || row.user?.notionTeamMemberId?.trim() || null;
+  const userPayload = row.user
+    ? {
+        ...row.user,
+        name: resolvedName ?? row.user.name,
+        notionTeamMemberId: resolvedNotion,
+      }
+    : undefined;
 
   const tagRows = await db
     .select({ id: tags.id, name: tags.name })
@@ -39,7 +53,7 @@ async function loadEntry(entryId: string) {
   return {
     ...row.entry,
     project: row.project ?? undefined,
-    user: row.user ?? undefined,
+    user: userPayload,
     tags: tagRows,
   };
 }

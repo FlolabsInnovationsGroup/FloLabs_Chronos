@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { isAdmin, canResolveDiscussion } from "@/lib/permissions";
 import { broadcastDiscussionChange } from "@/lib/realtime";
 import type { EntryDiscussion } from "@/types";
+import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 const patchSchema = z.object({
   resolved: z.literal(true),
@@ -23,6 +24,8 @@ export async function PATCH(
 
   const { id } = await params;
   const viewer = session.user;
+  const viewerChronosId = chronosUserIdFromSessionUser(viewer);
+  if (!viewerChronosId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
   const parsed = patchSchema.safeParse(body);
@@ -37,7 +40,7 @@ export async function PATCH(
 
   const [updated] = await db
     .update(entryDiscussions)
-    .set({ resolvedAt: new Date(), resolvedById: viewer.id, updatedAt: new Date() })
+    .set({ resolvedAt: new Date(), resolvedById: viewerChronosId, updatedAt: new Date() })
     .where(eq(entryDiscussions.id, id))
     .returning();
 
@@ -76,12 +79,17 @@ export async function DELETE(
 
   const { id } = await params;
   const viewer = session.user;
+  const viewerChronosId = chronosUserIdFromSessionUser(viewer);
 
   const [discussion] = await db.select().from(entryDiscussions).where(eq(entryDiscussions.id, id)).limit(1);
   if (!discussion) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Admin can always delete; starter can delete if unresolved
-  const canDelete = isAdmin(viewer) || (viewer.id === discussion.startedById && discussion.resolvedAt === null);
+  const canDelete =
+    isAdmin(viewer) ||
+    (Boolean(viewerChronosId) &&
+      viewerChronosId === discussion.startedById &&
+      discussion.resolvedAt === null);
   if (!canDelete) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   await db.delete(entryDiscussions).where(eq(entryDiscussions.id, id));

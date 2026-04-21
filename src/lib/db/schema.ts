@@ -298,7 +298,7 @@ export const applicants = pgTable(
     hubspotLastModifiedAt: timestamp("hubspot_last_modified_at", { withTimezone: true }),
     hubspotRawData: jsonb("hubspot_raw_data"),
     syncedToTeamMembers: boolean("synced_to_team_members").notNull().default(false),
-    /** Canonical Chronos profile fields (migration: keep auth credentials in `users`). */
+    /** Canonical Chronos-facing profile + access fields; password stays on `users` until Phase 3. */
     role: text("role").notNull().default("member"),
     teamId: uuid("team_id").references(() => teams.id),
     isActive: boolean("is_active").notNull().default(false),

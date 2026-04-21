@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import { applicants, passwordResetTokens, users } from "@/lib/db/schema";
-import { and, eq, gt, isNull, ne } from "drizzle-orm";
+import { passwordResetTokens, users } from "@/lib/db/schema";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { sendEmail } from "@/lib/mail";
 import { normalizeEmail } from "@/lib/invitations";
+import { findApplicantForCredentialEmail } from "@/lib/applicant-auth";
+import { findUserByAnyEmail } from "@/lib/user-email-aliases";
 
 const schema = z.object({ email: z.string().email() });
 
@@ -15,25 +17,37 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
   const email = normalizeEmail(parsed.data.email);
-  const [applicant] = await db
-    .select({
-      id: applicants.id,
-      email: applicants.email,
-      name: applicants.name,
-      status: applicants.status,
-      stage: applicants.stage,
-      isActive: applicants.isActive,
-      chronosUserId: applicants.chronosUserId,
-    })
-    .from(applicants)
-    .where(and(eq(applicants.email, email), ne(applicants.status, "terminated")))
-    .limit(1);
+  const applicantRow = await findApplicantForCredentialEmail(email);
+  const applicant = applicantRow
+    ? {
+        id: applicantRow.id,
+        email: applicantRow.email,
+        name: applicantRow.name,
+        status: applicantRow.status,
+        stage: applicantRow.stage,
+        isActive: applicantRow.isActive,
+        chronosUserId: applicantRow.chronosUserId,
+      }
+    : null;
 
   if (!applicant || !applicant.isActive) return NextResponse.json({ ok: true });
 
-  const [user] = applicant.chronosUserId
-    ? await db.select({ id: users.id, email: users.email, name: users.name, isActive: users.isActive }).from(users).where(eq(users.id, applicant.chronosUserId)).limit(1)
-    : [];
+  let user =
+    applicant.chronosUserId
+      ? (
+          await db
+            .select({ id: users.id, email: users.email, name: users.name, isActive: users.isActive })
+            .from(users)
+            .where(eq(users.id, applicant.chronosUserId))
+            .limit(1)
+        )[0]
+      : undefined;
+  if (!user) {
+    const byEmail = await findUserByAnyEmail(applicant.email.toLowerCase());
+    if (byEmail) {
+      user = { id: byEmail.id, email: byEmail.email, name: byEmail.name, isActive: byEmail.isActive };
+    }
+  }
 
   if (!user || !user.isActive) return NextResponse.json({ ok: true });
 

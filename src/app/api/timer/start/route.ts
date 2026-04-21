@@ -6,6 +6,7 @@ import { timeEntries, users, projects, tags } from "@/lib/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { sendDiscordEmbed, buildTimerStartEmbed } from "@/lib/discord";
+import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 const startSchema = z.object({
   projectId: z.string().uuid().optional().nullable(),
@@ -19,12 +20,15 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const chronosUserId = chronosUserIdFromSessionUser(session.user);
+  if (!chronosUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json();
   const parsed = startSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
   const { projectId, tagIds, description, notionTaskPageId, notionTaskTitle } = parsed.data;
-  const userId = session.user.id;
+  const userId = chronosUserId;
   const startedAt = Date.now();
 
   let selectedProject: { id: string; requiresTaskOnStop: boolean; name: string } | null = null;

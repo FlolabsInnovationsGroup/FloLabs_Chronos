@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { chronosUserIdFromSessionUser } from '@/lib/chronos-session';
 import { db } from '@/lib/db';
 import { applicants } from '@/lib/db/schema';
 import { inArray } from 'drizzle-orm';
@@ -101,10 +102,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'reviewId and valid status are required' }, { status: 400 });
   }
 
+  const reviewerChronosId = chronosUserIdFromSessionUser(session.user);
+  if (!reviewerChronosId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const review = await updateDuplicateReview({
     reviewId,
     status: status as 'pending' | 'confirmed_duplicate' | 'different_people' | 'merged',
-    reviewedById: session.user.id,
+    reviewedById: reviewerChronosId,
     notes,
     canonicalApplicantId,
   });

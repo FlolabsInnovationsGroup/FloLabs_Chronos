@@ -84,10 +84,9 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Notion Teams DB not configured" }, { status: 503 });
     }
 
-    const [teamPages, memberPages, userRows] = await Promise.all([
+    const [teamPages, memberPages] = await Promise.all([
       queryAllPages(teamsDbId, notionApiKey),
       queryAllPages(teamMembersDbId, notionApiKey),
-      db.select({ id: users.id, email: users.email, notionTeamMemberId: users.notionTeamMemberId }).from(users),
     ]);
 
     // ── STEP 1: Upsert teams ─────────────────────────────────────────────────
@@ -139,36 +138,51 @@ export async function GET(req: Request) {
       memberPageById.set(p.id, p);
     }
 
-    // ── STEP 3: Sync `Team` relation from each user's linked Team Member page ─
-    // Only users with notion_team_member_id are updated here (no email/name matching).
-    // Users without a link keep existing Chronos memberships (e.g. until an admin links Notion).
-    for (const user of userRows) {
-      if (!user.notionTeamMemberId) continue;
+    // ── STEP 3: Sync `Team` relation from each applicant's linked Team Member page ─
+    // Canonical Notion Team Member id lives on `applicants.notion_team_member_id`; `users` is mirrored for FK compatibility.
+    const applicantRows = await db
+      .select({
+        id: applicants.id,
+        email: applicants.email,
+        chronosUserId: applicants.chronosUserId,
+        notionTeamMemberId: applicants.notionTeamMemberId,
+      })
+      .from(applicants)
+      .where(and(isNotNull(applicants.chronosUserId), isNotNull(applicants.notionTeamMemberId)));
 
-      const page = memberPageById.get(user.notionTeamMemberId);
+    for (const row of applicantRows) {
+      const userId = row.chronosUserId!;
+      const notionMemberId = row.notionTeamMemberId!;
+
+      const page = memberPageById.get(notionMemberId);
       if (!page) {
         pagesMissingInNotion++;
-        errors.push(`User ${user.email}: Notion Team Member page ${user.notionTeamMemberId} not found`);
+        errors.push(`Applicant ${row.email}: Notion Team Member page ${notionMemberId} not found`);
         continue;
       }
 
       try {
-        await db.delete(teamMemberships).where(eq(teamMemberships.userId, user.id));
+        await db.delete(teamMemberships).where(eq(teamMemberships.userId, userId));
 
         const notionTeamIds = page.properties["Team"]?.relation?.map((r) => r.id) ?? [];
         const chronosTeamIds = notionTeamIds.map((nid) => teamIdByNotionPageId.get(nid)).filter((id): id is string => Boolean(id));
 
         if (chronosTeamIds.length > 0) {
-          await db.insert(teamMemberships).values(chronosTeamIds.map((teamId) => ({ userId: user.id, teamId }))).onConflictDoNothing();
-          await db.update(users).set({ teamId: chronosTeamIds[0], updatedAt: new Date() }).where(eq(users.id, user.id));
+          await db.insert(teamMemberships).values(chronosTeamIds.map((teamId) => ({ userId, teamId }))).onConflictDoNothing();
+          await db
+            .update(users)
+            .set({ teamId: chronosTeamIds[0], notionTeamMemberId: notionMemberId, updatedAt: new Date() })
+            .where(eq(users.id, userId));
+          await db.update(applicants).set({ teamId: chronosTeamIds[0], updatedAt: new Date() }).where(eq(applicants.id, row.id));
           membershipsSynced += chronosTeamIds.length;
         } else {
-          await db.update(users).set({ teamId: null, updatedAt: new Date() }).where(eq(users.id, user.id));
+          await db.update(users).set({ teamId: null, updatedAt: new Date() }).where(eq(users.id, userId));
+          await db.update(applicants).set({ teamId: null, updatedAt: new Date() }).where(eq(applicants.id, row.id));
         }
 
         usersSyncedFromNotion++;
       } catch (err) {
-        errors.push(`User ${user.email} (page ${user.notionTeamMemberId}): ${err instanceof Error ? err.message : String(err)}`);
+        errors.push(`Applicant ${row.email} (page ${notionMemberId}): ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 

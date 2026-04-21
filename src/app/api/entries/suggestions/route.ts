@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 import { db } from "@/lib/db";
 import { projects, tags, timeEntries, timeEntryTags } from "@/lib/db/schema";
 import { and, desc, eq, gte, ilike, inArray, isNotNull, or } from "drizzle-orm";
@@ -9,12 +10,15 @@ export async function GET(req: Request) {
   if (!session?.user) return NextResponse.json({ suggestions: [] }, { status: 401 });
   if (!db) return NextResponse.json({ suggestions: [] });
 
+  const chronosUserId = chronosUserIdFromSessionUser(session.user);
+  if (!chronosUserId) return NextResponse.json({ suggestions: [] }, { status: 401 });
+
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") ?? "").trim();
   const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
   const conditions = [
-    eq(timeEntries.userId, session.user.id),
+    eq(timeEntries.userId, chronosUserId),
     isNotNull(timeEntries.stoppedAt),
     gte(timeEntries.startedAt, since),
   ];

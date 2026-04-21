@@ -5,6 +5,7 @@ import { tags } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { broadcastDataChange } from "@/lib/realtime";
+import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 export async function PATCH(
   req: Request,
@@ -20,7 +21,9 @@ export async function PATCH(
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const isAdmin = session.user.role === "admin";
-  if (!isAdmin && existing.userId !== session.user.id) {
+  const chronosUserId = chronosUserIdFromSessionUser(session.user);
+  if (!isAdmin && !chronosUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isAdmin && existing.userId !== chronosUserId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -65,7 +68,9 @@ export async function DELETE(
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const isAdmin = session.user.role === "admin";
-  if (!isAdmin && existing.userId !== session.user.id) {
+  const chronosUserId = chronosUserIdFromSessionUser(session.user);
+  if (!isAdmin && !chronosUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isAdmin && existing.userId !== chronosUserId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

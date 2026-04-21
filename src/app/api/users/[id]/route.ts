@@ -92,8 +92,10 @@ export async function PATCH(
     return NextResponse.json({ error: "Only admins and HR can update associated emails." }, { status: 403 });
   }
 
+  const sessionChronosId = session.user.chronosUserId ?? null;
+
   if (userIsMember && !userIsAdmin && !userIsTeamLead) {
-    if (id !== session.user.id) {
+    if (!sessionChronosId || id !== sessionChronosId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const allowedKeys = ["weeklyTargetHours"];
@@ -108,7 +110,7 @@ export async function PATCH(
     const accessibleTeamIds = await getAccessibleTeamIds(session.user);
     const existingTeams = await getUserTeams(existingUser.id);
     const overlap = existingTeams.some((team) => accessibleTeamIds?.includes(team.id));
-    if (!overlap && existingUser.id !== session.user.id) {
+    if (!sessionChronosId || (!overlap && existingUser.id !== sessionChronosId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const allowedKeys = ["weeklyTargetHours"];
@@ -310,7 +312,7 @@ export async function DELETE(
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
 
   const { id } = await params;
-  if (id === session.user.id) {
+  if (session.user.chronosUserId && id === session.user.chronosUserId) {
     return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 });
   }
 
@@ -337,7 +339,14 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const notionTeamMemberId = existingUser.notionTeamMemberId?.trim() || null;
+  const [applicantRow] = await db
+    .select({ notionTeamMemberId: applicants.notionTeamMemberId })
+    .from(applicants)
+    .where(eq(applicants.chronosUserId, id))
+    .limit(1);
+
+  const notionTeamMemberId =
+    applicantRow?.notionTeamMemberId?.trim() || existingUser.notionTeamMemberId?.trim() || null;
   if (notionTeamMemberId && !parsedBody.data.notionExitStatus) {
     return NextResponse.json(
       {

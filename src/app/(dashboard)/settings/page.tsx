@@ -5,19 +5,22 @@ import { SettingsForm } from "./SettingsForm";
 import { db } from "@/lib/db";
 import { userEmailAliases } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 export const metadata: Metadata = { title: "Settings | FloLabs Chronos" };
 
 export default async function SettingsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
+  const chronosUserId = chronosUserIdFromSessionUser(session.user);
+  if (!chronosUserId) redirect("/login");
 
   const aliases =
     db
       ? await db
           .select({ email: userEmailAliases.email })
           .from(userEmailAliases)
-          .where(eq(userEmailAliases.userId, session.user.id))
+          .where(eq(userEmailAliases.userId, chronosUserId))
       : [];
   const alternateEmails = Array.from(
     new Set([session.user.email.toLowerCase(), ...aliases.map((row) => row.email.toLowerCase())]),
@@ -42,7 +45,7 @@ export default async function SettingsPage() {
 
       <SettingsForm
         user={{
-          id: session.user.id,
+          id: chronosUserId,
           name: session.user.name,
           email: session.user.email,
           alternateEmails,

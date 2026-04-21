@@ -4,9 +4,10 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { entryDiscussions, discussionReplies, timeEntries, users } from "@/lib/db/schema";
 import { eq, asc, inArray } from "drizzle-orm";
-import { canViewDiscussions } from "@/lib/permissions";
+import { canViewDiscussions, isAdmin } from "@/lib/permissions";
 import { broadcastDiscussionChange } from "@/lib/realtime";
 import type { DiscussionReply } from "@/types";
+import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 function toReply(
   row: typeof discussionReplies.$inferSelect,
@@ -33,6 +34,8 @@ export async function GET(
 
   const { id } = await params;
   const viewer = session.user;
+  const viewerChronosId = chronosUserIdFromSessionUser(viewer);
+  if (!isAdmin(viewer) && !viewerChronosId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const [discussion] = await db
     .select()
@@ -80,6 +83,8 @@ export async function POST(
 
   const { id } = await params;
   const viewer = session.user;
+  const viewerChronosId = chronosUserIdFromSessionUser(viewer);
+  if (!viewerChronosId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
   const parsed = postSchema.safeParse(body);
@@ -104,7 +109,7 @@ export async function POST(
 
   const [inserted] = await db
     .insert(discussionReplies)
-    .values({ discussionId: id, authorId: viewer.id, message: parsed.data.message })
+    .values({ discussionId: id, authorId: viewerChronosId, message: parsed.data.message })
     .returning();
 
   broadcastDiscussionChange(discussion.entryId);
@@ -112,7 +117,7 @@ export async function POST(
   const [author] = await db
     .select({ id: users.id, name: users.name })
     .from(users)
-    .where(eq(users.id, viewer.id))
+    .where(eq(users.id, viewerChronosId))
     .limit(1);
 
   const reply: DiscussionReply = toReply(inserted, author ?? null);

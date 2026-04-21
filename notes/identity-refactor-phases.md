@@ -64,13 +64,18 @@ These prevent immediate removal of the `users` table.
 
 #### Phase 2 first cut
 
-Phase 2 should be the first safe canonical-identity switch, without pretending the schema migration is already solved.
+Status: **complete** (2026-04-21)
 
-Exact first cut:
-1. make applicants the canonical auth and session source in `src/lib/auth.ts`
-2. make password reset and recovery resolve through applicants first, then only use legacy `users` linkage where structurally unavoidable
-3. make Notion Team Member linkage and access state read from applicants as source of truth
-4. document that `users` remains only as a compatibility ownership layer until Phase 3 migrates FK-backed records
+Phase 2 is the first safe canonical-identity switch, without pretending the schema migration is already solved.
+
+Delivered:
+1. **Auth** — `src/lib/auth.ts` resolves login via `findApplicantForCredentialEmail` (primary applicant email + alias-backed Chronos user), verifies password on `users`, issues JWT/session with `id` = applicant id and `chronosUserId` = `users.id`. JWT refresh re-reads applicant rows and migrates legacy tokens that still stored `users.id` as `id`.
+2. **Recovery** — `forgot-password` resolves the applicant the same way as login; reset tokens remain on `users` (FK); GET `reset-password` already prefers applicant display fields.
+3. **Notion linkage** — `teams-sync` drives membership sync from **`applicants.notion_team_member_id`** (not `users`), mirrors `users.notion_team_member_id` + `users.team_id`, and updates `applicants.team_id`. Entry delete/bulk delete / `entry-lifecycle` resolve Discord + Notion team-member id from applicant first.
+4. **Access / ownership** — `src/lib/permissions.ts` uses `sessionOwnershipUserId` (`chronosUserId`) for `team_memberships`, entry scope, and discussions. API routes that write to user-FK tables use `chronosUserIdFromSessionUser`.
+5. **Docs** — `ARCHITECTURE.md` documents canonical applicant vs compatibility `users`.
+
+Remaining for Phase 3+: migrate FKs off `users` where feasible; reduce dual writes.
 
 #### Explicit conclusion
 

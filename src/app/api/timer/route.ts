@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { projects, timeEntries, timeEntryTags, tags } from "@/lib/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 const updateTimerSchema = z.object({
   projectId: z.string().uuid().optional().nullable(),
@@ -18,11 +19,14 @@ export async function PATCH(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const chronosUserId = chronosUserIdFromSessionUser(session.user);
+  if (!chronosUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json().catch(() => ({}));
   const parsed = updateTimerSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-  const userId = session.user.id;
+  const userId = chronosUserId;
   const activeTimer = await getActiveTimer(userId);
   if (!activeTimer) return NextResponse.json({ error: "No active timer" }, { status: 404 });
 

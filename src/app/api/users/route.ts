@@ -30,9 +30,9 @@ export async function GET() {
 
     let rows: Awaited<ReturnType<typeof getAccessibleUsers>> = [];
     if (db) {
-      // Ensure applicants with Joined/Active status have linked Chronos users.
+      // Ensure every applicant already has a Chronos user account, with access gated only by applicant status.
       // Multi-pass + bounded batches so more rows link per request without timing out.
-      const joinedWhere = sql`lower(coalesce(${applicants.stage}, '')) = 'joined' or lower(coalesce(${applicants.status}, '')) in ('signed', 'joined', 'active')`;
+      const provisionableWhere = sql`${applicants.email} is not null and btrim(${applicants.email}) <> ''`;
       const generatedPasswordHash = await bcrypt.hash(randomBytes(24).toString("hex"), 12);
       const PROVISION_PER_PASS = 250;
       const MAX_PASSES = 3;
@@ -45,7 +45,7 @@ export async function GET() {
             chronosUserId: applicants.chronosUserId,
           })
           .from(applicants)
-          .where(joinedWhere);
+          .where(provisionableWhere);
         const missingJoinedApplicants = joinedApplicants.filter((a) => !a.chronosUserId).slice(0, PROVISION_PER_PASS);
         if (missingJoinedApplicants.length === 0) break;
         for (const applicant of missingJoinedApplicants) {
@@ -63,18 +63,17 @@ export async function GET() {
             let userId = existingUser?.id ?? null;
             if (!userId) {
               try {
-                userId = (
-                  await db
-                    .insert(usersTable)
-                    .values({
-                      email: normalizedApplicantEmail,
-                      name: applicant.name?.trim() || normalizedApplicantEmail,
-                      password: generatedPasswordHash,
-                      role: "member",
-                      isActive: true,
-                    })
-                    .returning()
-                )[0]?.id ?? null;
+                const [createdUser] = await db
+                  .insert(usersTable)
+                  .values({
+                    email: normalizedApplicantEmail,
+                    name: applicant.name?.trim() || normalizedApplicantEmail,
+                    password: generatedPasswordHash,
+                    role: "member",
+                    isActive: false,
+                  })
+                  .returning();
+                userId = createdUser?.id ?? null;
               } catch {
                 const [retryUser] = await db
                   .select({ id: usersTable.id })
@@ -88,7 +87,7 @@ export async function GET() {
             try {
               await db
                 .update(applicants)
-                .set({ chronosUserId: userId, isActive: true, updatedAt: new Date() })
+                .set({ chronosUserId: userId, updatedAt: new Date() })
                 .where(sql`${applicants.id} = ${applicant.id}`);
             } catch {
               await db
@@ -97,7 +96,7 @@ export async function GET() {
                 .where(sql`${applicants.id} = ${applicant.id}`);
             }
           } catch (error) {
-            console.error("[api/users] joined applicant auto-provision skipped", {
+            console.error("[api/users] applicant auto-provision skipped", {
               applicantId: applicant.id,
               error,
             });

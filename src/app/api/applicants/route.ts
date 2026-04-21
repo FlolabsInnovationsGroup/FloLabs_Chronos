@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { applicants, users } from '@/lib/db/schema';
 import { db } from '@/lib/db';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { teamMemberships, teams } from '@/lib/db/schema';
@@ -234,11 +234,19 @@ export async function POST(request: Request) {
     .returning();
 
   const applicant = inserted[0];
-  const shouldProvisionJoinedProfile = Boolean(body.syncedToTeamMembers) || body.stage === 'joined';
+  const normalizedStage = String(body.stage ?? applicant.stage ?? '').trim().toLowerCase();
+  const normalizedStatus = String(body.status ?? applicant.status ?? '').trim().toLowerCase();
+  const shouldProvisionChronosUser = true;
+  const shouldEnableChronosAccess = normalizedStage === 'joined' || normalizedStatus === 'joined' || normalizedStatus === 'active' || normalizedStatus === 'signed';
 
-  if (shouldProvisionJoinedProfile) {
+  if (shouldProvisionChronosUser) {
     try {
-      const [existingUser] = await db.select().from(users).where(eq(users.email, String(body.email).toLowerCase())).limit(1);
+      const normalizedEmail = String(body.email).toLowerCase();
+      const [existingUser] = await db
+        .select()
+        .from(users)
+        .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+        .limit(1);
       const requestedTeamIds = Array.isArray(body.teamIds)
         ? body.teamIds.filter((value: unknown): value is string => typeof value === 'string' && value.length > 0)
         : (typeof body.teamId === 'string' && body.teamId.length > 0 ? [body.teamId] : []);
@@ -267,12 +275,12 @@ export async function POST(request: Request) {
         : (await db
           .insert(users)
           .values({
-            email: String(body.email).toLowerCase(),
+            email: normalizedEmail,
             name,
             password: await bcrypt.hash(randomBytes(24).toString('hex'), 12),
             role: body.role ?? 'member',
             teamId: teamIds[0] ?? null,
-            isActive: body.isActive ?? true,
+            isActive: Boolean(body.isActive ?? shouldEnableChronosAccess),
             weeklyTargetHours: body.weeklyTargetHours ?? 40,
             profilePictureUrl: body.profilePictureUrl ?? null,
             notionTeamMemberId: teamMemberPage?.pageId ?? null,
@@ -295,16 +303,29 @@ export async function POST(request: Request) {
         .update(applicants)
         .set({
           chronosUserId: ensuredUser.id,
-          syncedToTeamMembers: true,
+          syncedToTeamMembers: Boolean(body.syncedToTeamMembers),
           role: (body.role ?? ensuredUser.role ?? "member"),
           teamId: teamIds[0] ?? ensuredUser.teamId ?? null,
-          isActive: Boolean(body.isActive ?? ensuredUser.isActive ?? true),
+          isActive: Boolean(body.isActive ?? shouldEnableChronosAccess),
           weeklyTargetHours: body.weeklyTargetHours ?? ensuredUser.weeklyTargetHours ?? 40,
           profilePictureUrl: body.profilePictureUrl ?? ensuredUser.profilePictureUrl ?? null,
           notionTeamMemberId: teamMemberPage?.pageId ?? ensuredUser.notionTeamMemberId ?? null,
           updatedAt: new Date(),
         })
         .where(eq(applicants.id, applicant.id));
+
+      await db
+        .update(users)
+        .set({
+          role: body.role ?? ensuredUser.role ?? 'member',
+          teamId: teamIds[0] ?? ensuredUser.teamId ?? null,
+          isActive: Boolean(body.isActive ?? shouldEnableChronosAccess),
+          weeklyTargetHours: body.weeklyTargetHours ?? ensuredUser.weeklyTargetHours ?? 40,
+          profilePictureUrl: body.profilePictureUrl ?? ensuredUser.profilePictureUrl ?? null,
+          notionTeamMemberId: teamMemberPage?.pageId ?? ensuredUser.notionTeamMemberId ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, ensuredUser.id));
 
       await addPrimaryEmailAlias(ensuredUser.id, ensuredUser.email).catch(() => null);
       await ensureDiscordResourcesForUser({ userId: ensuredUser.id, name: ensuredUser.name }).catch(() => null);

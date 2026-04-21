@@ -1,6 +1,6 @@
 # Chronos identity refactor phases
 
-Updated: 2026-04-21 Europe/Paris
+Updated: 2026-04-22 Europe/Paris
 
 ## Goal
 
@@ -77,8 +77,23 @@ Delivered:
 
 Follow-up slices (same Phase 2 contract — applicants canonical for reads, `users` only where FKs require it):
 - **Notion–Discord cron** — `/api/cron/notion-sync` notifications use the merged entry user (applicant-first Team Member id and name), matching `syncEntryToNotionFull`, not `users.notion_team_member_id` alone.
+- **Dashboard SSR** — `(dashboard)/timer` and `(dashboard)/reports` load tags, entries, weekly target, and initial discussions using `chronosUserId` / `requireChronosUserIdFromSessionUser`, not `session.user.id` (applicant id).
 
-Remaining for Phase 3+: migrate FKs off `users` where feasible; reduce dual writes.
+### Phase 3 — ownership migration (next)
+
+Status: not started
+
+**Verdict:** Phase 2 is complete enough to begin Phase 3. Auth, API routes, cron paths, and dashboard SSR that touch Chronos FKs use `users.id` via `session.user.chronosUserId`; remaining work is schema and write-path migration, not more “session id shape” cleanup.
+
+**First exact Phase 3 cut (single deliverable to unblock the rest):**
+
+1. Add nullable `applicant_id` (uuid, FK → `applicants.id`, index) to `time_entries` — the highest-churn owned table.
+2. Ship a migration script that backfills `time_entries.applicant_id` by joining `time_entries.user_id` = `users.id` = `applicants.chronos_user_id` (skip or log rows with no match).
+3. Dual-write: on create/update paths in entry APIs, set `applicant_id` from the signed-in applicant (`session.user.id`) whenever `chronosUserId` is present.
+
+Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `tags`, `entry_discussions`, `discussion_replies`, and Redis timer keys documentation/migration; then reduce or remove dual writes to `users` where safe.
+
+Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion
 
@@ -103,11 +118,6 @@ Use both signals below:
      - Phase 4: schema-removal or final deprecation commit
    - if no new artifact exists, the phase is stalled even if there were exploratory attempts
 
-## Next concrete completion condition for Phase 1
+## Phase 1 reference (complete)
 
-Phase 1 is complete only when this note is expanded with:
-- grouped dependency buckets
-- explicit hard blockers
-- the exact first schema or code slice for Phase 2
-
-At that point, send the user a Phase 1 complete message and begin Phase 2.
+Phase 1 required: dependency buckets, hard blockers, and Phase 2 first cut — all recorded above.

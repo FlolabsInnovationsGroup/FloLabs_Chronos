@@ -5,6 +5,7 @@ import { timeEntries, projects, tags, users, timeEntryTags, entryDiscussions } f
 import { eq, and, gte, lte, isNotNull, desc, inArray, isNull, asc } from "drizzle-orm";
 import { discussionReplies } from "@/lib/db/schema";
 import { getCalendarWeekRangeLocal } from "@/lib/utils";
+import { requireChronosUserIdFromSessionUser } from "@/lib/chronos-session";
 import { TimerDashboardClient } from "@/components/timer/TimerDashboardClient";
 import { isAdmin, isTeamLead, getAccessibleUserIds } from "@/lib/permissions";
 import type { Project, Tag, TimeEntry, EntryDiscussion } from "@/types";
@@ -105,12 +106,15 @@ async function getRecentEntries(userId: string): Promise<TimeEntry[]> {
   return buildEntriesWithTags(rows);
 }
 
-async function getInitialDiscussions(sessionUser: {
-  id: string;
-  role: import("@/types").Role;
-  teamId: string | null;
-  isActive: boolean;
-}): Promise<EntryDiscussion[]> {
+async function getInitialDiscussions(
+  sessionUser: {
+    id: string;
+    role: import("@/types").Role;
+    teamId: string | null;
+    isActive: boolean;
+  },
+  ownerChronosUserId: string
+): Promise<EntryDiscussion[]> {
   if (!db) return [];
 
   const startedByAlias = users;
@@ -156,7 +160,7 @@ async function getInitialDiscussions(sessionUser: {
 
     rows = allRows.filter(
       (r) =>
-        r.discussion.startedById === sessionUser.id ||
+        r.discussion.startedById === ownerChronosUserId ||
         (r.entry?.userId && accessibleUserIds.includes(r.entry.userId))
     );
   } else {
@@ -164,7 +168,7 @@ async function getInitialDiscussions(sessionUser: {
     const myEntries = await db
       .select({ id: timeEntries.id })
       .from(timeEntries)
-      .where(eq(timeEntries.userId, sessionUser.id));
+      .where(eq(timeEntries.userId, ownerChronosUserId));
 
     if (myEntries.length === 0) return [];
     const myEntryIds = myEntries.map((e) => e.id);
@@ -257,7 +261,7 @@ async function getUserWeeklyTarget(userId: string): Promise<number> {
 export default async function TimerPage() {
   const session = await auth();
   const sessionUser = session!.user;
-  const userId = sessionUser.id;
+  const userId = requireChronosUserIdFromSessionUser(sessionUser);
 
   const [projectsList, tagsList, weekEntries, recentEntries, weeklyTarget, initialDiscussions] = await Promise.all([
     getProjects(),
@@ -265,7 +269,7 @@ export default async function TimerPage() {
     getWeekEntries(userId),
     getRecentEntries(userId),
     getUserWeeklyTarget(userId),
-    getInitialDiscussions(sessionUser),
+    getInitialDiscussions(sessionUser, userId),
   ]);
 
   return (

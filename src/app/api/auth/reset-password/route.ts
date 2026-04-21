@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { passwordResetTokens, users } from "@/lib/db/schema";
+import { applicants, passwordResetTokens, users } from "@/lib/db/schema";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { userEmailAliases } from "@/lib/db/schema";
 import { z } from "zod";
@@ -16,6 +16,15 @@ export async function GET(req: Request) {
 
   const [reset] = await db.select({ id: passwordResetTokens.id, userId: passwordResetTokens.userId, expiresAt: passwordResetTokens.expiresAt, usedAt: passwordResetTokens.usedAt }).from(passwordResetTokens).where(and(eq(passwordResetTokens.token, token), isNull(passwordResetTokens.usedAt), gt(passwordResetTokens.expiresAt, new Date()))).limit(1);
   if (!reset) return NextResponse.json({ error: "This reset link is invalid or expired." }, { status: 404 });
+
+  const [applicant] = await db
+    .select({ email: applicants.email, name: applicants.name })
+    .from(applicants)
+    .where(eq(applicants.chronosUserId, reset.userId))
+    .limit(1);
+  if (applicant) {
+    return NextResponse.json({ reset: { email: applicant.email ?? "", name: applicant.name ?? "" } });
+  }
 
   const [user] = await db.select({ email: users.email, name: users.name }).from(users).where(eq(users.id, reset.userId)).limit(1);
   return NextResponse.json({ reset: { email: user?.email ?? "", name: user?.name ?? "" } });

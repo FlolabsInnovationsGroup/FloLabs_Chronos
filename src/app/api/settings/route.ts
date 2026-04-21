@@ -26,47 +26,56 @@ export async function PATCH(req: Request) {
 
   const body = await req.json();
 
+  const applicantId = session.user.id;
+  const chronosUserId = session.user.chronosUserId ?? null;
+
   // Name update
   const nameParsed = nameSchema.safeParse(body);
   if (nameParsed.success && !("currentPassword" in body)) {
-    const [user] = await db
-      .update(users)
-      .set({ name: nameParsed.data.name, updatedAt: new Date() })
-      .where(eq(users.id, session.user.id))
-      .returning();
-    await db
+    const [applicant] = await db
       .update(applicants)
       .set({ name: nameParsed.data.name, updatedAt: new Date() })
-      .where(eq(applicants.chronosUserId, session.user.id));
-    return NextResponse.json({ user });
+      .where(eq(applicants.id, applicantId))
+      .returning();
+
+    if (chronosUserId) {
+      await db
+        .update(users)
+        .set({ name: nameParsed.data.name, updatedAt: new Date() })
+        .where(eq(users.id, chronosUserId));
+    }
+
+    return NextResponse.json({ user: applicant });
   }
 
   // Profile picture update/remove
   const pictureParsed = profilePictureSchema.safeParse(body);
   if (pictureParsed.success && !("currentPassword" in body) && !("name" in body)) {
-    const [user] = await db
-      .update(users)
+    const [applicant] = await db
+      .update(applicants)
       .set({ profilePictureUrl: pictureParsed.data.profilePictureUrl, updatedAt: new Date() })
-      .where(eq(users.id, session.user.id))
+      .where(eq(applicants.id, applicantId))
       .returning();
-    try {
+
+    if (chronosUserId) {
       await db
-        .update(applicants)
+        .update(users)
         .set({ profilePictureUrl: pictureParsed.data.profilePictureUrl, updatedAt: new Date() })
-        .where(eq(applicants.chronosUserId, session.user.id));
-    } catch {
-      // Compatibility: applicant profilePictureUrl may not exist before migration.
+        .where(eq(users.id, chronosUserId));
     }
-    return NextResponse.json({ user });
+
+    return NextResponse.json({ user: applicant });
   }
 
   // Password update
   const pwParsed = passwordSchema.safeParse(body);
   if (pwParsed.success) {
+    if (!chronosUserId) return NextResponse.json({ error: "Password management is not linked yet for this account" }, { status: 409 });
+
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.id, session.user.id))
+      .where(eq(users.id, chronosUserId))
       .limit(1);
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
@@ -77,7 +86,7 @@ export async function PATCH(req: Request) {
     await db
       .update(users)
       .set({ password: hashed, updatedAt: new Date() })
-      .where(eq(users.id, session.user.id));
+      .where(eq(users.id, chronosUserId));
     return NextResponse.json({ success: true });
   }
 

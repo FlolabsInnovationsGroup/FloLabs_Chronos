@@ -646,6 +646,7 @@ Depending on actual database schema detection, Chronos maps:
 - Task relation when task linkage is present and target schema supports it
 
 ### Discord notifications
+- Cron-driven Notion entry sync resolves the Team Member page id and display name using the same applicant-first merge as the Notion payload: `applicants.notion_team_member_id` and applicant name override `users` when a linked applicant row exists.
 - Per-user/team-member webhook URLs are resolved from Notion Team Member records and/or stored user config
 - Notifications are sent as **Discord embeds**, not plain-text messages
 - Embeds use FloLabs Chronos brand colors

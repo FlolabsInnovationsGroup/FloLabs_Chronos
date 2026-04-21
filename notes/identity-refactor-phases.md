@@ -75,6 +75,9 @@ Delivered:
 4. **Access / ownership** — `src/lib/permissions.ts` uses `sessionOwnershipUserId` (`chronosUserId`) for `team_memberships`, entry scope, and discussions. API routes that write to user-FK tables use `chronosUserIdFromSessionUser`.
 5. **Docs** — `ARCHITECTURE.md` documents canonical applicant vs compatibility `users`.
 
+Follow-up slices (same Phase 2 contract — applicants canonical for reads, `users` only where FKs require it):
+- **Notion–Discord cron** — `/api/cron/notion-sync` notifications use the merged entry user (applicant-first Team Member id and name), matching `syncEntryToNotionFull`, not `users.notion_team_member_id` alone.
+
 Remaining for Phase 3+: migrate FKs off `users` where feasible; reduce dual writes.
 
 #### Explicit conclusion

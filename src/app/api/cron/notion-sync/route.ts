@@ -126,12 +126,15 @@ export async function GET(req: Request) {
         edited++;
       }
 
-      const notionTeamMemberId = row.user?.notionTeamMemberId ?? null;
+      // Same applicant-first merge as `entryFull.user` — Discord must not read `users.notion_team_member_id` alone.
+      const notifyUser = entryFull.user;
+      const notionTeamMemberId = notifyUser?.notionTeamMemberId?.trim() || null;
+      const notifyUserName = notifyUser?.name ?? "Unknown";
       if (notionPageId && notionTeamMemberId) {
         const delivered = isNew
           ? await notifyEntryAdded({
               notionTeamMemberId,
-              userName: row.user?.name ?? "Unknown",
+              userName: notifyUserName,
               project: row.project?.name ?? "No project",
               tags: entryTags.map((t) => t.name),
               description: row.entry.description,
@@ -142,7 +145,7 @@ export async function GET(req: Request) {
             })
           : await notifyEntryEdited({
               notionTeamMemberId,
-              userName: row.user?.name ?? "Unknown",
+              userName: notifyUserName,
               project: row.project?.name ?? "No project",
               tags: entryTags.map((t) => t.name),
               description: row.entry.description,

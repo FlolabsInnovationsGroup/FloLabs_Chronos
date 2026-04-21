@@ -6,7 +6,7 @@ import { timeEntries, users, projects, tags } from "@/lib/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { sendDiscordEmbed, buildTimerStartEmbed } from "@/lib/discord";
-import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 const startSchema = z.object({
   projectId: z.string().uuid().optional().nullable(),
@@ -74,8 +74,10 @@ export async function POST(req: Request) {
 
   // Write a running entry to DB for crash recovery (no tagIds on the entry row; set on stop)
   if (db) {
+    const applicantId = applicantIdForSessionLinkedUser(session.user);
     await db.insert(timeEntries).values({
       userId,
+      ...(applicantId ? { applicantId } : {}),
       projectId: projectId ?? null,
       description,
       notionTaskPageId: notionTaskPageId ?? null,

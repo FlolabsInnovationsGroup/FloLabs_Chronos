@@ -87,6 +87,8 @@ export interface Tag {
 export interface TimeEntry {
   id: string;
   userId: string;
+  /** Set when the entry owner is linked to an applicant (Phase 3 ownership migration). */
+  applicantId?: string | null;
   projectId: string | null;
   description: string;
   notionTaskPageId?: string | null;

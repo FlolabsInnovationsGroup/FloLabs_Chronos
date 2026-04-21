@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { projects, timeEntries, timeEntryTags, tags } from "@/lib/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 const updateTimerSchema = z.object({
   projectId: z.string().uuid().optional().nullable(),
@@ -98,11 +98,13 @@ export async function PATCH(req: Request) {
           .onConflictDoNothing();
       }
 
+      const applicantId = applicantIdForSessionLinkedUser(session.user);
       const updateFields: Record<string, unknown> = { updatedAt: new Date() };
       if (requestedProjectId !== undefined) updateFields.projectId = requestedProjectId;
       if (nextDescription !== undefined) updateFields.description = nextDescription;
       if (nextTaskPageId !== undefined) updateFields.notionTaskPageId = nextTaskPageId;
       if (nextTaskTitle !== undefined) updateFields.notionTaskTitle = nextTaskTitle;
+      if (applicantId) updateFields.applicantId = applicantId;
 
       await db.update(timeEntries).set(updateFields).where(eq(timeEntries.id, activeEntry.id));
     }

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { getAccessibleUserIds } from "@/lib/permissions";
 import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 import { setNotionLinkedTaskInProgressOnStop } from "@/lib/notion";
-import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 async function attachTags(
   entryRows: { id: string }[]
@@ -112,10 +112,12 @@ export async function POST(req: Request) {
 
   const { tagIds, ...rest } = parsed.data;
 
+  const applicantId = applicantIdForSessionLinkedUser(session.user);
   const [entry] = await db
     .insert(timeEntries)
     .values({
       userId: chronosUserId,
+      ...(applicantId ? { applicantId } : {}),
       ...rest,
       startedAt: new Date(rest.startedAt),
       stoppedAt: new Date(rest.stoppedAt),

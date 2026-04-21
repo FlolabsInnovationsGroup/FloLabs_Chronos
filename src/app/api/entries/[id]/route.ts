@@ -7,6 +7,7 @@ import { z } from "zod";
 import { deleteAndNotifyEntry, syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 import { canManageTimeEntry } from "@/lib/permissions";
 import { chronosUserDisplayAndNotionTeamMemberId } from "@/lib/chronos-user-notion";
+import { resolveApplicantIdForTimeEntryWrite } from "@/lib/time-entry-applicant";
 
 const patchSchema = z.object({
   description: z.string().optional(),
@@ -120,12 +121,27 @@ export async function PATCH(
 
   let updated = entry;
   if (Object.keys(entryFields).length > 0) {
+    const applicantId = await resolveApplicantIdForTimeEntryWrite(session.user, entry.userId);
     const [u] = await db
       .update(timeEntries)
-      .set({ ...entryFields, updatedAt: new Date() })
+      .set({
+        ...entryFields,
+        ...(applicantId ? { applicantId } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(timeEntries.id, id))
       .returning();
     updated = u;
+  } else if (tagIds !== undefined) {
+    const applicantId = await resolveApplicantIdForTimeEntryWrite(session.user, entry.userId);
+    if (applicantId) {
+      const [u] = await db
+        .update(timeEntries)
+        .set({ applicantId, updatedAt: new Date() })
+        .where(eq(timeEntries.id, id))
+        .returning();
+      updated = u;
+    }
   }
 
   if (tagIds !== undefined) {

@@ -184,6 +184,8 @@ export const timeEntries = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id),
+    /** Phase 3: canonical owner pointer; backfilled from applicants.chronos_user_id = user_id. */
+    applicantId: uuid("applicant_id").references(() => applicants.id, { onDelete: "set null" }),
     projectId: uuid("project_id").references(() => projects.id),
     description: text("description").notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
@@ -201,6 +203,7 @@ export const timeEntries = pgTable(
   },
   (t) => [
     index("idx_entries_user").on(t.userId, t.startedAt),
+    index("idx_entries_applicant").on(t.applicantId),
     index("idx_entries_project").on(t.projectId, t.startedAt),
     index("idx_entries_date").on(t.startedAt),
   ]

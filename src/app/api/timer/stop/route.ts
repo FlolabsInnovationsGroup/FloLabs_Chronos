@@ -9,7 +9,7 @@ import { sendDiscordEmbed, buildTimerStopEmbed } from "@/lib/discord";
 import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 import { setNotionLinkedTaskInProgressOnStop } from "@/lib/notion";
 import { getTimerStopValidation } from "@/lib/timer-rules";
-import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 const stopSchema = z.object({ discard: z.boolean().optional() });
 
@@ -66,6 +66,7 @@ export async function POST(req: Request) {
 
     const activeEntry = runningEntries[runningEntries.length - 1];
 
+    const applicantId = applicantIdForSessionLinkedUser(session.user);
     const updated = activeEntry
       ? await db
           .update(timeEntries)
@@ -77,6 +78,7 @@ export async function POST(req: Request) {
             notionTaskPageId: timer.notionTaskPageId ?? null,
             notionTaskTitle: timer.notionTaskTitle ?? null,
             updatedAt: new Date(stoppedAt),
+            ...(applicantId ? { applicantId } : {}),
           })
           .where(eq(timeEntries.id, activeEntry.id))
           .returning()

@@ -18,6 +18,7 @@
     "db:migrate:entry-discussions": "tsx scripts/migrate-entry-discussions.ts",
     "db:migrate:discussion-replies": "tsx scripts/migrate-discussion-replies.ts",
     "db:migrate:applicants": "tsx scripts/migrate-applicants.ts",
+    "db:migrate:time-entries-applicant-id": "tsx scripts/migrate-time-entries-applicant-id.ts",
     "db:migrate:user-profile-picture": "tsx scripts/migrate-user-profile-picture.ts",
     "import:hubspot:prepare": "python scripts/prepare-hubspot-import.py",
     "import:hubspot:applicants": "tsx scripts/import-hubspot-applicants.ts",

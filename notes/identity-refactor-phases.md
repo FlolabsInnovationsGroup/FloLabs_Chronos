@@ -81,15 +81,15 @@ Follow-up slices (same Phase 2 contract — applicants canonical for reads, `use
 
 ### Phase 3 — ownership migration (next)
 
-Status: not started
+Status: **first cut complete** (2026-04-22)
 
 **Verdict:** Phase 2 is complete enough to begin Phase 3. Auth, API routes, cron paths, and dashboard SSR that touch Chronos FKs use `users.id` via `session.user.chronosUserId`; remaining work is schema and write-path migration, not more “session id shape” cleanup.
 
 **First exact Phase 3 cut (single deliverable to unblock the rest):**
 
-1. Add nullable `applicant_id` (uuid, FK → `applicants.id`, index) to `time_entries` — the highest-churn owned table.
-2. Ship a migration script that backfills `time_entries.applicant_id` by joining `time_entries.user_id` = `users.id` = `applicants.chronos_user_id` (skip or log rows with no match).
-3. Dual-write: on create/update paths in entry APIs, set `applicant_id` from the signed-in applicant (`session.user.id`) whenever `chronosUserId` is present.
+1. Add nullable `applicant_id` (uuid, FK → `applicants.id`, index) to `time_entries` — the highest-churn owned table. *(Done in schema: `src/lib/db/schema.ts`; run `pnpm exec tsx scripts/migrate-time-entries-applicant-id.ts` against each database.)*
+2. Ship a migration script that backfills `time_entries.applicant_id` by joining `time_entries.user_id` = `users.id` = `applicants.chronos_user_id` (skip or log rows with no match). *(Done: `scripts/migrate-time-entries-applicant-id.ts`.)*
+3. Dual-write: on create/update paths in entry APIs, set `applicant_id` from the signed-in applicant (`session.user.id`) whenever `chronosUserId` is present. *(Done: `POST /api/entries`, `PATCH /api/entries/[id]`, timer start/stop/PATCH; owner edits use `session.user.id`; admin/lead edits resolve the entry owner’s applicant via `applicants.chronos_user_id`.)*
 
 Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `tags`, `entry_discussions`, `discussion_replies`, and Redis timer keys documentation/migration; then reduce or remove dual writes to `users` where safe.
 

@@ -14,3 +14,10 @@ export function requireChronosUserIdFromSessionUser(sessionUser: Session["user"]
   if (!id) throw new Error("Session is missing chronosUserId (Chronos user linkage)");
   return id;
 }
+
+/** When `chronosUserId` is set, `session.user.id` is the applicant id (Phase 2+ session shape). */
+export function applicantIdForSessionLinkedUser(sessionUser: Session["user"]): string | null {
+  if (!chronosUserIdFromSessionUser(sessionUser)) return null;
+  const id = sessionUser.id;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}

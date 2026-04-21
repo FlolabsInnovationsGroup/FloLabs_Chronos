@@ -9,38 +9,41 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!db) return NextResponse.json({ emails: [] });
 
-  const [user] = await db
-    .select({ id: users.id, email: users.email })
-    .from(users)
-    .where(eq(users.id, session.user.id))
+  const sessionApplicantId = session.user.id;
+  const sessionChronosUserId = session.user.chronosUserId ?? null;
+
+  const [applicant] = await db
+    .select({ email: applicants.email, hubspotRawData: applicants.hubspotRawData })
+    .from(applicants)
+    .where(eq(applicants.id, sessionApplicantId))
     .limit(1);
-  if (!user) return NextResponse.json({ emails: [] });
+  if (!applicant) return NextResponse.json({ emails: [] });
+
+  const [user] = sessionChronosUserId
+    ? await db
+        .select({ id: users.id, email: users.email })
+        .from(users)
+        .where(eq(users.id, sessionChronosUserId))
+        .limit(1)
+    : [];
 
   const aliasRows = await db
     .select({ email: userEmailAliases.email })
     .from(userEmailAliases)
-    .where(eq(userEmailAliases.userId, user.id));
+    .where(eq(userEmailAliases.userId, sessionChronosUserId ?? ""));
 
   let applicantEmails: string[] = [];
-  try {
-    const [applicant] = await db
-      .select({ hubspotRawData: applicants.hubspotRawData })
-      .from(applicants)
-      .where(eq(applicants.chronosUserId, user.id))
-      .limit(1);
-    if (applicant?.hubspotRawData && typeof applicant.hubspotRawData === "object") {
-      const maybeEmails = (applicant.hubspotRawData as { emails?: unknown }).emails;
-      if (Array.isArray(maybeEmails)) {
-        applicantEmails = maybeEmails.map((v) => String(v).trim().toLowerCase()).filter(Boolean);
-      }
+  if (applicant?.hubspotRawData && typeof applicant.hubspotRawData === "object") {
+    const maybeEmails = (applicant.hubspotRawData as { emails?: unknown }).emails;
+    if (Array.isArray(maybeEmails)) {
+      applicantEmails = maybeEmails.map((v) => String(v).trim().toLowerCase()).filter(Boolean);
     }
-  } catch {
-    // Compatibility fallback if migrations are pending.
   }
 
   const emails = Array.from(
     new Set([
-      user.email.toLowerCase(),
+      applicant.email.toLowerCase(),
+      ...(user ? [user.email.toLowerCase()] : []),
       ...aliasRows.map((row) => row.email.toLowerCase()),
       ...applicantEmails,
     ]),

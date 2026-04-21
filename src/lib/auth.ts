@@ -2,12 +2,26 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import type { Role } from "@/types";
+import type { ApplicantProgramStatus, Role } from "@/types";
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
+
+function normalizeApplicantStatus(input: string | null | undefined): ApplicantProgramStatus | null {
+  const value = String(input ?? "").trim().toLowerCase();
+  if (value === "active") return "active";
+  if (value === "graduated") return "graduated";
+  if (value === "terminated") return "terminated";
+  return null;
+}
+
+function applicantAccessEnabled(input: { stage?: string | null; status?: string | null; isActive?: boolean | null }) {
+  const stage = String(input.stage ?? "").trim().toLowerCase();
+  const status = String(input.status ?? "").trim().toLowerCase();
+  return Boolean(input.isActive) && status !== "terminated" && (stage === "joined" || status === "joined" || status === "active" || status === "signed");
+}
 
 function normalizeRole(input: string | null | undefined): Role {
   const value = String(input ?? "").trim().toLowerCase();
@@ -51,11 +65,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (!valid) return null;
           const fallbackRole = normalizeRole(user.role);
 
-          // Access switch: joined or active, non-terminated applicants can use Chronos.
           if (db) {
             try {
-              const [linkedApplicant] = await db
+              const [canonicalApplicant] = await db
                 .select({
+                  id: applicants.id,
+                  email: applicants.email,
+                  name: applicants.name,
                   stage: applicants.stage,
                   status: applicants.status,
                   role: applicants.role,
@@ -64,43 +80,56 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                   profilePictureUrl: applicants.profilePictureUrl,
                 })
                 .from(applicants)
-                .where(
-                  and(
-                    eq(applicants.chronosUserId, user.id),
-                    ne(applicants.status, "terminated"),
-                    or(
-                      sql`lower(${applicants.stage}) = 'joined'`,
-                      sql`lower(${applicants.status}) in ('joined', 'active')`,
-                    ),
-                  )
-                )
+                .where(eq(applicants.email, email.toLowerCase()))
                 .limit(1);
-              if (!linkedApplicant) {
-                // Operational fallback: when applicants are not yet migrated into the current
-                // environment, allow active Chronos users to authenticate from the users table.
+
+              if (canonicalApplicant) {
+                if (!applicantAccessEnabled(canonicalApplicant)) return null;
                 return {
-                  id: user.id,
-                  email: user.email,
-                  name: user.name,
-                  profilePictureUrl: user.profilePictureUrl ?? null,
-                  role: fallbackRole,
-                  teamId: user.teamId,
-                  isActive: user.isActive,
+                  id: canonicalApplicant.id,
+                  email: canonicalApplicant.email,
+                  name: canonicalApplicant.name,
+                  profilePictureUrl: canonicalApplicant.profilePictureUrl ?? user.profilePictureUrl ?? null,
+                  role: normalizeRole(canonicalApplicant.role ?? user.role),
+                  teamId: canonicalApplicant.teamId ?? user.teamId,
+                  isActive: Boolean(canonicalApplicant.isActive),
+                  applicantStatus: normalizeApplicantStatus(canonicalApplicant.status),
+                  chronosUserId: user.id,
                 };
               }
-              if (!linkedApplicant.isActive) return null;
 
-              return {
-                id: user.id,
-                email: user.email,
-                name: user.name,
-                profilePictureUrl: linkedApplicant.profilePictureUrl ?? user.profilePictureUrl ?? null,
-                role: normalizeRole(linkedApplicant.role ?? user.role),
-                teamId: linkedApplicant.teamId ?? user.teamId,
-                isActive: linkedApplicant.isActive,
-              };
+              const [linkedApplicant] = await db
+                .select({
+                  id: applicants.id,
+                  email: applicants.email,
+                  name: applicants.name,
+                  stage: applicants.stage,
+                  status: applicants.status,
+                  role: applicants.role,
+                  teamId: applicants.teamId,
+                  isActive: applicants.isActive,
+                  profilePictureUrl: applicants.profilePictureUrl,
+                })
+                .from(applicants)
+                .where(and(eq(applicants.chronosUserId, user.id), ne(applicants.status, "terminated")))
+                .limit(1);
+
+              if (linkedApplicant && applicantAccessEnabled(linkedApplicant)) {
+                return {
+                  id: linkedApplicant.id,
+                  email: linkedApplicant.email,
+                  name: linkedApplicant.name,
+                  profilePictureUrl: linkedApplicant.profilePictureUrl ?? user.profilePictureUrl ?? null,
+                  role: normalizeRole(linkedApplicant.role ?? user.role),
+                  teamId: linkedApplicant.teamId ?? user.teamId,
+                  isActive: Boolean(linkedApplicant.isActive),
+                  applicantStatus: normalizeApplicantStatus(linkedApplicant.status),
+                  chronosUserId: user.id,
+                };
+              }
+
+              return null;
             } catch {
-              // Compatibility fallback while applicant data is missing or partially migrated.
               return {
                 id: user.id,
                 email: user.email,
@@ -109,6 +138,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 role: fallbackRole,
                 teamId: user.teamId,
                 isActive: user.isActive,
+                applicantStatus: null,
+                chronosUserId: user.id,
               };
             }
           }
@@ -121,6 +152,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             role: normalizeRole(user.role),
             teamId: user.teamId,
             isActive: user.isActive,
+            applicantStatus: null,
+            chronosUserId: user.id,
           };
         } catch {
           return null;
@@ -138,17 +171,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         t.teamId = (user as { teamId?: string | null }).teamId ?? null;
         t.isActive = (user as { isActive?: boolean }).isActive ?? true;
         t.profilePictureUrl = (user as { profilePictureUrl?: string | null }).profilePictureUrl ?? null;
+        t.applicantStatus = (user as { applicantStatus?: ApplicantProgramStatus | null }).applicantStatus ?? null;
+        t.chronosUserId = (user as { chronosUserId?: string | null }).chronosUserId ?? null;
         t.roleRefreshedAt = Date.now();
       }
 
       // On subsequent calls (session refresh, "update" trigger), re-read role/isActive
       // from the DB so that admin-applied role changes take effect without re-login.
       const t = token as Record<string, unknown>;
-      const userId = t.id as string | undefined;
+      const applicantId = t.id as string | undefined;
+      const lastRefresh = (t.roleRefreshedAt as number | undefined) ?? 0;
       const lastRefresh = (t.roleRefreshedAt as number | undefined) ?? 0;
       const REFRESH_INTERVAL_MS = 30_000; // re-check DB every 30 seconds
 
-      if (userId && (trigger === "update" || Date.now() - lastRefresh > REFRESH_INTERVAL_MS)) {
+      if (applicantId && (trigger === "update" || Date.now() - lastRefresh > REFRESH_INTERVAL_MS)) {
         try {
           const { db } = await import("./db");
           const { applicants, users } = await import("./db/schema");
@@ -156,7 +192,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           if (db) {
             let fresh:
-              | { role: string | null; teamId: string | null; isActive: boolean; profilePictureUrl: string | null }
+              | { role: string | null; teamId: string | null; isActive: boolean; profilePictureUrl: string | null; status: string | null; chronosUserId: string | null }
               | undefined;
             try {
               [fresh] = await db
@@ -165,18 +201,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                   teamId: applicants.teamId,
                   isActive: applicants.isActive,
                   profilePictureUrl: applicants.profilePictureUrl,
+                  status: applicants.status,
+                  chronosUserId: applicants.chronosUserId,
                 })
                 .from(applicants)
-                .where(
-                  and(
-                    eq(applicants.chronosUserId, userId),
-                    ne(applicants.status, "terminated"),
-                    or(
-                      sql`lower(${applicants.stage}) = 'joined'`,
-                      sql`lower(${applicants.status}) in ('joined', 'active')`,
-                    ),
-                  ),
-                )
+                .where(eq(applicants.id, applicantId))
                 .limit(1);
             } catch {
               // Keep fallback below.
@@ -187,29 +216,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               t.teamId = fresh.teamId ?? null;
               t.isActive = fresh.isActive;
               t.profilePictureUrl = fresh.profilePictureUrl ?? null;
+              t.applicantStatus = normalizeApplicantStatus(fresh.status);
+              t.chronosUserId = fresh.chronosUserId ?? null;
               t.roleRefreshedAt = Date.now();
 
-              // If the user has been deactivated, invalidate the session.
-              if (!fresh.isActive) {
+              if (!applicantAccessEnabled({ status: fresh.status, isActive: fresh.isActive })) {
                 return null as unknown as typeof token;
               }
             } else {
-              const [legacy] = await db
-                .select({
-                  role: users.role,
-                  teamId: users.teamId,
-                  isActive: users.isActive,
-                  profilePictureUrl: users.profilePictureUrl,
-                })
-                .from(users)
-                .where(eq(users.id, userId))
-                .limit(1);
-              if (legacy) {
-                t.role = normalizeRole(legacy.role);
-                t.teamId = legacy.teamId ?? null;
-                t.isActive = legacy.isActive;
-                t.profilePictureUrl = legacy.profilePictureUrl ?? null;
-                t.roleRefreshedAt = Date.now();
+              const legacyUserId = t.chronosUserId as string | undefined;
+              if (legacyUserId) {
+                const [legacy] = await db
+                  .select({
+                    role: users.role,
+                    teamId: users.teamId,
+                    isActive: users.isActive,
+                    profilePictureUrl: users.profilePictureUrl,
+                  })
+                  .from(users)
+                  .where(eq(users.id, legacyUserId))
+                  .limit(1);
+                if (legacy) {
+                  t.role = normalizeRole(legacy.role);
+                  t.teamId = legacy.teamId ?? null;
+                  t.isActive = legacy.isActive;
+                  t.profilePictureUrl = legacy.profilePictureUrl ?? null;
+                  t.roleRefreshedAt = Date.now();
+                }
               }
             }
           }
@@ -227,6 +260,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.user.teamId = (t.teamId as string | null | undefined) ?? null;
       session.user.isActive = (t.isActive as boolean | undefined) ?? true;
       session.user.profilePictureUrl = (t.profilePictureUrl as string | null | undefined) ?? null;
+      session.user.applicantStatus = (t.applicantStatus as ApplicantProgramStatus | null | undefined) ?? null;
+      session.user.chronosUserId = (t.chronosUserId as string | null | undefined) ?? null;
       return session;
     },
   },
@@ -242,6 +277,8 @@ declare module "next-auth" {
       teamId: string | null;
       isActive: boolean;
       profilePictureUrl?: string | null;
+      applicantStatus?: ApplicantProgramStatus | null;
+      chronosUserId?: string | null;
     };
   }
 }

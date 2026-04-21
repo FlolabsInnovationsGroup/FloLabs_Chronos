@@ -12,6 +12,8 @@ export interface User {
   role: Role;
   teamId: string | null;
   isActive: boolean;
+  applicantStatus?: ApplicantProgramStatus | null;
+  chronosUserId?: string | null;
   weeklyTargetHours: number | null;
   createdAt: Date;
   updatedAt: Date;

@@ -9,6 +9,7 @@ import { applicantIdForSessionLinkedUser, requireChronosUserIdFromSessionUser } 
 import { whereTagsForLinkedUser } from "@/lib/tag-applicant";
 import { TimerDashboardClient } from "@/components/timer/TimerDashboardClient";
 import { isAdmin, isTeamLead, getAccessibleUserIds } from "@/lib/permissions";
+import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 import type { Project, Tag, TimeEntry, EntryDiscussion } from "@/types";
 
 export const metadata: Metadata = { title: "Timer | FloLabs Chronos" };
@@ -60,7 +61,7 @@ async function buildEntriesWithTags(
   })) as TimeEntry[];
 }
 
-async function getWeekEntries(userId: string): Promise<TimeEntry[]> {
+async function getWeekEntries(userId: string, applicantId: string | null): Promise<TimeEntry[]> {
   if (!db) return [];
   const { start, end } = getCalendarWeekRangeLocal(new Date());
 
@@ -75,7 +76,7 @@ async function getWeekEntries(userId: string): Promise<TimeEntry[]> {
     .leftJoin(users, eq(timeEntries.userId, users.id))
     .where(
       and(
-        eq(timeEntries.userId, userId),
+        whereTimeEntriesForLinkedUser(userId, applicantId),
         isNotNull(timeEntries.stoppedAt),
         gte(timeEntries.startedAt, start),
         lte(timeEntries.startedAt, end)
@@ -87,7 +88,7 @@ async function getWeekEntries(userId: string): Promise<TimeEntry[]> {
   return buildEntriesWithTags(rows);
 }
 
-async function getRecentEntries(userId: string): Promise<TimeEntry[]> {
+async function getRecentEntries(userId: string, applicantId: string | null): Promise<TimeEntry[]> {
   if (!db) return [];
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
@@ -100,7 +101,7 @@ async function getRecentEntries(userId: string): Promise<TimeEntry[]> {
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
-    .where(and(eq(timeEntries.userId, userId), isNotNull(timeEntries.stoppedAt), gte(timeEntries.startedAt, sevenDaysAgo)))
+    .where(and(whereTimeEntriesForLinkedUser(userId, applicantId), isNotNull(timeEntries.stoppedAt), gte(timeEntries.startedAt, sevenDaysAgo)))
     .orderBy(desc(timeEntries.startedAt))
     .limit(50);
 
@@ -173,7 +174,7 @@ async function getInitialDiscussions(
     const myEntries = await db
       .select({ id: timeEntries.id })
       .from(timeEntries)
-      .where(eq(timeEntries.userId, ownerChronosUserId));
+      .where(whereTimeEntriesForLinkedUser(ownerChronosUserId, viewerApplicantId));
 
     if (myEntries.length === 0) return [];
     const myEntryIds = myEntries.map((e) => e.id);
@@ -275,8 +276,8 @@ export default async function TimerPage() {
   const [projectsList, tagsList, weekEntries, recentEntries, weeklyTarget, initialDiscussions] = await Promise.all([
     getProjects(),
     getUserTags(userId, linkedApplicantId),
-    getWeekEntries(userId),
-    getRecentEntries(userId),
+    getWeekEntries(userId, linkedApplicantId),
+    getRecentEntries(userId, linkedApplicantId),
     getUserWeeklyTarget(userId),
     getInitialDiscussions(sessionUser, userId, linkedApplicantId),
   ]);

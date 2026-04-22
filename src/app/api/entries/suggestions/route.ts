@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 import { db } from "@/lib/db";
 import { projects, tags, timeEntries, timeEntryTags } from "@/lib/db/schema";
 import { and, desc, eq, gte, ilike, inArray, isNotNull, or } from "drizzle-orm";
+import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -12,13 +13,14 @@ export async function GET(req: Request) {
 
   const chronosUserId = chronosUserIdFromSessionUser(session.user);
   if (!chronosUserId) return NextResponse.json({ suggestions: [] }, { status: 401 });
+  const applicantId = applicantIdForSessionLinkedUser(session.user);
 
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") ?? "").trim();
   const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
   const conditions = [
-    eq(timeEntries.userId, chronosUserId),
+    whereTimeEntriesForLinkedUser(chronosUserId, applicantId),
     isNotNull(timeEntries.stoppedAt),
     gte(timeEntries.startedAt, since),
   ];

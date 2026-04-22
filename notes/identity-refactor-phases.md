@@ -106,6 +106,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 3. Dual-write: `POST /api/discussions` sets starter applicant id; `PATCH /api/discussions/[id]` sets resolver applicant id; `POST /api/discussions/[id]/replies` sets author applicant id. GET handlers and timer SSR include the new fields on `EntryDiscussion` / `DiscussionReply`.
 4. Scope: `discussionStarterMatchesViewer` + `canResolveDiscussion` treat the viewer as the starter when either `chronosUserId` matches `startedById` or session applicant id matches `startedByApplicantId`. Team-lead unresolved list filters include the same applicant-id match. Timer `DiscussionCard` uses `viewerChronosUserId` and `viewerApplicantId` so resolve controls work with Phase 2 session shape.
 
+**Time-entry read-path slice (2026-04-22):**
+
+1. Add `whereTimeEntriesForLinkedUser` in `src/lib/time-entry-applicant.ts` to prefer canonical `time_entries.applicant_id` and fall back to `user_id` only for rows not backfilled yet.
+2. Use that scope in recent-suggestions and timer dashboard SSR reads so the hottest entry-owning reads stop assuming `time_entries.user_id` is canonical.
+3. Keep joins to `users` only for display compatibility (`name`, weekly target), not row ownership.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

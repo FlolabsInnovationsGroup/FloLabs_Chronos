@@ -15,6 +15,8 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { getAccessibleUserIds } from "@/lib/permissions";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -33,20 +35,32 @@ export async function GET(req: Request) {
 
   const conditions: SQL[] = [isNotNull(timeEntries.stoppedAt)];
   const accessibleUserIds = await getAccessibleUserIds(session.user);
+  const ownerChronosUserId = chronosUserIdFromSessionUser(session.user);
+  const linkedApplicantId = applicantIdForSessionLinkedUser(session.user);
 
   if (accessibleUserIds !== null) {
     if (userId && !accessibleUserIds.includes(userId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (userId) {
-      conditions.push(eq(timeEntries.userId, userId));
+      conditions.push(
+        ownerChronosUserId && userId === ownerChronosUserId
+          ? whereTimeEntriesForLinkedUser(ownerChronosUserId, linkedApplicantId)
+          : eq(timeEntries.userId, userId)
+      );
+    } else if (ownerChronosUserId && accessibleUserIds.length === 1 && accessibleUserIds[0] === ownerChronosUserId) {
+      conditions.push(whereTimeEntriesForLinkedUser(ownerChronosUserId, linkedApplicantId));
     } else if (accessibleUserIds.length === 1) {
       conditions.push(eq(timeEntries.userId, accessibleUserIds[0]));
     } else {
       conditions.push(inArray(timeEntries.userId, accessibleUserIds));
     }
   } else if (userId) {
-    conditions.push(eq(timeEntries.userId, userId));
+    conditions.push(
+      ownerChronosUserId && userId === ownerChronosUserId
+        ? whereTimeEntriesForLinkedUser(ownerChronosUserId, linkedApplicantId)
+        : eq(timeEntries.userId, userId)
+    );
   }
 
   if (projectId) conditions.push(eq(timeEntries.projectId, projectId));

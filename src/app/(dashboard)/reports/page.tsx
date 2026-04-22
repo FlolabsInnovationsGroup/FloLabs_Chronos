@@ -29,6 +29,7 @@ import {
 } from "@/lib/permissions";
 import { applicantIdForSessionLinkedUser, requireChronosUserIdFromSessionUser } from "@/lib/chronos-session";
 import { whereTagsForLinkedUser } from "@/lib/tag-applicant";
+import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 
 export const metadata: Metadata = { title: "Reports | FloLabs Chronos" };
 
@@ -90,7 +91,9 @@ async function getEntries(
     role: import("@/types").Role;
     teamId: string | null;
     isActive: boolean;
-  }
+  },
+  ownerChronosUserId: string,
+  linkedApplicantId: string | null
 ): Promise<TimeEntry[]> {
   if (!db) return [];
 
@@ -100,14 +103,24 @@ async function getEntries(
   if (accessibleUserIds !== null) {
     if (params.userId && !accessibleUserIds.includes(params.userId)) return [];
     if (params.userId) {
-      conditions.push(eq(timeEntries.userId, params.userId));
+      conditions.push(
+        params.userId === ownerChronosUserId
+          ? whereTimeEntriesForLinkedUser(ownerChronosUserId, linkedApplicantId)
+          : eq(timeEntries.userId, params.userId)
+      );
+    } else if (accessibleUserIds.length === 1 && accessibleUserIds[0] === ownerChronosUserId) {
+      conditions.push(whereTimeEntriesForLinkedUser(ownerChronosUserId, linkedApplicantId));
     } else if (accessibleUserIds.length === 1) {
       conditions.push(eq(timeEntries.userId, accessibleUserIds[0]));
     } else {
       conditions.push(inArray(timeEntries.userId, accessibleUserIds));
     }
   } else if (params.userId) {
-    conditions.push(eq(timeEntries.userId, params.userId));
+    conditions.push(
+      params.userId === ownerChronosUserId
+        ? whereTimeEntriesForLinkedUser(ownerChronosUserId, linkedApplicantId)
+        : eq(timeEntries.userId, params.userId)
+    );
   }
 
   if (params.from) conditions.push(gte(timeEntries.startedAt, new Date(params.from)));
@@ -272,7 +285,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
   const [filterData, entries] = await Promise.all([
     getFilterData(sessionUser!, ownerChronosUserId, linkedApplicantId),
-    getEntries(params, sessionUser!),
+    getEntries(params, sessionUser!, ownerChronosUserId, linkedApplicantId),
   ]);
 
   const groupBy = params.groupBy ?? "day";

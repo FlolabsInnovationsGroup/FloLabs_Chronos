@@ -9,6 +9,7 @@ import { getAccessibleUserIds } from "@/lib/permissions";
 import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 import { setNotionLinkedTaskInProgressOnStop } from "@/lib/notion";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 
 async function attachTags(
   entryRows: { id: string }[]
@@ -40,6 +41,8 @@ export async function GET(req: Request) {
   const limit = parseInt(url.searchParams.get("limit") ?? "50");
   const requestedUserId = url.searchParams.get("userId");
   const accessibleUserIds = await getAccessibleUserIds(session.user);
+  const ownerChronosUserId = chronosUserIdFromSessionUser(session.user);
+  const linkedApplicantId = applicantIdForSessionLinkedUser(session.user);
 
   const conditions: SQL[] = [isNotNull(timeEntries.stoppedAt)];
 
@@ -48,14 +51,24 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (requestedUserId) {
-      conditions.push(eq(timeEntries.userId, requestedUserId));
+      conditions.push(
+        ownerChronosUserId && requestedUserId === ownerChronosUserId
+          ? whereTimeEntriesForLinkedUser(ownerChronosUserId, linkedApplicantId)
+          : eq(timeEntries.userId, requestedUserId)
+      );
+    } else if (ownerChronosUserId && accessibleUserIds.length === 1 && accessibleUserIds[0] === ownerChronosUserId) {
+      conditions.push(whereTimeEntriesForLinkedUser(ownerChronosUserId, linkedApplicantId));
     } else if (accessibleUserIds.length === 1) {
       conditions.push(eq(timeEntries.userId, accessibleUserIds[0]));
     } else {
       conditions.push(inArray(timeEntries.userId, accessibleUserIds));
     }
   } else if (requestedUserId) {
-    conditions.push(eq(timeEntries.userId, requestedUserId));
+    conditions.push(
+      ownerChronosUserId && requestedUserId === ownerChronosUserId
+        ? whereTimeEntriesForLinkedUser(ownerChronosUserId, linkedApplicantId)
+        : eq(timeEntries.userId, requestedUserId)
+    );
   }
 
   const from = url.searchParams.get("from");

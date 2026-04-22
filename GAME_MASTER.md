@@ -195,6 +195,7 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 
 ## Recent Updates
 
+- 2026-04-22: Phase 3 identity refactor: expanded applicant-owned time-entry reads into reports SSR plus `/api/entries` and `/api/reports` self-owner scopes, still falling back to `user_id` for non-backfilled rows and leaving admin/team-lead multi-user scopes on Chronos user ids for now. See `notes/identity-refactor-phases.md`.
 - 2026-04-22: Phase 3 identity refactor: added `whereTimeEntriesForLinkedUser` so hot time-entry reads prefer `time_entries.applicant_id` with `user_id` fallback, and wired it into entry suggestions plus timer dashboard SSR week/recent/discussion-owner reads. See `notes/identity-refactor-phases.md`.
 - 2026-04-22: Phase 3 identity refactor: added applicant FK columns on `entry_discussions` (starter + resolver) and `discussion_replies` (author), script `db:migrate:discussions-applicant-ids`, dual-write on discussion/reply/resolve APIs, `discussionStarterMatchesViewer` for starter scope, and timer `DiscussionCard` resolve UI aligned with Chronos vs applicant ids. See `notes/identity-refactor-phases.md`.
 - 2026-04-22: Phase 3 identity refactor: added `tags.applicant_id` (nullable FK to `applicants`), backfill/migration script `db:migrate:tags-applicant-id`, dual-write on tag create, and `tag-applicant` helpers for list/ownership and entry+timer tag validation. See `notes/identity-refactor-phases.md`.

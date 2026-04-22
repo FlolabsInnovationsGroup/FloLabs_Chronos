@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
+import { timeEntries, projects, tags, users, timeEntryTags, applicants } from "@/lib/db/schema";
 import {
   eq,
   and,
@@ -77,7 +77,7 @@ export async function GET(req: Request) {
     conditions.push(inArray(timeEntries.id, entryIdsWithTag));
   }
 
-  // Search filter: match description, project name, user name, or tag name
+  // Search filter: match description, project name, applicant/user name/email, or tag name
   if (search) {
     const pattern = `%${search}%`;
     const entryIdsMatchingTag = db
@@ -90,6 +90,9 @@ export async function GET(req: Request) {
       ilike(timeEntries.description, pattern),
       ilike(projects.name, pattern),
       ilike(users.name, pattern),
+      ilike(users.email, pattern),
+      ilike(applicants.name, pattern),
+      ilike(applicants.email, pattern),
       inArray(timeEntries.id, entryIdsMatchingTag),
     );
     if (searchCondition) conditions.push(searchCondition);
@@ -104,6 +107,7 @@ export async function GET(req: Request) {
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
+    .leftJoin(applicants, eq(timeEntries.applicantId, applicants.id))
     .where(and(...conditions))
     .orderBy(desc(timeEntries.startedAt));
 

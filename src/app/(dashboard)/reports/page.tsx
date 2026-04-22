@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
+import { timeEntries, projects, tags, users, timeEntryTags, applicants } from "@/lib/db/schema";
 import {
   eq,
   and,
@@ -141,7 +141,7 @@ async function getEntries(
     conditions.push(inArray(timeEntries.id, entryIdsWithTag));
   }
 
-  // Search via description, project name, user name, or tag name
+  // Search via description, project name, applicant/user name/email, or tag name
   if (params.search) {
     const pattern = `%${params.search}%`;
     const entryIdsMatchingTag = db
@@ -154,6 +154,9 @@ async function getEntries(
       ilike(timeEntries.description, pattern),
       ilike(projects.name, pattern),
       ilike(users.name, pattern),
+      ilike(users.email, pattern),
+      ilike(applicants.name, pattern),
+      ilike(applicants.email, pattern),
       inArray(timeEntries.id, entryIdsMatchingTag),
     );
     if (searchCondition) conditions.push(searchCondition);
@@ -171,6 +174,7 @@ async function getEntries(
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
+    .leftJoin(applicants, eq(timeEntries.applicantId, applicants.id))
     .where(and(...conditions))
     .orderBy(desc(timeEntries.startedAt));
 

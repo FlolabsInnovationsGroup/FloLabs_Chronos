@@ -154,6 +154,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. Daily summary entry payloads now resolve time-entry owners through the same batched applicant-first display map used in entries/reports/timer history.
 3. Legacy `users` rows still remain as fallback for non-backfilled entries, keeping the cron path compatible while removing one more `users`-canonical assumption.
 
+**Applicant-aware report search slice (2026-04-23):**
+
+1. Report search in both `GET /api/reports` and the dashboard reports page now searches applicant name/email as well as legacy `users` fields.
+2. The report queries now join `applicants` directly on `time_entries.applicant_id`, so backfilled rows are discoverable by canonical applicant identity instead of only by `users.name`.
+3. Legacy `users` search remains intact for non-backfilled rows, preserving compatibility while removing another `users`-canonical read assumption.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

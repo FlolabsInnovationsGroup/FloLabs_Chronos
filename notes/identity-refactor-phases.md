@@ -124,6 +124,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. Self-owner bulk actions (`delete`, `changeProject`) treat the signed-in applicant as canonical: allow rows where `applicant_id = session.user.id`, with `user_id = chronosUserId` fallback only for non-backfilled entries.
 3. Admin/team-lead bulk scopes remain keyed on Chronos `user_id` for now, matching the rest of the Phase 3 multi-user compatibility layer.
 
+**Discussion actor display slice (2026-04-22):**
+
+1. Added `chronosActorDisplay(...)` in `src/lib/chronos-user-notion.ts` so discussion/reply actors prefer canonical applicant identity when `startedByApplicantId` / `resolvedByApplicantId` / `authorApplicantId` is present.
+2. `GET /api/discussions`, `GET /api/discussions/entry/[entryId]`, `PATCH /api/discussions/[id]`, and `/api/discussions/[id]/replies` now return applicant-first actor names instead of reading `users.name` alone.
+3. Fallback remains `users`-based for rows that are not backfilled yet, preserving compatibility while discussion actor presentation stops assuming `users` is the canonical profile source.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

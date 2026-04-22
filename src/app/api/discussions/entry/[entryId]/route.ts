@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { entryDiscussions, timeEntries, users, projects } from "@/lib/db/schema";
+import { entryDiscussions, timeEntries, projects } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { canViewDiscussions } from "@/lib/permissions";
 import { fetchRepliesForDiscussions } from "@/app/api/discussions/[id]/replies/route";
 import type { EntryDiscussion } from "@/types";
+import { chronosActorDisplay } from "@/lib/chronos-user-notion";
 
 export async function GET(
   _req: NextRequest,
@@ -28,10 +29,8 @@ export async function GET(
   const rows = await db
     .select({
       discussion: entryDiscussions,
-      startedBy: { id: users.id, name: users.name },
     })
     .from(entryDiscussions)
-    .leftJoin(users, eq(entryDiscussions.startedById, users.id))
     .where(eq(entryDiscussions.entryId, entryId))
     .orderBy(asc(entryDiscussions.createdAt));
 
@@ -42,15 +41,21 @@ export async function GET(
     projectName = proj?.name;
   }
 
-  // Collect resolvedBy ids and fetch names
-  const resolvedByIds = [...new Set(
-    rows.map((r) => r.discussion.resolvedById).filter((id): id is string => id !== null)
-  )];
-  const resolvedByMap = new Map<string, string>();
-  for (const rbId of resolvedByIds) {
-    const [u] = await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.id, rbId)).limit(1);
-    if (u) resolvedByMap.set(u.id, u.name);
-  }
+  const actorKeys = rows.flatMap((r) => [
+    { userId: r.discussion.startedById, applicantId: r.discussion.startedByApplicantId ?? null },
+    r.discussion.resolvedById
+      ? { userId: r.discussion.resolvedById, applicantId: r.discussion.resolvedByApplicantId ?? null }
+      : null,
+  ]).filter((v): v is { userId: string; applicantId: string | null } => Boolean(v));
+
+  const actorMap = new Map<string, { id: string; name: string } | null>();
+  await Promise.all(
+    actorKeys.map(async ({ userId, applicantId }) => {
+      const key = `${userId}:${applicantId ?? ""}`;
+      if (actorMap.has(key)) return;
+      actorMap.set(key, await chronosActorDisplay(userId, applicantId));
+    })
+  );
 
   const discussions: EntryDiscussion[] = rows.map((r) => ({
     id: r.discussion.id,
@@ -63,9 +68,9 @@ export async function GET(
     resolvedByApplicantId: r.discussion.resolvedByApplicantId,
     createdAt: r.discussion.createdAt!,
     updatedAt: r.discussion.updatedAt!,
-    startedBy: r.startedBy ?? undefined,
+    startedBy: actorMap.get(`${r.discussion.startedById}:${r.discussion.startedByApplicantId ?? ""}`) ?? undefined,
     resolvedBy: r.discussion.resolvedById
-      ? { id: r.discussion.resolvedById, name: resolvedByMap.get(r.discussion.resolvedById) ?? '' }
+      ? (actorMap.get(`${r.discussion.resolvedById}:${r.discussion.resolvedByApplicantId ?? ""}`) ?? null)
       : null,
     entryOwnerUserId: entry.userId,
     entryDescription: entry.description,

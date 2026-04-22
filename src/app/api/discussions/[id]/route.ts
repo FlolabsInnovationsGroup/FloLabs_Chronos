@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { entryDiscussions, users } from "@/lib/db/schema";
+import { entryDiscussions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { isAdmin, canResolveDiscussion, discussionStarterMatchesViewer } from "@/lib/permissions";
 import { broadcastDiscussionChange } from "@/lib/realtime";
 import type { EntryDiscussion } from "@/types";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { chronosActorDisplay } from "@/lib/chronos-user-notion";
 
 const patchSchema = z.object({
   resolved: z.literal(true),
@@ -52,12 +53,7 @@ export async function PATCH(
 
   broadcastDiscussionChange(updated.entryId);
 
-  // Load startedBy for response
-  const [startedByUser] = await db
-    .select({ id: users.id, name: users.name })
-    .from(users)
-    .where(eq(users.id, updated.startedById))
-    .limit(1);
+  const startedBy = await chronosActorDisplay(updated.startedById, updated.startedByApplicantId ?? null);
 
   const result: EntryDiscussion = {
     id: updated.id,
@@ -70,7 +66,7 @@ export async function PATCH(
     resolvedByApplicantId: updated.resolvedByApplicantId,
     createdAt: updated.createdAt!,
     updatedAt: updated.updatedAt!,
-    startedBy: startedByUser ?? undefined,
+    startedBy: startedBy ?? undefined,
   };
 
   return NextResponse.json({ discussion: result });
@@ -87,12 +83,10 @@ export async function DELETE(
 
   const { id } = await params;
   const viewer = session.user;
-  const viewerChronosId = chronosUserIdFromSessionUser(viewer);
 
   const [discussion] = await db.select().from(entryDiscussions).where(eq(entryDiscussions.id, id)).limit(1);
   if (!discussion) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Admin can always delete; starter can delete if unresolved
   const canDelete =
     isAdmin(viewer) ||
     (discussion.resolvedAt === null && discussionStarterMatchesViewer(viewer, discussion));

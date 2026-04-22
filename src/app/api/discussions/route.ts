@@ -15,6 +15,7 @@ import { fetchRepliesForDiscussions } from "@/app/api/discussions/[id]/replies/r
 import type { EntryDiscussion } from "@/types";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
+import { chronosActorDisplay } from "@/lib/chronos-user-notion";
 
 function toDiscussion(row: {
   discussion: typeof entryDiscussions.$inferSelect;
@@ -52,11 +53,7 @@ export async function GET() {
     return NextResponse.json({ discussions: [] });
   }
 
-  // Build query for unresolved discussions visible to this viewer
   const startedByAlias = users;
-
-  // We need to join: entry_discussions -> time_entries -> projects -> users(startedBy)
-  // For simplicity, fetch all unresolved then filter by access
   let rows: {
     discussion: typeof entryDiscussions.$inferSelect;
     startedBy: { id: string; name: string } | null;
@@ -96,7 +93,6 @@ export async function GET() {
       .leftJoin(projects, eq(timeEntries.projectId, projects.id))
       .where(isNull(entryDiscussions.resolvedAt));
 
-    // Filter: started by viewer OR entry owner is in accessible scope
     rows = rows.filter(
       (r) =>
         (viewerChronosId && r.discussion.startedById === viewerChronosId) ||
@@ -106,7 +102,6 @@ export async function GET() {
         (r.entry?.userId && accessibleUserIds.includes(r.entry.userId))
     );
   } else {
-    // Member: only discussions on their own entries
     if (!viewerChronosId) return NextResponse.json({ discussions: [] });
     const viewerApplicantId = applicantIdForSessionLinkedUser(viewer);
     const myEntries = await db
@@ -138,7 +133,25 @@ export async function GET() {
     rows = rows.filter((r) => r.discussion.resolvedAt === null);
   }
 
-  const discussions = rows.map(toDiscussion);
+  const startedByMap = new Map<string, { id: string; name: string } | null>();
+  await Promise.all(
+    rows.map(async (r) => {
+      const key = `${r.discussion.startedById}:${r.discussion.startedByApplicantId ?? ""}`;
+      if (startedByMap.has(key)) return;
+      startedByMap.set(
+        key,
+        await chronosActorDisplay(r.discussion.startedById, r.discussion.startedByApplicantId ?? null)
+      );
+    })
+  );
+
+  const discussions = rows.map((row) =>
+    toDiscussion({
+      ...row,
+      startedBy:
+        startedByMap.get(`${row.discussion.startedById}:${row.discussion.startedByApplicantId ?? ""}`) ?? null,
+    })
+  );
 
   const repliesMap = await fetchRepliesForDiscussions(discussions.map((d) => d.id));
   for (const d of discussions) {
@@ -168,7 +181,6 @@ export async function POST(req: NextRequest) {
   const viewerChronosId = chronosUserIdFromSessionUser(viewer);
   if (!viewerChronosId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Load entry to check ownership
   const [entry] = await db.select().from(timeEntries).where(eq(timeEntries.id, entryId)).limit(1);
   if (!entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
 
@@ -188,16 +200,11 @@ export async function POST(req: NextRequest) {
 
   broadcastDiscussionChange(entryId);
 
-  // Load startedBy for response
-  const [startedByUser] = await db
-    .select({ id: users.id, name: users.name })
-    .from(users)
-    .where(eq(users.id, viewerChronosId))
-    .limit(1);
-
   const [project] = entry.projectId
     ? await db.select({ name: projects.name }).from(projects).where(eq(projects.id, entry.projectId)).limit(1)
     : [null];
+
+  const startedBy = await chronosActorDisplay(viewerChronosId, starterApplicantId);
 
   const result: EntryDiscussion = {
     id: discussion.id,
@@ -210,7 +217,7 @@ export async function POST(req: NextRequest) {
     resolvedByApplicantId: discussion.resolvedByApplicantId,
     createdAt: discussion.createdAt!,
     updatedAt: discussion.updatedAt!,
-    startedBy: startedByUser ?? undefined,
+    startedBy: startedBy ?? undefined,
     entryOwnerUserId: entry.userId,
     entryDescription: entry.description,
     entryProjectName: project?.name ?? undefined,

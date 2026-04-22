@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { entryDiscussions, discussionReplies, timeEntries, users } from "@/lib/db/schema";
+import { entryDiscussions, discussionReplies, timeEntries } from "@/lib/db/schema";
 import { eq, asc, inArray } from "drizzle-orm";
 import { canViewDiscussions, isAdmin } from "@/lib/permissions";
 import { broadcastDiscussionChange } from "@/lib/realtime";
 import type { DiscussionReply } from "@/types";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { chronosActorDisplay } from "@/lib/chronos-user-notion";
 
 function toReply(
   row: typeof discussionReplies.$inferSelect,
@@ -56,16 +57,15 @@ export async function GET(
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const rows = await db
-    .select({
-      reply: discussionReplies,
-      author: { id: users.id, name: users.name },
-    })
+    .select({ reply: discussionReplies })
     .from(discussionReplies)
-    .leftJoin(users, eq(discussionReplies.authorId, users.id))
     .where(eq(discussionReplies.discussionId, id))
     .orderBy(asc(discussionReplies.createdAt));
 
-  const replies: DiscussionReply[] = rows.map((r) => toReply(r.reply, r.author));
+  const authors = await Promise.all(
+    rows.map((r) => chronosActorDisplay(r.reply.authorId, r.reply.authorApplicantId ?? null))
+  );
+  const replies: DiscussionReply[] = rows.map((r, idx) => toReply(r.reply, authors[idx]));
 
   return NextResponse.json({ replies });
 }
@@ -121,12 +121,7 @@ export async function POST(
 
   broadcastDiscussionChange(discussion.entryId);
 
-  const [author] = await db
-    .select({ id: users.id, name: users.name })
-    .from(users)
-    .where(eq(users.id, viewerChronosId))
-    .limit(1);
-
+  const author = await chronosActorDisplay(viewerChronosId, authorApplicantId);
   const reply: DiscussionReply = toReply(inserted, author ?? null);
 
   return NextResponse.json({ reply }, { status: 201 });
@@ -143,12 +138,8 @@ export async function fetchRepliesForDiscussions(
   if (!db || discussionIds.length === 0) return map;
 
   const rows = await db
-    .select({
-      reply: discussionReplies,
-      author: { id: users.id, name: users.name },
-    })
+    .select({ reply: discussionReplies })
     .from(discussionReplies)
-    .leftJoin(users, eq(discussionReplies.authorId, users.id))
     .where(
       discussionIds.length === 1
         ? eq(discussionReplies.discussionId, discussionIds[0])
@@ -156,9 +147,13 @@ export async function fetchRepliesForDiscussions(
     )
     .orderBy(asc(discussionReplies.createdAt));
 
-  for (const r of rows) {
+  const authors = await Promise.all(
+    rows.map((r) => chronosActorDisplay(r.reply.authorId, r.reply.authorApplicantId ?? null))
+  );
+
+  for (const [idx, r] of rows.entries()) {
     const existing = map.get(r.reply.discussionId) ?? [];
-    existing.push(toReply(r.reply, r.author));
+    existing.push(toReply(r.reply, authors[idx]));
     map.set(r.reply.discussionId, existing);
   }
 

@@ -7,6 +7,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 import { whereTagsForLinkedUser } from "@/lib/tag-applicant";
+import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 
 const updateTimerSchema = z.object({
   projectId: z.string().uuid().optional().nullable(),
@@ -82,10 +83,11 @@ export async function PATCH(req: Request) {
   await setActiveTimer(userId, updatedTimer);
 
   if (db) {
+    const applicantId = applicantIdForSessionLinkedUser(session.user);
     const runningEntries = await db
       .select({ id: timeEntries.id })
       .from(timeEntries)
-      .where(and(eq(timeEntries.userId, userId), isNull(timeEntries.stoppedAt)))
+      .where(and(whereTimeEntriesForLinkedUser(userId, applicantId), isNull(timeEntries.stoppedAt)))
       .orderBy(timeEntries.startedAt);
 
     const activeEntry = runningEntries[runningEntries.length - 1];
@@ -100,7 +102,6 @@ export async function PATCH(req: Request) {
           .onConflictDoNothing();
       }
 
-      const applicantId = applicantIdForSessionLinkedUser(session.user);
       const updateFields: Record<string, unknown> = { updatedAt: new Date() };
       if (requestedProjectId !== undefined) updateFields.projectId = requestedProjectId;
       if (nextDescription !== undefined) updateFields.description = nextDescription;

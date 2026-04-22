@@ -10,6 +10,7 @@ import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 import { setNotionLinkedTaskInProgressOnStop } from "@/lib/notion";
 import { getTimerStopValidation } from "@/lib/timer-rules";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 
 const stopSchema = z.object({ discard: z.boolean().optional() });
 
@@ -58,15 +59,14 @@ export async function POST(req: Request) {
   await deleteActiveTimer(userId);
 
   if (db && !discard) {
+    const applicantId = applicantIdForSessionLinkedUser(session.user);
     const runningEntries = await db
       .select({ id: timeEntries.id })
       .from(timeEntries)
-      .where(and(eq(timeEntries.userId, userId), isNull(timeEntries.stoppedAt)))
+      .where(and(whereTimeEntriesForLinkedUser(userId, applicantId), isNull(timeEntries.stoppedAt)))
       .orderBy(timeEntries.startedAt);
 
     const activeEntry = runningEntries[runningEntries.length - 1];
-
-    const applicantId = applicantIdForSessionLinkedUser(session.user);
     const updated = activeEntry
       ? await db
           .update(timeEntries)
@@ -101,11 +101,12 @@ export async function POST(req: Request) {
       void setNotionLinkedTaskInProgressOnStop(linkedTaskId).catch(() => {});
     }
   } else if (db && discard) {
+    const applicantId = applicantIdForSessionLinkedUser(session.user);
     await db
       .delete(timeEntries)
       .where(
         and(
-          eq(timeEntries.userId, userId),
+          whereTimeEntriesForLinkedUser(userId, applicantId),
           isNull(timeEntries.stoppedAt)
         )
       );

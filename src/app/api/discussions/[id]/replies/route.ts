@@ -7,7 +7,7 @@ import { eq, asc, inArray } from "drizzle-orm";
 import { canViewDiscussions, isAdmin } from "@/lib/permissions";
 import { broadcastDiscussionChange } from "@/lib/realtime";
 import type { DiscussionReply } from "@/types";
-import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 function toReply(
   row: typeof discussionReplies.$inferSelect,
@@ -17,6 +17,7 @@ function toReply(
     id: row.id,
     discussionId: row.discussionId,
     authorId: row.authorId,
+    authorApplicantId: row.authorApplicantId,
     message: row.message,
     createdAt: row.createdAt!,
     updatedAt: row.updatedAt!,
@@ -107,9 +108,15 @@ export async function POST(
   const allowed = await canViewDiscussions(viewer, entry.userId);
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  const authorApplicantId = applicantIdForSessionLinkedUser(viewer);
   const [inserted] = await db
     .insert(discussionReplies)
-    .values({ discussionId: id, authorId: viewerChronosId, message: parsed.data.message })
+    .values({
+      discussionId: id,
+      authorId: viewerChronosId,
+      authorApplicantId,
+      message: parsed.data.message,
+    })
     .returning();
 
   broadcastDiscussionChange(discussion.entryId);

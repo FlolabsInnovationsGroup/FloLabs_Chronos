@@ -35,7 +35,10 @@ function avatarColor(name: string): string {
 interface DiscussionCardProps {
   initialDiscussions: EntryDiscussion[];
   viewerRole: string;
-  viewerId: string;
+  /** Chronos `users.id` when the session is linked (matches `startedById` on discussions). */
+  viewerChronosUserId?: string | null;
+  /** Applicant id from session (matches `startedByApplicantId` when set). */
+  viewerApplicantId?: string | null;
 }
 
 // ─── sub-components ──────────────────────────────────────────────────────────
@@ -146,7 +149,12 @@ function hasUnread(discussion: EntryDiscussion, seen: Set<string>): boolean {
 
 // ─── main component ───────────────────────────────────────────────────────────
 
-export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: DiscussionCardProps) {
+export function DiscussionCard({
+  initialDiscussions,
+  viewerRole,
+  viewerChronosUserId,
+  viewerApplicantId,
+}: DiscussionCardProps) {
   const [discussions, setDiscussions] = useState<EntryDiscussion[]>(initialDiscussions);
   const [listOpen, setListOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -284,7 +292,11 @@ export function DiscussionCard({ initialDiscussions, viewerRole, viewerId }: Dis
   const hasAnyUnread = discussions.some((d) => hasUnread(d, seenIds));
 
   const canResolve = (discussion: EntryDiscussion) =>
-    isAdminLikeRole(viewerRole) || discussion.startedById === viewerId;
+    isAdminLikeRole(viewerRole) ||
+    (Boolean(viewerChronosUserId) && discussion.startedById === viewerChronosUserId) ||
+    (Boolean(viewerApplicantId) &&
+      Boolean(discussion.startedByApplicantId) &&
+      discussion.startedByApplicantId === viewerApplicantId);
 
   const activeDiscussion = activeId ? discussions.find((d) => d.id === activeId) : null;
 

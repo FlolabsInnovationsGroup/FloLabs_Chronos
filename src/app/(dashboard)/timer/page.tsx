@@ -114,7 +114,8 @@ async function getInitialDiscussions(
     teamId: string | null;
     isActive: boolean;
   },
-  ownerChronosUserId: string
+  ownerChronosUserId: string,
+  viewerApplicantId: string | null
 ): Promise<EntryDiscussion[]> {
   if (!db) return [];
 
@@ -162,6 +163,9 @@ async function getInitialDiscussions(
     rows = allRows.filter(
       (r) =>
         r.discussion.startedById === ownerChronosUserId ||
+        (viewerApplicantId &&
+          r.discussion.startedByApplicantId &&
+          r.discussion.startedByApplicantId === viewerApplicantId) ||
         (r.entry?.userId && accessibleUserIds.includes(r.entry.userId))
     );
   } else {
@@ -198,9 +202,11 @@ async function getInitialDiscussions(
     id: r.discussion.id,
     entryId: r.discussion.entryId,
     startedById: r.discussion.startedById,
+    startedByApplicantId: r.discussion.startedByApplicantId,
     message: r.discussion.message,
     resolvedAt: r.discussion.resolvedAt,
     resolvedById: r.discussion.resolvedById,
+    resolvedByApplicantId: r.discussion.resolvedByApplicantId,
     createdAt: r.discussion.createdAt!,
     updatedAt: r.discussion.updatedAt!,
     startedBy: r.startedBy ?? undefined,
@@ -234,6 +240,7 @@ async function getInitialDiscussions(
         id: r.reply.id,
         discussionId: r.reply.discussionId,
         authorId: r.reply.authorId,
+        authorApplicantId: r.reply.authorApplicantId,
         message: r.reply.message,
         createdAt: r.reply.createdAt!,
         updatedAt: r.reply.updatedAt!,
@@ -271,7 +278,7 @@ export default async function TimerPage() {
     getWeekEntries(userId),
     getRecentEntries(userId),
     getUserWeeklyTarget(userId),
-    getInitialDiscussions(sessionUser, userId),
+    getInitialDiscussions(sessionUser, userId, linkedApplicantId),
   ]);
 
   return (

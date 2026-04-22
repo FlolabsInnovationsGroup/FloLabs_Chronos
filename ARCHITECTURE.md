@@ -413,16 +413,30 @@ CREATE TABLE time_entry_tags (
 );
 
 CREATE TABLE entry_discussions (
-  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  entry_id       UUID NOT NULL REFERENCES time_entries(id) ON DELETE CASCADE,
-  started_by_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  message        TEXT NOT NULL,
-  resolved_at    TIMESTAMPTZ,
-  resolved_by_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  created_at     TIMESTAMPTZ DEFAULT now(),
-  updated_at     TIMESTAMPTZ DEFAULT now()
+  id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_id                  UUID NOT NULL REFERENCES time_entries(id) ON DELETE CASCADE,
+  started_by_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  started_by_applicant_id   UUID REFERENCES applicants(id) ON DELETE SET NULL,
+  message                   TEXT NOT NULL,
+  resolved_at               TIMESTAMPTZ,
+  resolved_by_id            UUID REFERENCES users(id) ON DELETE SET NULL,
+  resolved_by_applicant_id  UUID REFERENCES applicants(id) ON DELETE SET NULL,
+  created_at                TIMESTAMPTZ DEFAULT now(),
+  updated_at                TIMESTAMPTZ DEFAULT now()
 );
--- Indexes: idx_discussions_entry, idx_discussions_started_by, idx_discussions_unresolved
+-- Indexes: idx_discussions_entry, idx_discussions_started_by, idx_discussions_started_by_applicant,
+--   idx_discussions_resolved_by_applicant, idx_discussions_unresolved
+
+CREATE TABLE discussion_replies (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  discussion_id     UUID NOT NULL REFERENCES entry_discussions(id) ON DELETE CASCADE,
+  author_id          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  author_applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL,
+  message            TEXT NOT NULL,
+  created_at         TIMESTAMPTZ DEFAULT now(),
+  updated_at         TIMESTAMPTZ DEFAULT now()
+);
+-- Indexes: idx_replies_discussion, idx_replies_author, idx_replies_author_applicant
 ```
 
 ### Data Rules
@@ -434,6 +448,7 @@ CREATE TABLE entry_discussions (
 - `invitation_team_memberships` stores full invited membership intent.
 - Tags are unique per `(name, user_id)`.
 - Phase 3: `tags.applicant_id` is the canonical owner pointer (dual-stored with `user_id`); new writes and API scope checks set or honor both; run `db:migrate:tags-applicant-id` to add and backfill the column.
+- Phase 3: `entry_discussions.started_by_applicant_id`, `resolved_by_applicant_id`, and `discussion_replies.author_applicant_id` mirror the user FKs; dual-write on create/resolve/reply; run `db:migrate:discussions-applicant-ids` per database. List/resolve/delete scope uses `discussionStarterMatchesViewer` in `src/lib/permissions.ts`.
 - Time entries never store a direct single tag column.
 - Project linkage is optional for timer-created entries and may be filled in later.
 - Task linkage is optional while the timer is running; stopping requires an explicit task selection only when the entry’s project has `requires_task_on_stop = true`.

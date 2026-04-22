@@ -120,7 +120,8 @@ export function TimerDashboardClient({
           <DiscussionCard
             initialDiscussions={discussions}
             viewerRole={session?.user.role ?? "member"}
-            viewerId={session?.user.id ?? ""}
+            viewerChronosUserId={session?.user.chronosUserId ?? null}
+            viewerApplicantId={session?.user.id ?? null}
           />
           <ActiveTimerCard weekEntries={weekEntries} weeklyTargetHours={weeklyTargetHours} />
         </div>

@@ -126,6 +126,8 @@ export interface DiscussionReply {
   id: string;
   discussionId: string;
   authorId: string;
+  /** Phase 3: set when the author is linked to an applicant. */
+  authorApplicantId?: string | null;
   message: string;
   createdAt: Date;
   updatedAt: Date;
@@ -136,9 +138,13 @@ export interface EntryDiscussion {
   id: string;
   entryId: string;
   startedById: string;
+  /** Phase 3: canonical starter when linked to applicants. */
+  startedByApplicantId?: string | null;
   message: string;
   resolvedAt: Date | null;
   resolvedById: string | null;
+  /** Phase 3: canonical resolver when linked to applicants. */
+  resolvedByApplicantId?: string | null;
   createdAt: Date;
   updatedAt: Date;
   startedBy?: Pick<User, 'id' | 'name'>;

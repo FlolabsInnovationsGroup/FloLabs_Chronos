@@ -237,15 +237,21 @@ export const entryDiscussions = pgTable(
     id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
     entryId: uuid('entry_id').notNull().references(() => timeEntries.id, { onDelete: 'cascade' }),
     startedById: uuid('started_by_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    /** Phase 3: canonical starter pointer; backfilled from applicants.chronos_user_id = started_by_id. */
+    startedByApplicantId: uuid('started_by_applicant_id').references(() => applicants.id, { onDelete: 'set null' }),
     message: text('message').notNull(),
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),
     resolvedById: uuid('resolved_by_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Phase 3: canonical resolver pointer; backfilled from applicants.chronos_user_id = resolved_by_id. */
+    resolvedByApplicantId: uuid('resolved_by_applicant_id').references(() => applicants.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   },
   (t) => [
     index('idx_discussions_entry').on(t.entryId),
     index('idx_discussions_started_by').on(t.startedById),
+    index('idx_discussions_started_by_applicant').on(t.startedByApplicantId),
+    index('idx_discussions_resolved_by_applicant').on(t.resolvedByApplicantId),
     index('idx_discussions_unresolved').on(t.entryId, t.resolvedAt),
   ]
 );
@@ -259,6 +265,8 @@ export const discussionReplies = pgTable(
     id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
     discussionId: uuid('discussion_id').notNull().references(() => entryDiscussions.id, { onDelete: 'cascade' }),
     authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    /** Phase 3: canonical author pointer; backfilled from applicants.chronos_user_id = author_id. */
+    authorApplicantId: uuid('author_applicant_id').references(() => applicants.id, { onDelete: 'set null' }),
     message: text('message').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
@@ -266,6 +274,7 @@ export const discussionReplies = pgTable(
   (t) => [
     index('idx_replies_discussion').on(t.discussionId),
     index('idx_replies_author').on(t.authorId),
+    index('idx_replies_author_applicant').on(t.authorApplicantId),
   ]
 );
 

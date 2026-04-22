@@ -13,7 +13,7 @@ import {
 import { broadcastDiscussionChange } from "@/lib/realtime";
 import { fetchRepliesForDiscussions } from "@/app/api/discussions/[id]/replies/route";
 import type { EntryDiscussion } from "@/types";
-import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 function toDiscussion(row: {
   discussion: typeof entryDiscussions.$inferSelect;
@@ -25,9 +25,11 @@ function toDiscussion(row: {
     id: row.discussion.id,
     entryId: row.discussion.entryId,
     startedById: row.discussion.startedById,
+    startedByApplicantId: row.discussion.startedByApplicantId,
     message: row.discussion.message,
     resolvedAt: row.discussion.resolvedAt,
     resolvedById: row.discussion.resolvedById,
+    resolvedByApplicantId: row.discussion.resolvedByApplicantId,
     createdAt: row.discussion.createdAt!,
     updatedAt: row.discussion.updatedAt!,
     startedBy: row.startedBy ?? undefined,
@@ -79,6 +81,7 @@ export async function GET() {
     if (!accessibleUserIds || accessibleUserIds.length === 0) {
       return NextResponse.json({ discussions: [] });
     }
+    const viewerApplicantId = applicantIdForSessionLinkedUser(viewer);
     rows = await db
       .select({
         discussion: entryDiscussions,
@@ -96,6 +99,9 @@ export async function GET() {
     rows = rows.filter(
       (r) =>
         (viewerChronosId && r.discussion.startedById === viewerChronosId) ||
+        (viewerApplicantId &&
+          r.discussion.startedByApplicantId &&
+          r.discussion.startedByApplicantId === viewerApplicantId) ||
         (r.entry?.userId && accessibleUserIds.includes(r.entry.userId))
     );
   } else {
@@ -167,9 +173,15 @@ export async function POST(req: NextRequest) {
   const allowed = await canStartDiscussion(viewer, entry.userId);
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  const starterApplicantId = applicantIdForSessionLinkedUser(viewer);
   const [discussion] = await db
     .insert(entryDiscussions)
-    .values({ entryId, startedById: viewerChronosId, message })
+    .values({
+      entryId,
+      startedById: viewerChronosId,
+      startedByApplicantId: starterApplicantId,
+      message,
+    })
     .returning();
 
   broadcastDiscussionChange(entryId);
@@ -189,9 +201,11 @@ export async function POST(req: NextRequest) {
     id: discussion.id,
     entryId: discussion.entryId,
     startedById: discussion.startedById,
+    startedByApplicantId: discussion.startedByApplicantId,
     message: discussion.message,
     resolvedAt: discussion.resolvedAt,
     resolvedById: discussion.resolvedById,
+    resolvedByApplicantId: discussion.resolvedByApplicantId,
     createdAt: discussion.createdAt!,
     updatedAt: discussion.updatedAt!,
     startedBy: startedByUser ?? undefined,

@@ -99,6 +99,13 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. Backfill script: `tags.user_id` = `applicants.chronos_user_id` → `applicant_id`. *(Done: `scripts/migrate-tags-applicant-id.ts`.)*
 3. Dual-write: `POST /api/tags` sets `applicant_id` from the signed-in applicant when `chronosUserId` is present; reads and ownership checks use `whereTagsForLinkedUser` / `tagRowAccessibleBySession` in `src/lib/tag-applicant.ts` (timer PATCH/start, tag list, reports/timer SSR, `POST`/`PATCH` entries tag validation, bulk tag delete).
 
+**Discussions + replies slice (2026-04-22):**
+
+1. Add nullable `started_by_applicant_id`, `resolved_by_applicant_id` on `entry_discussions` and `author_applicant_id` on `discussion_replies` (FK → `applicants.id`, indexes). *(Schema: `src/lib/db/schema.ts`; run `pnpm run db:migrate:discussions-applicant-ids` per database.)*
+2. Backfill from `applicants.chronos_user_id` for each user FK column. *(Done: `scripts/migrate-discussions-applicant-ids.ts`.)*
+3. Dual-write: `POST /api/discussions` sets starter applicant id; `PATCH /api/discussions/[id]` sets resolver applicant id; `POST /api/discussions/[id]/replies` sets author applicant id. GET handlers and timer SSR include the new fields on `EntryDiscussion` / `DiscussionReply`.
+4. Scope: `discussionStarterMatchesViewer` + `canResolveDiscussion` treat the viewer as the starter when either `chronosUserId` matches `startedById` or session applicant id matches `startedByApplicantId`. Team-lead unresolved list filters include the same applicant-id match. Timer `DiscussionCard` uses `viewerChronosUserId` and `viewerApplicantId` so resolve controls work with Phase 2 session shape.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

@@ -4,10 +4,10 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { entryDiscussions, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { isAdmin, canResolveDiscussion } from "@/lib/permissions";
+import { isAdmin, canResolveDiscussion, discussionStarterMatchesViewer } from "@/lib/permissions";
 import { broadcastDiscussionChange } from "@/lib/realtime";
 import type { EntryDiscussion } from "@/types";
-import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 const patchSchema = z.object({
   resolved: z.literal(true),
@@ -38,9 +38,15 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const resolverApplicantId = applicantIdForSessionLinkedUser(viewer);
   const [updated] = await db
     .update(entryDiscussions)
-    .set({ resolvedAt: new Date(), resolvedById: viewerChronosId, updatedAt: new Date() })
+    .set({
+      resolvedAt: new Date(),
+      resolvedById: viewerChronosId,
+      resolvedByApplicantId: resolverApplicantId,
+      updatedAt: new Date(),
+    })
     .where(eq(entryDiscussions.id, id))
     .returning();
 
@@ -57,9 +63,11 @@ export async function PATCH(
     id: updated.id,
     entryId: updated.entryId,
     startedById: updated.startedById,
+    startedByApplicantId: updated.startedByApplicantId,
     message: updated.message,
     resolvedAt: updated.resolvedAt,
     resolvedById: updated.resolvedById,
+    resolvedByApplicantId: updated.resolvedByApplicantId,
     createdAt: updated.createdAt!,
     updatedAt: updated.updatedAt!,
     startedBy: startedByUser ?? undefined,
@@ -87,9 +95,7 @@ export async function DELETE(
   // Admin can always delete; starter can delete if unresolved
   const canDelete =
     isAdmin(viewer) ||
-    (Boolean(viewerChronosId) &&
-      viewerChronosId === discussion.startedById &&
-      discussion.resolvedAt === null);
+    (discussion.resolvedAt === null && discussionStarterMatchesViewer(viewer, discussion));
   if (!canDelete) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   await db.delete(entryDiscussions).where(eq(entryDiscussions.id, id));

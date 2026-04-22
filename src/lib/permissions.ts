@@ -190,13 +190,30 @@ export async function canStartDiscussion(viewer: SessionUserLike, entryOwnerUser
   return false;
 }
 
+/** True when the viewer is the discussion starter (Chronos user and/or linked applicant). */
+export function discussionStarterMatchesViewer(
+  viewer: SessionUserLike,
+  discussion: { startedById: string; startedByApplicantId?: string | null }
+): boolean {
+  if (sessionOwnershipUserId(viewer) === discussion.startedById) return true;
+  if (
+    typeof viewer.chronosUserId === "string" &&
+    viewer.chronosUserId.length > 0 &&
+    discussion.startedByApplicantId &&
+    viewer.id === discussion.startedByApplicantId
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /** Admins can resolve any discussion. Discussion starter can resolve their own. */
 export function canResolveDiscussion(
   viewer: SessionUserLike,
-  discussion: { startedById: string }
+  discussion: { startedById: string; startedByApplicantId?: string | null }
 ): boolean {
   if (isAdmin(viewer)) return true;
-  return sessionOwnershipUserId(viewer) === discussion.startedById;
+  return discussionStarterMatchesViewer(viewer, discussion);
 }
 
 /** Who can view discussions on an entry */

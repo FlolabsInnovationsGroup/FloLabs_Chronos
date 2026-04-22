@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { teamMemberships, teams, users, projects, timeEntries } from "@/lib/db/schema";
+import { teamMemberships, teams, users, projects, timeEntries, applicants } from "@/lib/db/schema";
 import { eq, inArray, isNull, and } from "drizzle-orm";
 import { getAccessibleTeamIds, isAdmin } from "@/lib/permissions";
 import { getAllActiveTimers } from "@/lib/redis";
@@ -56,9 +56,17 @@ export async function GET(
       isActive: users.isActive,
       weeklyTargetHours: users.weeklyTargetHours,
       createdAt: users.createdAt,
+      applicantName: applicants.name,
+      applicantEmail: applicants.email,
+      applicantRole: applicants.role,
+      applicantIsActive: applicants.isActive,
+      applicantWeeklyTargetHours: applicants.weeklyTargetHours,
+      applicantProgramStatus: applicants.status,
+      applicantNotionTeamMemberId: applicants.notionTeamMemberId,
     })
     .from(teamMemberships)
     .innerJoin(users, eq(teamMemberships.userId, users.id))
+    .leftJoin(applicants, eq(applicants.chronosUserId, users.id))
     .where(eq(teamMemberships.teamId, teamId));
 
   if (memberRows.length === 0) return NextResponse.json({ members: [] });
@@ -103,7 +111,15 @@ export async function GET(
       (effectiveProjectId ? (projectNameById.get(effectiveProjectId) ?? null) : null);
 
     return {
-      ...m,
+      id: m.id,
+      name: m.applicantName?.trim() || m.name,
+      email: m.applicantEmail?.trim() || m.email,
+      role: m.applicantRole ?? m.role,
+      isActive: m.applicantIsActive ?? m.isActive,
+      weeklyTargetHours: m.applicantWeeklyTargetHours ?? m.weeklyTargetHours,
+      createdAt: m.createdAt,
+      applicantProgramStatus: m.applicantProgramStatus ?? null,
+      notionTeamMemberId: m.applicantNotionTeamMemberId ?? null,
       activeTimer: timer
         ? {
             startedAt: timer.startedAt,

@@ -202,6 +202,45 @@ export async function GET() {
       }
     }
 
+    if (db && rows.length > 0) {
+      try {
+        const applicantRows = await db
+          .select({
+            chronosUserId: applicants.chronosUserId,
+            status: applicants.status,
+            role: applicants.role,
+            teamId: applicants.teamId,
+            isActive: applicants.isActive,
+            weeklyTargetHours: applicants.weeklyTargetHours,
+            profilePictureUrl: applicants.profilePictureUrl,
+            notionTeamMemberId: applicants.notionTeamMemberId,
+            name: applicants.name,
+            email: applicants.email,
+            hubspotRawData: applicants.hubspotRawData,
+          })
+          .from(applicants)
+          .where(inArray(applicants.chronosUserId, rows.map((r) => r.id)));
+
+        for (const row of applicantRows) {
+          if (!row.chronosUserId) continue;
+          programStatusByUserId.set(row.chronosUserId, row.status as ApplicantProgramStatus);
+          applicantProfileByUserId.set(row.chronosUserId, {
+            role: row.role,
+            teamId: row.teamId,
+            isActive: row.isActive,
+            weeklyTargetHours: row.weeklyTargetHours,
+            profilePictureUrl: row.profilePictureUrl,
+            notionTeamMemberId: row.notionTeamMemberId,
+            name: row.name,
+            email: row.email,
+            hubspotRawData: row.hubspotRawData,
+          });
+        }
+      } catch (error) {
+        console.error("[api/users] applicant profile overlay query failed", error);
+      }
+    }
+
     const applicantCounts = new Map<string, number>();
     if (db && session.user.role === 'admin') {
       try {

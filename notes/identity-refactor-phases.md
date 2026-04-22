@@ -136,6 +136,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. `GET /api/entries`, `GET /api/reports`, and the dashboard reports page now prefer applicant name/email when `time_entries.applicant_id` is present, while still falling back to linked `users` rows for legacy entries.
 3. CSV export and grouped report labels now reflect the canonical applicant-facing owner identity instead of relying on `users.name` alone.
 
+**Users/team directory overlay slice (2026-04-22):**
+
+1. `GET /api/users` now actually overlays linked applicant profile fields (`name`, `email`, `role`, `teamId`, `isActive`, `weeklyTargetHours`, `profilePictureUrl`, `notionTeamMemberId`, `status`) instead of leaving the applicant-first maps empty.
+2. `GET /api/teams/[id]/members` now prefers applicant profile fields for member identity/status in team views, with `users` fallback for legacy or unlinked rows.
+3. This keeps shared directory surfaces aligned with Phase 3’s applicant-canonical identity model without changing Redis timer keys or other Phase 4 live-state infrastructure yet.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

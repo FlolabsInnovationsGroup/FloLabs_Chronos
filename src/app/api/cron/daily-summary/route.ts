@@ -4,6 +4,7 @@ import { applicants, timeEntries, projects, tags, users, timeEntryTags } from "@
 import { eq, and, gte, isNotNull, inArray } from "drizzle-orm";
 import { sendDiscordEmbed, buildDailySummaryEmbed } from "@/lib/discord";
 import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
+import { chronosEntryOwnerDisplayMap } from "@/lib/chronos-user-notion";
 import type { TimeEntry } from "@/types";
 
 export const runtime = "nodejs";
@@ -46,7 +47,7 @@ export async function GET(req: Request) {
 
     try {
       const [linkedApplicant] = await db
-        .select({ id: applicants.id })
+        .select({ id: applicants.id, name: applicants.name, email: applicants.email })
         .from(applicants)
         .where(eq(applicants.chronosUserId, user.id))
         .limit(1);
@@ -70,13 +71,16 @@ export async function GET(req: Request) {
 
       // Fetch tags for these entries
       const entryIds = rows.map((r) => r.entry.id);
-      const tagRows = entryIds.length > 0
-        ? await db
-            .select({ timeEntryId: timeEntryTags.timeEntryId, tagId: tags.id, tagName: tags.name })
-            .from(timeEntryTags)
-            .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
-            .where(inArray(timeEntryTags.timeEntryId, entryIds))
-        : [];
+      const [tagRows, ownerDisplayMap] = await Promise.all([
+        entryIds.length > 0
+          ? db
+              .select({ timeEntryId: timeEntryTags.timeEntryId, tagId: tags.id, tagName: tags.name })
+              .from(timeEntryTags)
+              .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
+              .where(inArray(timeEntryTags.timeEntryId, entryIds))
+          : Promise.resolve([]),
+        chronosEntryOwnerDisplayMap(rows.map((r) => ({ userId: r.entry.userId, applicantId: r.entry.applicantId ?? null }))),
+      ]);
 
       const tagMap = new Map<string, { id: string; name: string }[]>();
       for (const r of tagRows) {
@@ -85,14 +89,15 @@ export async function GET(req: Request) {
         tagMap.set(r.timeEntryId, existing);
       }
 
-      const userEntries = rows.map(({ entry, project }) => ({
+      const userEntries = rows.map(({ entry, project, user: entryUser }) => ({
         ...entry,
         project: project ?? undefined,
         tags: tagMap.get(entry.id) ?? [],
-        user: { id: user.id, name: user.name, email: user.email },
+        user: ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ?? entryUser ?? { id: user.id, name: user.name, email: user.email },
       })) as TimeEntry[];
 
-      const embed = buildDailySummaryEmbed(user.name, userEntries);
+      const summaryName = linkedApplicant?.name?.trim() || user.name;
+      const embed = buildDailySummaryEmbed(summaryName, userEntries);
       await sendDiscordEmbed(user.discordWebhookUrl, embed);
       sent++;
     } catch (err) {

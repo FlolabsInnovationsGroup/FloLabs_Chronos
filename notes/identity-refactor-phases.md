@@ -148,6 +148,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. Initial discussion and reply payloads on the timer page now prefer applicant-canonical actor names via `chronosActorDisplay(...)`.
 3. Weekly target hours on the timer page now prefer `applicants.weekly_target_hours`, with linked-applicant and `users` fallback for legacy rows.
 
+**Daily summary identity slice (2026-04-22):**
+
+1. `GET /api/cron/daily-summary` now prefers the linked applicant profile when naming the summary recipient.
+2. Daily summary entry payloads now resolve time-entry owners through the same batched applicant-first display map used in entries/reports/timer history.
+3. Legacy `users` rows still remain as fallback for non-backfilled entries, keeping the cron path compatible while removing one more `users`-canonical assumption.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

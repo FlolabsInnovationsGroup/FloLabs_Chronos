@@ -112,6 +112,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. Use that scope in recent-suggestions, timer dashboard SSR, timer PATCH/stop running-entry lookup, reports SSR, `/api/entries` + `/api/reports` self-owner reads, member discussion entry lookup, daily summaries, and user-delete ownership checks so the hottest entry-owning reads stop assuming `time_entries.user_id` is canonical.
 3. Keep admin/team-lead multi-user scopes on `user_id` for now, and keep joins to `users` only for display compatibility (`name`, weekly target), not row ownership.
 
+**Notion sync + lifecycle owner-resolution slice (2026-04-22):**
+
+1. `GET /api/cron/notion-sync` now resolves the applicant profile for each entry by preferring `time_entries.applicant_id` and only falling back to `applicants.chronos_user_id = time_entries.user_id` for rows not backfilled yet.
+2. `src/lib/entry-lifecycle.ts` uses the same applicant-first join when hydrating entries for Notion sync / Discord notification work, so background sync paths stop assuming `users.id` is the canonical bridge to applicant profile data.
+3. `users` stays joined only as the temporary FK/display compatibility row; applicant-facing name/email/team-member identity now reads canonically from `applicant_id` first.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

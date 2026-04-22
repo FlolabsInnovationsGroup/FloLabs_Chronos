@@ -58,7 +58,13 @@ export async function GET(req: Request) {
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
-    .leftJoin(applicants, eq(applicants.chronosUserId, users.id))
+    .leftJoin(
+      applicants,
+      or(
+        eq(timeEntries.applicantId, applicants.id),
+        and(isNull(timeEntries.applicantId), eq(applicants.chronosUserId, users.id))
+      )
+    )
     .where(
       and(
         isNotNull(timeEntries.stoppedAt),

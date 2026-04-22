@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { applicants, projects, tags, timeEntries, timeEntryTags, users } from "@/lib/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { markEntryDeleted, syncEntryToNotionFull, updateEntryStatus } from "@/lib/notion";
 import {
   notifyEntryAdded,
@@ -26,7 +26,13 @@ async function loadEntry(entryId: string) {
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
-    .leftJoin(applicants, eq(applicants.chronosUserId, users.id))
+    .leftJoin(
+      applicants,
+      or(
+        eq(timeEntries.applicantId, applicants.id),
+        and(isNull(timeEntries.applicantId), eq(applicants.chronosUserId, users.id))
+      )
+    )
     .where(eq(timeEntries.id, entryId))
     .limit(1);
 

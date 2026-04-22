@@ -160,6 +160,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. The report queries now join `applicants` directly on `time_entries.applicant_id`, so backfilled rows are discoverable by canonical applicant identity instead of only by `users.name`.
 3. Legacy `users` search remains intact for non-backfilled rows, preserving compatibility while removing another `users`-canonical read assumption.
 
+**User update response identity slice (2026-04-23):**
+
+1. `PATCH /api/users/[id]` now reloads the linked applicant profile before returning the updated user payload.
+2. The response now prefers applicant-canonical `name`, `email`, `role`, `teamId`, `isActive`, `weeklyTargetHours`, `notionTeamMemberId`, `profilePictureUrl`, and program status instead of echoing only the legacy `users` row.
+3. This keeps admin/team editing flows aligned with the applicant-first identity model immediately after saves, while preserving `users` fallback for unlinked rows.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

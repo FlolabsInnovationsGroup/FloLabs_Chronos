@@ -296,9 +296,40 @@ export async function PATCH(
       // Non-blocking: user/team update should still succeed if Notion sync fails.
     }
   }
+  const [linkedApplicantProfile] = await db
+    .select({
+      name: applicants.name,
+      email: applicants.email,
+      role: applicants.role,
+      teamId: applicants.teamId,
+      isActive: applicants.isActive,
+      weeklyTargetHours: applicants.weeklyTargetHours,
+      notionTeamMemberId: applicants.notionTeamMemberId,
+      applicantProgramStatus: applicants.status,
+      profilePictureUrl: applicants.profilePictureUrl,
+    })
+    .from(applicants)
+    .where(eq(applicants.chronosUserId, id))
+    .limit(1);
+
   const userTeams = await getUserTeams(id);
   broadcastDataChange("team");
-  return NextResponse.json({ user: { ...user, teams: userTeams, team: userTeams[0] ?? null } });
+  return NextResponse.json({
+    user: {
+      ...user,
+      name: linkedApplicantProfile?.name?.trim() || user.name,
+      email: linkedApplicantProfile?.email?.trim() || user.email,
+      role: linkedApplicantProfile?.role ?? user.role,
+      teamId: linkedApplicantProfile?.teamId ?? user.teamId,
+      isActive: linkedApplicantProfile?.isActive ?? user.isActive,
+      weeklyTargetHours: linkedApplicantProfile?.weeklyTargetHours ?? user.weeklyTargetHours,
+      notionTeamMemberId: linkedApplicantProfile?.notionTeamMemberId ?? user.notionTeamMemberId,
+      profilePictureUrl: linkedApplicantProfile?.profilePictureUrl ?? user.profilePictureUrl,
+      applicantProgramStatus: linkedApplicantProfile?.applicantProgramStatus ?? null,
+      teams: userTeams,
+      team: userTeams[0] ?? null,
+    },
+  });
 }
 
 export async function DELETE(

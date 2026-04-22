@@ -10,6 +10,7 @@ import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 import { setNotionLinkedTaskInProgressOnStop } from "@/lib/notion";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
+import { chronosEntryOwnerDisplayMap } from "@/lib/chronos-user-notion";
 
 async function attachTags(
   entryRows: { id: string }[]
@@ -89,12 +90,15 @@ export async function GET(req: Request) {
     .orderBy(desc(timeEntries.startedAt))
     .limit(limit);
 
-  const tagMap = await attachTags(rows.map((r) => r.entry));
+  const [tagMap, ownerDisplayMap] = await Promise.all([
+    attachTags(rows.map((r) => r.entry)),
+    chronosEntryOwnerDisplayMap(rows.map((r) => ({ userId: r.entry.userId, applicantId: r.entry.applicantId ?? null }))),
+  ]);
 
   const entries = rows.map(({ entry, project, user }) => ({
     ...entry,
     project,
-    user,
+    user: ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ?? user,
     tags: tagMap.get(entry.id) ?? [],
   }));
 

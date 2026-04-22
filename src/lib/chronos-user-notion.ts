@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { applicants, users } from "@/lib/db/schema";
 
@@ -73,4 +73,71 @@ export async function chronosActorDisplay(
     id: row.userId,
     name: row.applicantName?.trim() || row.userName,
   };
+}
+
+export async function chronosEntryOwnerDisplayMap(
+  owners: Array<{ userId: string | null | undefined; applicantId?: string | null }>
+): Promise<Map<string, { id: string; name: string; email: string | null }>> {
+  const map = new Map<string, { id: string; name: string; email: string | null }>();
+  if (!db || owners.length === 0) return map;
+
+  const applicantIds = [...new Set(owners.map((o) => o.applicantId).filter((v): v is string => !!v))];
+  const userIds = [...new Set(owners.map((o) => o.userId).filter((v): v is string => !!v))];
+
+  const [applicantRows, linkedApplicantRows, userRows] = await Promise.all([
+    applicantIds.length > 0
+      ? db
+          .select({
+            applicantId: applicants.id,
+            chronosUserId: applicants.chronosUserId,
+            name: applicants.name,
+            email: applicants.email,
+          })
+          .from(applicants)
+          .where(inArray(applicants.id, applicantIds))
+      : Promise.resolve([]),
+    userIds.length > 0
+      ? db
+          .select({
+            applicantId: applicants.id,
+            chronosUserId: applicants.chronosUserId,
+            name: applicants.name,
+            email: applicants.email,
+          })
+          .from(applicants)
+          .where(inArray(applicants.chronosUserId, userIds))
+      : Promise.resolve([]),
+    userIds.length > 0
+      ? db
+          .select({ id: users.id, name: users.name, email: users.email })
+          .from(users)
+          .where(inArray(users.id, userIds))
+      : Promise.resolve([]),
+  ]);
+
+  const applicantById = new Map(applicantRows.map((row) => [row.applicantId, row]));
+  const linkedApplicantByUserId = new Map(
+    linkedApplicantRows
+      .filter((row) => !!row.chronosUserId)
+      .map((row) => [row.chronosUserId as string, row])
+  );
+  const userById = new Map(userRows.map((row) => [row.id, row]));
+
+  for (const owner of owners) {
+    const key = `${owner.userId ?? ""}:${owner.applicantId ?? ""}`;
+    const applicant = owner.applicantId ? applicantById.get(owner.applicantId) : null;
+    const linkedApplicant = owner.userId ? linkedApplicantByUserId.get(owner.userId) : null;
+    const user = owner.userId ? userById.get(owner.userId) : null;
+    const preferredApplicant = applicant ?? linkedApplicant ?? null;
+
+    if (preferredApplicant || user) {
+      map.set(key, {
+        id: owner.userId ?? preferredApplicant?.chronosUserId ?? preferredApplicant?.applicantId ?? user?.id ?? "",
+        name: preferredApplicant?.name?.trim() || user?.name || "Unknown",
+        email: preferredApplicant?.email?.trim() || user?.email || null,
+      });
+    }
+  }
+
+  return map;
 }

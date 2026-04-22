@@ -130,6 +130,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. `GET /api/discussions`, `GET /api/discussions/entry/[entryId]`, `PATCH /api/discussions/[id]`, and `/api/discussions/[id]/replies` now return applicant-first actor names instead of reading `users.name` alone.
 3. Fallback remains `users`-based for rows that are not backfilled yet, preserving compatibility while discussion actor presentation stops assuming `users` is the canonical profile source.
 
+**Entry/report owner display slice (2026-04-22):**
+
+1. Added batched `chronosEntryOwnerDisplayMap(...)` in `src/lib/chronos-user-notion.ts` so time-entry owner display can resolve applicant-first without per-row lookups.
+2. `GET /api/entries`, `GET /api/reports`, and the dashboard reports page now prefer applicant name/email when `time_entries.applicant_id` is present, while still falling back to linked `users` rows for legacy entries.
+3. CSV export and grouped report labels now reflect the canonical applicant-facing owner identity instead of relying on `users.name` alone.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

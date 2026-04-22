@@ -30,6 +30,7 @@ import {
 import { applicantIdForSessionLinkedUser, requireChronosUserIdFromSessionUser } from "@/lib/chronos-session";
 import { whereTagsForLinkedUser } from "@/lib/tag-applicant";
 import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
+import { chronosEntryOwnerDisplayMap } from "@/lib/chronos-user-notion";
 
 export const metadata: Metadata = { title: "Reports | FloLabs Chronos" };
 
@@ -179,11 +180,14 @@ async function getEntries(
 
   // Fetch tags for all returned entries
   const entryIds = rows.map((r) => r.entry.id);
-  const tagRows = await db
-    .select({ timeEntryId: timeEntryTags.timeEntryId, tagId: tags.id, tagName: tags.name })
-    .from(timeEntryTags)
-    .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
-    .where(inArray(timeEntryTags.timeEntryId, entryIds));
+  const [tagRows, ownerDisplayMap] = await Promise.all([
+    db
+      .select({ timeEntryId: timeEntryTags.timeEntryId, tagId: tags.id, tagName: tags.name })
+      .from(timeEntryTags)
+      .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
+      .where(inArray(timeEntryTags.timeEntryId, entryIds)),
+    chronosEntryOwnerDisplayMap(rows.map((r) => ({ userId: r.entry.userId, applicantId: r.entry.applicantId ?? null }))),
+  ]);
 
   const tagMap = new Map<string, { id: string; name: string }[]>();
   for (const r of tagRows) {
@@ -196,7 +200,7 @@ async function getEntries(
     ...entry,
     project: project ?? undefined,
     tags: tagMap.get(entry.id) ?? [],
-    user: user ?? undefined,
+    user: ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ?? user ?? undefined,
   })) as TimeEntry[];
 }
 

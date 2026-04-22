@@ -17,6 +17,7 @@ import {
 import { getAccessibleUserIds } from "@/lib/permissions";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
+import { chronosEntryOwnerDisplayMap } from "@/lib/chronos-user-notion";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -108,9 +109,9 @@ export async function GET(req: Request) {
 
   // Fetch tags for all entries
   const entryIds = rows.map((r) => r.entry.id);
-  const tagRows =
+  const [tagRows, ownerDisplayMap] = await Promise.all([
     entryIds.length > 0
-      ? await db
+      ? db
           .select({
             timeEntryId: timeEntryTags.timeEntryId,
             tagId: tags.id,
@@ -119,7 +120,9 @@ export async function GET(req: Request) {
           .from(timeEntryTags)
           .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
           .where(inArray(timeEntryTags.timeEntryId, entryIds))
-      : [];
+      : Promise.resolve([]),
+    chronosEntryOwnerDisplayMap(rows.map((r) => ({ userId: r.entry.userId, applicantId: r.entry.applicantId ?? null }))),
+  ]);
 
   const tagMap = new Map<string, { id: string; name: string }[]>();
   for (const r of tagRows) {
@@ -135,9 +138,10 @@ export async function GET(req: Request) {
       ...rows.map(({ entry, project, user }) => {
         const durationH = ((entry.durationMs ?? 0) / 3600000).toFixed(2);
         const entryTags = (tagMap.get(entry.id) ?? []).map((t) => t.name).join("; ");
+        const owner = ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ?? user;
         return [
           new Date(entry.startedAt).toISOString().split("T")[0],
-          user?.name ?? "",
+          owner?.name ?? "",
           project?.name ?? "",
           `"${entryTags.replace(/"/g, '""')}"`,
           `"${(entry.description ?? "").replace(/"/g, '""')}"`,
@@ -160,6 +164,7 @@ export async function GET(req: Request) {
   const groups: Record<string, { label: string; totalMs: number; entryCount: number }> = {};
 
   for (const { entry, project, user } of rows) {
+    const owner = ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ?? user;
     let key = "";
     let label = "";
     const date = new Date(entry.startedAt);
@@ -177,7 +182,7 @@ export async function GET(req: Request) {
       label = date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
     } else if (groupBy === "user") {
       key = entry.userId;
-      label = user?.name ?? entry.userId;
+      label = owner?.name ?? entry.userId;
     } else if (groupBy === "project") {
       key = entry.projectId ?? "no-project";
       label = project?.name ?? entry.projectId ?? "No project";

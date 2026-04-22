@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { applicants, teams, timeEntries, users, tags, userEmailAliases } from "@/lib/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import {
   canManageTeams,
@@ -357,10 +357,23 @@ export async function DELETE(
     );
   }
 
+  const [linkedApplicant] = await db
+    .select({ id: applicants.id })
+    .from(applicants)
+    .where(eq(applicants.chronosUserId, id))
+    .limit(1);
+
   const [entry] = await db
     .select({ id: timeEntries.id })
     .from(timeEntries)
-    .where(eq(timeEntries.userId, id))
+    .where(
+      linkedApplicant
+        ? or(
+            eq(timeEntries.applicantId, linkedApplicant.id),
+            and(isNull(timeEntries.applicantId), eq(timeEntries.userId, id))
+          )!
+        : eq(timeEntries.userId, id)
+    )
     .limit(1);
 
   if (entry) {

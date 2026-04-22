@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
+import { applicants, timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
 import { eq, and, gte, isNotNull, inArray } from "drizzle-orm";
 import { sendDiscordEmbed, buildDailySummaryEmbed } from "@/lib/discord";
+import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 import type { TimeEntry } from "@/types";
 
 export const runtime = "nodejs";
@@ -44,6 +45,12 @@ export async function GET(req: Request) {
     if (!user.discordWebhookUrl) continue;
 
     try {
+      const [linkedApplicant] = await db
+        .select({ id: applicants.id })
+        .from(applicants)
+        .where(eq(applicants.chronosUserId, user.id))
+        .limit(1);
+
       const rows = await db
         .select({
           entry: timeEntries,
@@ -55,7 +62,7 @@ export async function GET(req: Request) {
         .leftJoin(users, eq(timeEntries.userId, users.id))
         .where(
           and(
-            eq(timeEntries.userId, user.id),
+            whereTimeEntriesForLinkedUser(user.id, linkedApplicant?.id ?? null),
             isNotNull(timeEntries.stoppedAt),
             gte(timeEntries.startedAt, today)
           )

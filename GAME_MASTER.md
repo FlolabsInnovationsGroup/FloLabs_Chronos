@@ -195,6 +195,7 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 
 ## Recent Updates
 
+- 2026-04-22: Phase 3 identity refactor: extended applicant-owned time-entry reads into daily summaries and user-delete ownership checks, so those flows now treat `time_entries.applicant_id` as canonical with `user_id` fallback. See `notes/identity-refactor-phases.md`.
 - 2026-04-22: Phase 3 identity refactor: extended applicant-owned time-entry reads into member discussion entry lookup, so self-owned discussion visibility now follows `time_entries.applicant_id` first with `user_id` fallback. See `notes/identity-refactor-phases.md`.
 - 2026-04-22: Phase 3 identity refactor: expanded applicant-owned time-entry reads into reports SSR plus `/api/entries` and `/api/reports` self-owner scopes, still falling back to `user_id` for non-backfilled rows and leaving admin/team-lead multi-user scopes on Chronos user ids for now. See `notes/identity-refactor-phases.md`.
 - 2026-04-22: Phase 3 identity refactor: added `whereTimeEntriesForLinkedUser` so hot time-entry reads prefer `time_entries.applicant_id` with `user_id` fallback, and wired it into entry suggestions plus timer dashboard SSR week/recent/discussion-owner reads. See `notes/identity-refactor-phases.md`.

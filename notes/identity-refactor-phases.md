@@ -109,7 +109,7 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 **Time-entry read-path slice (2026-04-22):**
 
 1. Add `whereTimeEntriesForLinkedUser` in `src/lib/time-entry-applicant.ts` to prefer canonical `time_entries.applicant_id` and fall back to `user_id` only for rows not backfilled yet.
-2. Use that scope in recent-suggestions, timer dashboard SSR, reports SSR, `/api/entries` + `/api/reports` self-owner reads, and member discussion entry lookup so the hottest entry-owning reads stop assuming `time_entries.user_id` is canonical.
+2. Use that scope in recent-suggestions, timer dashboard SSR, reports SSR, `/api/entries` + `/api/reports` self-owner reads, member discussion entry lookup, daily summaries, and user-delete ownership checks so the hottest entry-owning reads stop assuming `time_entries.user_id` is canonical.
 3. Keep admin/team-lead multi-user scopes on `user_id` for now, and keep joins to `users` only for display compatibility (`name`, weekly target), not row ownership.
 
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.

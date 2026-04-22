@@ -11,8 +11,15 @@ if (-not (Test-Path $ProvisionPath)) { throw 'Missing deploy/aws/provision-outpu
 $Provision = Get-Content $ProvisionPath -Raw | ConvertFrom-Json
 $AccountId = (aws sts get-caller-identity --query Account --output text --region $Region).Trim()
 $RepositoryName = $Provision.repositoryName
-$ImageTag = 'latest'
+$CommitSha = (git -C $ProjectRoot rev-parse HEAD).Trim()
+if (-not $CommitSha) { throw 'Could not resolve git commit SHA for build metadata.' }
+$CommitShortSha = $CommitSha.Substring(0, [Math]::Min(12, $CommitSha.Length))
+$CommitRef = (git -C $ProjectRoot rev-parse --abbrev-ref HEAD).Trim()
+if (-not $CommitRef) { $CommitRef = 'unknown' }
+$BuildTimestamp = (Get-Date).ToUniversalTime().ToString('o')
+$ImageTag = "git-$CommitShortSha"
 $ImageUri = "${AccountId}.dkr.ecr.${Region}.amazonaws.com/${RepositoryName}:${ImageTag}"
+$LatestImageUri = "${AccountId}.dkr.ecr.${Region}.amazonaws.com/${RepositoryName}:latest"
 $SourceConfigPath = Join-Path $PSScriptRoot 'apprunner-source.json'
 $ServiceConfigPath = Join-Path $PSScriptRoot 'apprunner-service.json'
 $InstanceConfig = @{ Cpu = '1 vCPU'; Memory = '2 GB' }
@@ -123,6 +130,16 @@ if ($Provision.redisUrl) {
 }
 $envFromFile['CRON_SECRET'] = [string]$Provision.cronSecret
 $envFromFile['NODE_ENV'] = 'production'
+$envFromFile['BUILD_COMMIT_SHA'] = $CommitSha
+$envFromFile['BUILD_COMMIT_REF'] = $CommitRef
+$envFromFile['BUILD_IMAGE_TAG'] = $ImageTag
+$envFromFile['BUILD_IMAGE_DIGEST'] = 'pending'
+$envFromFile['BUILD_TIMESTAMP'] = $BuildTimestamp
+$envFromFile['NEXT_PUBLIC_BUILD_COMMIT_SHA'] = $CommitSha
+$envFromFile['NEXT_PUBLIC_BUILD_COMMIT_REF'] = $CommitRef
+$envFromFile['NEXT_PUBLIC_BUILD_IMAGE_TAG'] = $ImageTag
+$envFromFile['NEXT_PUBLIC_BUILD_IMAGE_DIGEST'] = 'pending'
+$envFromFile['NEXT_PUBLIC_BUILD_TIMESTAMP'] = $BuildTimestamp
 
 $localEnvPath = Join-Path $ProjectRoot '.env.production.local'
 if (-not (Test-Path $localEnvPath)) {
@@ -154,6 +171,15 @@ if ($LASTEXITCODE -ne 0) { throw 'Docker build failed' }
 docker tag "${RepositoryName}:${ImageTag}" $ImageUri
 docker push $ImageUri
 if ($LASTEXITCODE -ne 0) { throw 'Docker push failed' }
+
+docker tag "${RepositoryName}:${ImageTag}" $LatestImageUri
+docker push $LatestImageUri
+if ($LASTEXITCODE -ne 0) { throw 'Docker push latest failed' }
+
+$ImageDigest = (aws ecr describe-images --repository-name $RepositoryName --image-ids imageTag=$ImageTag --query 'imageDetails[0].imageDigest' --output text --region $Region).Trim()
+if (-not $ImageDigest -or $ImageDigest -eq 'None') { throw 'Could not resolve pushed image digest from ECR.' }
+$envFromFile['BUILD_IMAGE_DIGEST'] = $ImageDigest
+$envFromFile['NEXT_PUBLIC_BUILD_IMAGE_DIGEST'] = $ImageDigest
 
 $serviceArn = (aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='$AppName'].ServiceArn | [0]" --output text --region $Region).Trim()
 $initialUrl = if ($serviceArn -and $serviceArn -ne 'None') {

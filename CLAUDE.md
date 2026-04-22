@@ -82,6 +82,7 @@ Future sessions should know where access currently comes from and how to continu
 - Service URL: `https://hcmsmnfq5q.us-east-1.awsapprunner.com`
 - RDS + Redis details are available through `deploy/aws/provision-output.json` and the local env files
 - deployment entry point: `deploy/aws/deploy-app.ps1`
+- deployment proof chain now needs commit/image metadata: build images with immutable git-SHA tags, publish the digest to ECR, and expose `/api/health` build info so AWS runtime can be tied back to an exact commit/image digest
 
 ### Vercel access context
 A Vercel token is already present in local env files for domain/API operations.

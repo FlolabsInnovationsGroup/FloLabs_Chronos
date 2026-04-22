@@ -118,6 +118,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. `src/lib/entry-lifecycle.ts` uses the same applicant-first join when hydrating entries for Notion sync / Discord notification work, so background sync paths stop assuming `users.id` is the canonical bridge to applicant profile data.
 3. `users` stays joined only as the temporary FK/display compatibility row; applicant-facing name/email/team-member identity now reads canonically from `applicant_id` first.
 
+**Bulk entry ownership slice (2026-04-22):**
+
+1. `POST /api/entries/bulk` now loads `time_entries.applicant_id` alongside `user_id` when validating access.
+2. Self-owner bulk actions (`delete`, `changeProject`) treat the signed-in applicant as canonical: allow rows where `applicant_id = session.user.id`, with `user_id = chronosUserId` fallback only for non-backfilled entries.
+3. Admin/team-lead bulk scopes remain keyed on Chronos `user_id` for now, matching the rest of the Phase 3 multi-user compatibility layer.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

@@ -6,7 +6,7 @@ import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { deleteAndNotifyEntry, syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 import { getAccessibleUserIds, isAdmin, isTeamLead } from "@/lib/permissions";
-import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 import { chronosUserDisplayAndNotionTeamMemberId } from "@/lib/chronos-user-notion";
 
 const bulkSchema = z.discriminatedUnion("action", [
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
 
   // Fetch entries and verify ownership / team scope
   const found = await db
-    .select({ id: timeEntries.id, userId: timeEntries.userId })
+    .select({ id: timeEntries.id, userId: timeEntries.userId, applicantId: timeEntries.applicantId })
     .from(timeEntries)
     .where(inArray(timeEntries.id, entryIds));
 
@@ -55,7 +55,16 @@ export async function POST(req: Request) {
     } else {
       const chronosUserId = chronosUserIdFromSessionUser(session.user);
       if (!chronosUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      const forbidden = found.some((e) => e.userId !== chronosUserId);
+      const applicantId = applicantIdForSessionLinkedUser(session.user);
+      const forbidden = found.some((e) => {
+        if (applicantId) {
+          return !(
+            e.applicantId === applicantId ||
+            (e.applicantId == null && e.userId === chronosUserId)
+          );
+        }
+        return e.userId !== chronosUserId;
+      });
       if (forbidden) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }

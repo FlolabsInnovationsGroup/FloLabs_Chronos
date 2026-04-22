@@ -14,6 +14,7 @@ import { broadcastDiscussionChange } from "@/lib/realtime";
 import { fetchRepliesForDiscussions } from "@/app/api/discussions/[id]/replies/route";
 import type { EntryDiscussion } from "@/types";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 
 function toDiscussion(row: {
   discussion: typeof entryDiscussions.$inferSelect;
@@ -107,10 +108,11 @@ export async function GET() {
   } else {
     // Member: only discussions on their own entries
     if (!viewerChronosId) return NextResponse.json({ discussions: [] });
+    const viewerApplicantId = applicantIdForSessionLinkedUser(viewer);
     const myEntries = await db
       .select({ id: timeEntries.id })
       .from(timeEntries)
-      .where(eq(timeEntries.userId, viewerChronosId));
+      .where(whereTimeEntriesForLinkedUser(viewerChronosId, viewerApplicantId));
 
     if (myEntries.length === 0) return NextResponse.json({ discussions: [] });
 

@@ -15,6 +15,7 @@ Project context for coding agents working on this repository.
 - `GAME_MASTER.md` tracks **what's done and what's next**. Update it after completing work.
 - `CLAUDE.md` (this file) defines **how to work** in this repo. Follow these guardrails.
 - **Default: push after work.** When you finish a coherent change (code, docs, or both), commit with a clear message and **`git push`** to `origin` so the remote stays current. Skip pushing only if the user explicitly asks you not to, or if there is nothing to commit.
+- **Absolute testing/deploy rule:** never, under any circumstance, test Chronos behavior on the local machine or create/use a local test environment as a substitute for production validation. Do not rely on host-local Docker, browser checks, local app runs, or local smoke tests for confidence. Test and validate only from AWS/deployed surfaces (App Runner, Lambda, EventBridge, CloudWatch, public deployment URLs, and other AWS-reachable paths), no matter the inconvenience or implications.
 
 When starting a session, check `GAME_MASTER.md` first for current status and handoff notes.
 
@@ -22,24 +23,26 @@ When starting a session, check `GAME_MASTER.md` first for current status and han
 
 ## Current Mission
 
-The immediate goal is to make Chronos fully portable, production-ready on AWS, and easy to run locally in Docker, while removing old Neon-specific deployment/runtime coupling.
+The immediate goal is to make Chronos fully portable and production-ready on AWS while removing old Neon-specific deployment/runtime coupling.
 
 What has already been achieved:
-- Chronos builds successfully with `pnpm build`
-- local Docker flow exists and works
-- README has local setup + Docker setup + AWS deployment guidance
+- README has AWS deployment guidance and operational notes
 - Hermes docs were updated to point to the real Chronos repo and include portability/backup notes
 - Chronos runtime and scripts were migrated away from Neon-specific code paths to standard Postgres / `pg`
 - App Runner was redeployed and the live runtime environment was cleaned so old Neon env vars are no longer present in the running AWS service
 - AWS is now the canonical production runtime target for the app layer
 
 What is still being pursued:
-- create and store a local backup of the old Neon database, if access becomes possible again
-- migrate any missing historical production data into AWS RDS
+- reconstruct missing historical production data in AWS RDS from the exported Notion Time Entries backup, not from Neon
+- link imported users to imported time entries through the Team Members database relation captured in the export
 - finish any remaining operational cleanup such as custom domain cutover
 - keep Hermes as the operations/backup/control repo for portability work
 
-The biggest current blocker is data extraction from the legacy Neon source. Direct `pg_dump` currently fails because Neon returns a data transfer quota error.
+The legacy Neon source is no longer the planned recovery path. The source of truth for historical recovery is now the exported Notion Time Entries CSV plus Team Member linkage.
+
+## Non-Negotiable Validation Rule
+
+For Chronos, do not test features locally. Do not spin up or rely on a local test environment "just to check quickly." Do not use host-local Docker success, local HTTP checks, or local browser/UI smoke tests as evidence that a change works. If a task requires validation, perform it only through AWS/deployed surfaces such as App Runner, Lambda, EventBridge, CloudWatch, public deployment URLs, or other AWS-reachable interfaces. If AWS-only validation is temporarily impossible, report the blocker instead of falling back to local testing.
 
 ### Restart Handoff Note
 
@@ -66,10 +69,11 @@ Future sessions should know where access currently comes from and how to continu
 - Hephaestus repo: `C:\Users\olire\Documents\workspace_python\hephaestus-international`
 
 ### Environment / secret sources
-- `.env.local` and `.env.production.local` in the Chronos repo contain the runtime values used for local/dev and deploy scripting
+- `.env.local` and `.env.production.local` in the Chronos repo contain runtime values used by deploy tooling
 - these files include AWS runtime values and also historically contained Neon values
 - do not commit secrets
 - use the existing env files for operational continuity, but prefer AWS-backed values for runtime/deploy decisions
+- never treat local env-backed execution on this machine as an acceptable Chronos test environment
 
 ### AWS access context
 - AWS CLI is already authenticated in this environment

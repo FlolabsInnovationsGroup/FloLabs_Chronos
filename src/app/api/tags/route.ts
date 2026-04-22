@@ -5,7 +5,8 @@ import { tags, users } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { broadcastDataChange } from "@/lib/realtime";
-import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { tagRowAccessibleBySession, whereTagsForLinkedUser } from "@/lib/tag-applicant";
 
 export async function GET() {
   const session = await auth();
@@ -20,6 +21,7 @@ export async function GET() {
         id: tags.id,
         name: tags.name,
         userId: tags.userId,
+        applicantId: tags.applicantId,
         createdAt: tags.createdAt,
         user: { id: users.id, name: users.name },
       })
@@ -32,10 +34,11 @@ export async function GET() {
   const chronosUserId = chronosUserIdFromSessionUser(session.user);
   if (!chronosUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const applicantId = applicantIdForSessionLinkedUser(session.user);
   const rows = await db
     .select()
     .from(tags)
-    .where(eq(tags.userId, chronosUserId))
+    .where(whereTagsForLinkedUser(chronosUserId, applicantId))
     .orderBy(tags.name);
   return NextResponse.json({ tags: rows });
 }
@@ -52,10 +55,13 @@ export async function POST(req: Request) {
   const parsed = z.object({ name: z.string().min(1).max(50) }).safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
 
+  const applicantId = applicantIdForSessionLinkedUser(session.user);
   const existing = await db
     .select({ id: tags.id })
     .from(tags)
-    .where(and(eq(tags.name, parsed.data.name.trim()), eq(tags.userId, chronosUserId)))
+    .where(
+      and(eq(tags.name, parsed.data.name.trim()), whereTagsForLinkedUser(chronosUserId, applicantId))
+    )
     .limit(1);
 
   if (existing.length > 0) {
@@ -64,7 +70,11 @@ export async function POST(req: Request) {
 
   const [tag] = await db
     .insert(tags)
-    .values({ name: parsed.data.name.trim(), userId: chronosUserId })
+    .values({
+      name: parsed.data.name.trim(),
+      userId: chronosUserId,
+      ...(applicantId ? { applicantId } : {}),
+    })
     .returning();
 
   broadcastDataChange("tags");
@@ -95,10 +105,10 @@ export async function DELETE(req: Request) {
 
   if (!isAdmin) {
     const found = await db
-      .select({ id: tags.id, userId: tags.userId })
+      .select({ id: tags.id, userId: tags.userId, applicantId: tags.applicantId })
       .from(tags)
       .where(inArray(tags.id, ids));
-    const forbidden = found.some((t) => t.userId !== chronosUserId);
+    const forbidden = found.some((t) => !tagRowAccessibleBySession(t, session.user));
     if (forbidden) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

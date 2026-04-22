@@ -4,6 +4,7 @@ import { setActiveTimer, broadcastTimerEvent } from "@/lib/redis";
 import { db } from "@/lib/db";
 import { timeEntries, users, projects, tags } from "@/lib/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
+import { whereTagsForLinkedUser } from "@/lib/tag-applicant";
 import { z } from "zod";
 import { sendDiscordEmbed, buildTimerStartEmbed } from "@/lib/discord";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
@@ -48,10 +49,11 @@ export async function POST(req: Request) {
 
   const uniqueTagIds = [...new Set(tagIds)];
   if (db && uniqueTagIds.length > 0) {
+    const applicantId = applicantIdForSessionLinkedUser(session.user);
     const ownedTags = await db
       .select({ id: tags.id })
       .from(tags)
-      .where(and(eq(tags.userId, userId), inArray(tags.id, uniqueTagIds)));
+      .where(and(whereTagsForLinkedUser(userId, applicantId), inArray(tags.id, uniqueTagIds)));
 
     if (ownedTags.length !== uniqueTagIds.length) {
       return NextResponse.json({ error: "One or more tags are invalid" }, { status: 400 });

@@ -79,6 +79,8 @@ export interface Tag {
   id: string;
   name: string;
   userId: string;
+  /** Set when the tag owner is linked to an applicant (Phase 3 ownership migration). */
+  applicantId?: string | null;
   createdAt?: Date;
   // Optional: for admin views
   user?: Pick<User, "id" | "name"> | null;

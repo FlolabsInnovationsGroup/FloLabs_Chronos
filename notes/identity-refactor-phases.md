@@ -91,7 +91,13 @@ Status: **first cut complete** (2026-04-22)
 2. Ship a migration script that backfills `time_entries.applicant_id` by joining `time_entries.user_id` = `users.id` = `applicants.chronos_user_id` (skip or log rows with no match). *(Done: `scripts/migrate-time-entries-applicant-id.ts`.)*
 3. Dual-write: on create/update paths in entry APIs, set `applicant_id` from the signed-in applicant (`session.user.id`) whenever `chronosUserId` is present. *(Done: `POST /api/entries`, `PATCH /api/entries/[id]`, timer start/stop/PATCH; owner edits use `session.user.id`; admin/lead edits resolve the entry owner’s applicant via `applicants.chronos_user_id`.)*
 
-Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `tags`, `entry_discussions`, `discussion_replies`, and Redis timer keys documentation/migration; then reduce or remove dual writes to `users` where safe.
+Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_discussions`, `discussion_replies`, and Redis timer keys documentation/migration; then reduce or remove dual writes to `users` where safe.
+
+**Tags slice (2026-04-22):**
+
+1. Add nullable `tags.applicant_id` (FK → `applicants.id`, index) — same dual-ownership pattern as time entries. *(Schema: `src/lib/db/schema.ts`; run `pnpm run db:migrate:tags-applicant-id` per database.)*
+2. Backfill script: `tags.user_id` = `applicants.chronos_user_id` → `applicant_id`. *(Done: `scripts/migrate-tags-applicant-id.ts`.)*
+3. Dual-write: `POST /api/tags` sets `applicant_id` from the signed-in applicant when `chronosUserId` is present; reads and ownership checks use `whereTagsForLinkedUser` / `tagRowAccessibleBySession` in `src/lib/tag-applicant.ts` (timer PATCH/start, tag list, reports/timer SSR, `POST`/`PATCH` entries tag validation, bulk tag delete).
 
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
 import { eq, and, gte, lte, desc, inArray, isNotNull, type SQL } from "drizzle-orm";
+import { whereTagsForLinkedUser } from "@/lib/tag-applicant";
 import { z } from "zod";
 import { getAccessibleUserIds } from "@/lib/permissions";
 import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
@@ -111,8 +112,21 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
   const { tagIds, ...rest } = parsed.data;
+  const uniqueTagIds = [...new Set(tagIds)];
 
   const applicantId = applicantIdForSessionLinkedUser(session.user);
+  if (uniqueTagIds.length > 0) {
+    const valid = await db
+      .select({ id: tags.id })
+      .from(tags)
+      .where(
+        and(whereTagsForLinkedUser(chronosUserId, applicantId), inArray(tags.id, uniqueTagIds))
+      );
+    if (valid.length !== uniqueTagIds.length) {
+      return NextResponse.json({ error: "One or more tags are invalid" }, { status: 400 });
+    }
+  }
+
   const [entry] = await db
     .insert(timeEntries)
     .values({
@@ -126,10 +140,10 @@ export async function POST(req: Request) {
     })
     .returning();
 
-  if (tagIds.length > 0) {
+  if (uniqueTagIds.length > 0) {
     await db
       .insert(timeEntryTags)
-      .values(tagIds.map((tagId) => ({ timeEntryId: entry.id, tagId })))
+      .values(uniqueTagIds.map((tagId) => ({ timeEntryId: entry.id, tagId })))
       .onConflictDoNothing();
   }
 

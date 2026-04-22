@@ -6,6 +6,7 @@ import { projects, timeEntries, timeEntryTags, tags } from "@/lib/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { whereTagsForLinkedUser } from "@/lib/tag-applicant";
 
 const updateTimerSchema = z.object({
   projectId: z.string().uuid().optional().nullable(),
@@ -52,10 +53,11 @@ export async function PATCH(req: Request) {
   }
 
   if (db && requestedTagIds.length > 0) {
+    const applicantId = applicantIdForSessionLinkedUser(session.user);
     const ownedTags = await db
       .select({ id: tags.id })
       .from(tags)
-      .where(and(eq(tags.userId, userId), inArray(tags.id, requestedTagIds)));
+      .where(and(whereTagsForLinkedUser(userId, applicantId), inArray(tags.id, requestedTagIds)));
 
     if (ownedTags.length !== requestedTagIds.length) {
       return NextResponse.json({ error: "One or more tags are invalid" }, { status: 400 });

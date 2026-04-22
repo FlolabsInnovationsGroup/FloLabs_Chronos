@@ -5,7 +5,8 @@ import { timeEntries, projects, tags, users, timeEntryTags, entryDiscussions } f
 import { eq, and, gte, lte, isNotNull, desc, inArray, isNull, asc } from "drizzle-orm";
 import { discussionReplies } from "@/lib/db/schema";
 import { getCalendarWeekRangeLocal } from "@/lib/utils";
-import { requireChronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, requireChronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { whereTagsForLinkedUser } from "@/lib/tag-applicant";
 import { TimerDashboardClient } from "@/components/timer/TimerDashboardClient";
 import { isAdmin, isTeamLead, getAccessibleUserIds } from "@/lib/permissions";
 import type { Project, Tag, TimeEntry, EntryDiscussion } from "@/types";
@@ -22,12 +23,12 @@ async function getProjects(): Promise<Project[]> {
   return rows as Project[];
 }
 
-async function getUserTags(userId: string): Promise<Tag[]> {
+async function getUserTags(chronosUserId: string, applicantId: string | null): Promise<Tag[]> {
   if (!db) return [];
   const rows = await db
     .select()
     .from(tags)
-    .where(eq(tags.userId, userId))
+    .where(whereTagsForLinkedUser(chronosUserId, applicantId))
     .orderBy(tags.name);
   return rows as Tag[];
 }
@@ -262,10 +263,11 @@ export default async function TimerPage() {
   const session = await auth();
   const sessionUser = session!.user;
   const userId = requireChronosUserIdFromSessionUser(sessionUser);
+  const linkedApplicantId = applicantIdForSessionLinkedUser(sessionUser);
 
   const [projectsList, tagsList, weekEntries, recentEntries, weeklyTarget, initialDiscussions] = await Promise.all([
     getProjects(),
-    getUserTags(userId),
+    getUserTags(userId, linkedApplicantId),
     getWeekEntries(userId),
     getRecentEntries(userId),
     getUserWeeklyTarget(userId),

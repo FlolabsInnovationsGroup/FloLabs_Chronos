@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { broadcastDataChange } from "@/lib/realtime";
 import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { tagRowAccessibleBySession, whereTagsForLinkedUser } from "@/lib/tag-applicant";
 
 export async function PATCH(
   req: Request,
@@ -23,7 +24,7 @@ export async function PATCH(
   const isAdmin = session.user.role === "admin";
   const chronosUserId = chronosUserIdFromSessionUser(session.user);
   if (!isAdmin && !chronosUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isAdmin && existing.userId !== chronosUserId) {
+  if (!isAdmin && !tagRowAccessibleBySession(existing, session.user)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -37,7 +38,7 @@ export async function PATCH(
   const conflict = await db
     .select({ id: tags.id })
     .from(tags)
-    .where(and(eq(tags.name, newName), eq(tags.userId, ownerId)))
+    .where(and(eq(tags.name, newName), whereTagsForLinkedUser(ownerId, existing.applicantId ?? null)))
     .limit(1);
 
   if (conflict.length > 0 && conflict[0].id !== id) {
@@ -70,7 +71,7 @@ export async function DELETE(
   const isAdmin = session.user.role === "admin";
   const chronosUserId = chronosUserIdFromSessionUser(session.user);
   if (!isAdmin && !chronosUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isAdmin && existing.userId !== chronosUserId) {
+  if (!isAdmin && !tagRowAccessibleBySession(existing, session.user)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -27,7 +27,8 @@ import {
   isAdmin as userIsAdmin,
   isTeamLead as userIsTeamLead,
 } from "@/lib/permissions";
-import { requireChronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, requireChronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { whereTagsForLinkedUser } from "@/lib/tag-applicant";
 
 export const metadata: Metadata = { title: "Reports | FloLabs Chronos" };
 
@@ -49,7 +50,8 @@ async function getFilterData(
     teamId: string | null;
     isActive: boolean;
   },
-  ownerChronosUserId: string
+  ownerChronosUserId: string,
+  linkedApplicantId: string | null
 ) {
   if (!db) return { projects: [], tags: [], users: [] };
 
@@ -62,7 +64,11 @@ async function getFilterData(
       ? db.select().from(tags).orderBy(tags.name)
       : isTeamLead && accessibleUserIds !== null && accessibleUserIds.length > 0
         ? db.select().from(tags).where(inArray(tags.userId, accessibleUserIds)).orderBy(tags.name)
-        : db.select().from(tags).where(eq(tags.userId, ownerChronosUserId)).orderBy(tags.name);
+        : db
+            .select()
+            .from(tags)
+            .where(whereTagsForLinkedUser(ownerChronosUserId, linkedApplicantId))
+            .orderBy(tags.name);
 
   const [projectRows, tagRows, userRows] = await Promise.all([
     db.select().from(projects).where(eq(projects.archived, false)).orderBy(projects.name),
@@ -262,9 +268,10 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const params = await searchParams;
 
   const ownerChronosUserId = requireChronosUserIdFromSessionUser(sessionUser!);
+  const linkedApplicantId = applicantIdForSessionLinkedUser(sessionUser!);
 
   const [filterData, entries] = await Promise.all([
-    getFilterData(sessionUser!, ownerChronosUserId),
+    getFilterData(sessionUser!, ownerChronosUserId, linkedApplicantId),
     getEntries(params, sessionUser!),
   ]);
 

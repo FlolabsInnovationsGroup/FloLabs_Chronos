@@ -169,11 +169,14 @@ export const tags = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    /** Phase 3: canonical owner pointer; backfilled from applicants.chronos_user_id = user_id. */
+    applicantId: uuid("applicant_id").references(() => applicants.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     uniqueIndex("tags_name_user_unique").on(t.name, t.userId),
     index("idx_tags_user").on(t.userId),
+    index("idx_tags_applicant").on(t.applicantId),
   ]
 );
 

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { timeEntries, timeEntryTags, projects, tags } from "@/lib/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+import { whereTagsForLinkedUser } from "@/lib/tag-applicant";
 import { z } from "zod";
 import { deleteAndNotifyEntry, syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 import { canManageTimeEntry } from "@/lib/permissions";
@@ -145,16 +146,36 @@ export async function PATCH(
   }
 
   if (tagIds !== undefined) {
+    const nextIds = tagIds.length > 0 ? [...new Set(tagIds)] : [];
+    if (nextIds.length > 0) {
+      const valid = await db
+        .select({ id: tags.id })
+        .from(tags)
+        .where(
+          and(
+            whereTagsForLinkedUser(entry.userId, entry.applicantId ?? null),
+            inArray(tags.id, nextIds)
+          )
+        );
+      if (valid.length !== nextIds.length) {
+        return NextResponse.json({ error: "One or more tags are invalid" }, { status: 400 });
+      }
+    }
     await db.delete(timeEntryTags).where(eq(timeEntryTags.timeEntryId, id));
-    if (tagIds.length > 0) {
+    if (nextIds.length > 0) {
       await db
         .insert(timeEntryTags)
-        .values(tagIds.map((tagId) => ({ timeEntryId: id, tagId })))
+        .values(nextIds.map((tagId) => ({ timeEntryId: id, tagId })))
         .onConflictDoNothing();
     }
   }
 
-  const nextTagIds = tagIds ?? previousTagIds.map((row) => row.tagId);
+  const nextTagIds =
+    tagIds !== undefined
+      ? tagIds.length > 0
+        ? [...new Set(tagIds)]
+        : []
+      : previousTagIds.map((row) => row.tagId);
   const nextTagNames = nextTagIds.length > 0
     ? (await db.select({ name: tags.name }).from(tags).where(inArray(tags.id, nextTagIds))).map((row) => row.name)
     : [];

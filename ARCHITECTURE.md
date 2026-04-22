@@ -379,13 +379,15 @@ CREATE TABLE projects (
 );
 
 CREATE TABLE tags (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name        TEXT NOT NULL,
-  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at  TIMESTAMPTZ DEFAULT now()
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name          TEXT NOT NULL,
+  user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  applicant_id  UUID REFERENCES applicants(id) ON DELETE SET NULL,
+  created_at    TIMESTAMPTZ DEFAULT now()
 );
 CREATE UNIQUE INDEX tags_name_user_unique ON tags(name, user_id);
 CREATE INDEX idx_tags_user ON tags(user_id);
+CREATE INDEX idx_tags_applicant ON tags(applicant_id);
 
 CREATE TABLE time_entries (
   id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -431,6 +433,7 @@ CREATE TABLE entry_discussions (
 - `invitations.team_id` is a compatibility/default pointer.
 - `invitation_team_memberships` stores full invited membership intent.
 - Tags are unique per `(name, user_id)`.
+- Phase 3: `tags.applicant_id` is the canonical owner pointer (dual-stored with `user_id`); new writes and API scope checks set or honor both; run `db:migrate:tags-applicant-id` to add and backfill the column.
 - Time entries never store a direct single tag column.
 - Project linkage is optional for timer-created entries and may be filled in later.
 - Task linkage is optional while the timer is running; stopping requires an explicit task selection only when the entry’s project has `requires_task_on_stop = true`.

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users, timeEntryTags, entryDiscussions } from "@/lib/db/schema";
+import { timeEntries, projects, tags, users, timeEntryTags, entryDiscussions, applicants } from "@/lib/db/schema";
 import { eq, and, gte, lte, isNotNull, desc, inArray, isNull, asc } from "drizzle-orm";
 import { discussionReplies } from "@/lib/db/schema";
 import { getCalendarWeekRangeLocal } from "@/lib/utils";
@@ -11,6 +11,7 @@ import { TimerDashboardClient } from "@/components/timer/TimerDashboardClient";
 import { isAdmin, isTeamLead, getAccessibleUserIds } from "@/lib/permissions";
 import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 import type { Project, Tag, TimeEntry, EntryDiscussion } from "@/types";
+import { chronosActorDisplay, chronosEntryOwnerDisplayMap } from "@/lib/chronos-user-notion";
 
 export const metadata: Metadata = { title: "Timer | FloLabs Chronos" };
 
@@ -40,11 +41,14 @@ async function buildEntriesWithTags(
   if (!db || rows.length === 0) return [];
 
   const entryIds = rows.map((r) => r.entry.id);
-  const tagRows = await db
-    .select({ timeEntryId: timeEntryTags.timeEntryId, tagId: tags.id, tagName: tags.name })
-    .from(timeEntryTags)
-    .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
-    .where(inArray(timeEntryTags.timeEntryId, entryIds));
+  const [tagRows, ownerDisplayMap] = await Promise.all([
+    db
+      .select({ timeEntryId: timeEntryTags.timeEntryId, tagId: tags.id, tagName: tags.name })
+      .from(timeEntryTags)
+      .innerJoin(tags, eq(timeEntryTags.tagId, tags.id))
+      .where(inArray(timeEntryTags.timeEntryId, entryIds)),
+    chronosEntryOwnerDisplayMap(rows.map((r) => ({ userId: r.entry.userId, applicantId: r.entry.applicantId ?? null }))),
+  ]);
 
   const tagMap = new Map<string, { id: string; name: string }[]>();
   for (const r of tagRows) {
@@ -57,7 +61,7 @@ async function buildEntriesWithTags(
     ...entry,
     project: project ?? undefined,
     tags: tagMap.get(entry.id) ?? [],
-    user: user ?? undefined,
+    user: ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ?? user ?? undefined,
   })) as TimeEntry[];
 }
 
@@ -199,6 +203,18 @@ async function getInitialDiscussions(
     rows = allRows.filter((r) => r.discussion.resolvedAt === null);
   }
 
+  const startedByMap = new Map<string, { id: string; name: string } | null>();
+  await Promise.all(
+    rows.map(async (r) => {
+      const key = `${r.discussion.startedById}:${r.discussion.startedByApplicantId ?? ""}`;
+      if (startedByMap.has(key)) return;
+      startedByMap.set(
+        key,
+        await chronosActorDisplay(r.discussion.startedById, r.discussion.startedByApplicantId ?? null)
+      );
+    })
+  );
+
   const discussions = rows.map((r) => ({
     id: r.discussion.id,
     entryId: r.discussion.entryId,
@@ -210,7 +226,7 @@ async function getInitialDiscussions(
     resolvedByApplicantId: r.discussion.resolvedByApplicantId,
     createdAt: r.discussion.createdAt!,
     updatedAt: r.discussion.updatedAt!,
-    startedBy: r.startedBy ?? undefined,
+    startedBy: startedByMap.get(`${r.discussion.startedById}:${r.discussion.startedByApplicantId ?? ""}`) ?? r.startedBy ?? undefined,
     entryOwnerUserId: r.entry?.userId,
     entryDescription: r.entry?.description,
     entryProjectName: r.projectName ?? undefined,
@@ -234,6 +250,15 @@ async function getInitialDiscussions(
       )
       .orderBy(asc(discussionReplies.createdAt));
 
+    const authorMap = new Map<string, { id: string; name: string } | null>();
+    await Promise.all(
+      replyRows.map(async (r) => {
+        const key = `${r.reply.authorId}:${r.reply.authorApplicantId ?? ""}`;
+        if (authorMap.has(key)) return;
+        authorMap.set(key, await chronosActorDisplay(r.reply.authorId, r.reply.authorApplicantId ?? null));
+      })
+    );
+
     const repliesMap = new Map<string, EntryDiscussion['replies']>();
     for (const r of replyRows) {
       const existing = repliesMap.get(r.reply.discussionId) ?? [];
@@ -245,7 +270,7 @@ async function getInitialDiscussions(
         message: r.reply.message,
         createdAt: r.reply.createdAt!,
         updatedAt: r.reply.updatedAt!,
-        author: r.author ?? undefined,
+        author: authorMap.get(`${r.reply.authorId}:${r.reply.authorApplicantId ?? ""}`) ?? r.author ?? undefined,
       });
       repliesMap.set(r.reply.discussionId, existing);
     }
@@ -257,8 +282,25 @@ async function getInitialDiscussions(
   return discussions;
 }
 
-async function getUserWeeklyTarget(userId: string): Promise<number> {
+async function getUserWeeklyTarget(userId: string, applicantId: string | null): Promise<number> {
   if (!db) return 40;
+
+  if (applicantId) {
+    const [applicantRow] = await db
+      .select({ weeklyTargetHours: applicants.weeklyTargetHours })
+      .from(applicants)
+      .where(eq(applicants.id, applicantId))
+      .limit(1);
+    if (typeof applicantRow?.weeklyTargetHours === "number") return applicantRow.weeklyTargetHours;
+  }
+
+  const [linkedApplicantRow] = await db
+    .select({ weeklyTargetHours: applicants.weeklyTargetHours })
+    .from(applicants)
+    .where(eq(applicants.chronosUserId, userId))
+    .limit(1);
+  if (typeof linkedApplicantRow?.weeklyTargetHours === "number") return linkedApplicantRow.weeklyTargetHours;
+
   const [row] = await db
     .select({ weeklyTargetHours: users.weeklyTargetHours })
     .from(users)
@@ -278,7 +320,7 @@ export default async function TimerPage() {
     getUserTags(userId, linkedApplicantId),
     getWeekEntries(userId, linkedApplicantId),
     getRecentEntries(userId, linkedApplicantId),
-    getUserWeeklyTarget(userId),
+    getUserWeeklyTarget(userId, linkedApplicantId),
     getInitialDiscussions(sessionUser, userId, linkedApplicantId),
   ]);
 

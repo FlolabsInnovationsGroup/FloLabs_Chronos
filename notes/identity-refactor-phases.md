@@ -142,6 +142,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. `GET /api/teams/[id]/members` now prefers applicant profile fields for member identity/status in team views, with `users` fallback for legacy or unlinked rows.
 3. This keeps shared directory surfaces aligned with Phase 3’s applicant-canonical identity model without changing Redis timer keys or other Phase 4 live-state infrastructure yet.
 
+**Timer dashboard identity slice (2026-04-22):**
+
+1. The timer dashboard page now resolves week/recent entry owners with the same batched applicant-first display map used in entries/reports, so timer history no longer falls back to `users.name/email` for backfilled rows.
+2. Initial discussion and reply payloads on the timer page now prefer applicant-canonical actor names via `chronosActorDisplay(...)`.
+3. Weekly target hours on the timer page now prefer `applicants.weekly_target_hours`, with linked-applicant and `users` fallback for legacy rows.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

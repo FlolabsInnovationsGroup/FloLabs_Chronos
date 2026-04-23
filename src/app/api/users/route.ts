@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getAccessibleUsers } from "@/lib/permissions";
-import { getAllActiveTimers } from "@/lib/redis";
+import { getActiveTimersForUserIds } from "@/lib/redis";
 import { db } from "@/lib/db";
 import { applicants, projects, timeEntries, userEmailAliases, users as usersTable } from "@/lib/db/schema";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
@@ -155,7 +155,7 @@ export async function GET() {
       }
     >();
 
-  const activeTimers: Record<string, ActiveTimer> = await getAllActiveTimers().catch(() => ({}));
+  const activeTimers: Record<string, ActiveTimer> = await getActiveTimersForUserIds(rows.map((r) => r.id)).catch(() => ({}));
   const activeUserIds = Object.keys(activeTimers);
 
   /** Running Postgres row may still have project_id when Redis timer predates projectName or projectId sync. */

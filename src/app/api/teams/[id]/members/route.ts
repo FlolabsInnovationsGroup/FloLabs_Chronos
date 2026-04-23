@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { teamMemberships, teams, users, projects, timeEntries, applicants } from "@/lib/db/schema";
 import { eq, inArray, isNull, and } from "drizzle-orm";
 import { getAccessibleTeamIds, isAdmin } from "@/lib/permissions";
-import { getAllActiveTimers } from "@/lib/redis";
+import { getActiveTimersForUserIds } from "@/lib/redis";
 import type { ActiveTimer } from "@/types";
 
 /**
@@ -72,8 +72,8 @@ export async function GET(
   if (memberRows.length === 0) return NextResponse.json({ members: [] });
 
   // Attach active timer info (live indicator) from Redis.
-  const activeTimers: Record<string, ActiveTimer> = await getAllActiveTimers().catch(() => ({}));
   const memberUserIds = memberRows.map((m) => m.id);
+  const activeTimers: Record<string, ActiveTimer> = await getActiveTimersForUserIds(memberUserIds).catch(() => ({}));
 
   // Resolve project names for running timers where the name isn't in Redis yet.
   const activeUserIds = memberUserIds.filter((uid) => !!activeTimers[uid]);
@@ -90,7 +90,7 @@ export async function GET(
 
   const projectIdSet = new Set<string>();
   for (const timer of Object.values(activeTimers)) {
-    if (typeof timer.projectId === "string") projectIdSet.add(timer.projectId);
+    if (typeof timer.projectId === "string" && timer.projectId.length > 0) projectIdSet.add(timer.projectId);
   }
   for (const pid of runningProjectIdByUser.values()) projectIdSet.add(pid);
 

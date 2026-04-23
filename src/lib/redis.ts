@@ -126,23 +126,11 @@ function parseActiveTimer(raw: string | null): ActiveTimer | null {
   }
 }
 
-export async function setActiveTimer(userId: string, timer: ActiveTimer) {
-  await kvSet(`timer:${userId}`, JSON.stringify(timer));
+function activeTimerKey(userId: string) {
+  return `timer:${userId}`;
 }
 
-export async function getActiveTimer(userId: string): Promise<ActiveTimer | null> {
-  return parseActiveTimer(await kvGet(`timer:${userId}`));
-}
-
-export async function deleteActiveTimer(userId: string) {
-  await kvDel(`timer:${userId}`);
-}
-
-export async function getAllActiveTimers(): Promise<Record<string, ActiveTimer>> {
-  const keys = await kvKeys("timer:*");
-  if (!keys.length) return {};
-
-  const rawTimers = await kvMGet(keys);
+function mapActiveTimersFromKeys(keys: string[], rawTimers: Array<string | null>): Record<string, ActiveTimer> {
   const result: Record<string, ActiveTimer> = {};
 
   for (let i = 0; i < keys.length; i += 1) {
@@ -154,6 +142,30 @@ export async function getAllActiveTimers(): Promise<Record<string, ActiveTimer>>
   }
 
   return result;
+}
+
+export async function setActiveTimer(userId: string, timer: ActiveTimer) {
+  await kvSet(activeTimerKey(userId), JSON.stringify(timer));
+}
+
+export async function getActiveTimer(userId: string): Promise<ActiveTimer | null> {
+  return parseActiveTimer(await kvGet(activeTimerKey(userId)));
+}
+
+export async function deleteActiveTimer(userId: string) {
+  await kvDel(activeTimerKey(userId));
+}
+
+export async function getActiveTimersForUserIds(userIds: string[]): Promise<Record<string, ActiveTimer>> {
+  const keys = Array.from(new Set(userIds.map((userId) => userId?.trim()).filter(Boolean))).map(activeTimerKey);
+  if (!keys.length) return {};
+  return mapActiveTimersFromKeys(keys, await kvMGet(keys));
+}
+
+export async function getAllActiveTimers(): Promise<Record<string, ActiveTimer>> {
+  const keys = await kvKeys("timer:*");
+  if (!keys.length) return {};
+  return mapActiveTimersFromKeys(keys, await kvMGet(keys));
 }
 
 // Simple SSE broadcast via a shared in-process EventEmitter (works on single instance)

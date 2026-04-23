@@ -184,6 +184,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. `getActiveTimer(...)` and `getAllActiveTimers()` now share the same parser so malformed Redis payloads are skipped consistently without duplicating JSON handling.
 3. This keeps the Phase 3 live-timer compatibility layer on Chronos `user_id` keys for now, but removes avoidable N+1 Redis round-trips from team/users timer surfaces while Phase 4 key migration is still pending.
 
+**Scoped Redis timer reads slice (2026-04-23):**
+
+1. Added `getActiveTimersForUserIds(...)` in `src/lib/redis.ts` so team- and directory-scoped routes can fetch only the timer keys they actually need, still using the same batched `mget` path.
+2. `GET /api/users` now limits Redis timer reads to the currently accessible Chronos user ids instead of scanning every `timer:*` key before filtering.
+3. `GET /api/teams/[id]/members` now does the same for the team member set, preserving the current `user_id`-keyed compatibility layer while reducing unnecessary Redis fanout on shared team surfaces.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

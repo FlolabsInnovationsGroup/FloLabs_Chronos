@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { SettingsForm } from "./SettingsForm";
 import { db } from "@/lib/db";
-import { userEmailAliases } from "@/lib/db/schema";
+import { applicants, userEmailAliases } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
@@ -15,15 +15,26 @@ export default async function SettingsPage() {
   const chronosUserId = chronosUserIdFromSessionUser(session.user);
   if (!chronosUserId) redirect("/login");
 
-  const aliases =
-    db
-      ? await db
+  const [aliases, linkedApplicant] = db
+    ? await Promise.all([
+        db
           .select({ email: userEmailAliases.email })
           .from(userEmailAliases)
-          .where(eq(userEmailAliases.userId, chronosUserId))
-      : [];
+          .where(eq(userEmailAliases.userId, chronosUserId)),
+        db
+          .select({
+            name: applicants.name,
+            email: applicants.email,
+            profilePictureUrl: applicants.profilePictureUrl,
+          })
+          .from(applicants)
+          .where(eq(applicants.chronosUserId, chronosUserId))
+          .limit(1)
+          .then((rows) => rows[0] ?? null),
+      ])
+    : [[], null as { name: string; email: string; profilePictureUrl: string | null } | null];
   const alternateEmails = Array.from(
-    new Set([session.user.email.toLowerCase(), ...aliases.map((row) => row.email.toLowerCase())]),
+    new Set([(linkedApplicant?.email ?? session.user.email).toLowerCase(), ...aliases.map((row) => row.email.toLowerCase())]),
   );
 
   return (
@@ -46,10 +57,10 @@ export default async function SettingsPage() {
       <SettingsForm
         user={{
           id: chronosUserId,
-          name: session.user.name,
-          email: session.user.email,
+          name: linkedApplicant?.name?.trim() || session.user.name,
+          email: linkedApplicant?.email?.trim() || session.user.email,
           alternateEmails,
-          profilePictureUrl: session.user.profilePictureUrl ?? null,
+          profilePictureUrl: linkedApplicant?.profilePictureUrl ?? session.user.profilePictureUrl ?? null,
         }}
       />
     </div>

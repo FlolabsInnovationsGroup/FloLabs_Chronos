@@ -166,6 +166,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. The response now prefers applicant-canonical `name`, `email`, `role`, `teamId`, `isActive`, `weeklyTargetHours`, `notionTeamMemberId`, `profilePictureUrl`, and program status instead of echoing only the legacy `users` row.
 3. This keeps admin/team editing flows aligned with the applicant-first identity model immediately after saves, while preserving `users` fallback for unlinked rows.
 
+**Settings identity slice (2026-04-23):**
+
+1. The dashboard settings page now loads the linked applicant profile alongside email aliases.
+2. Settings UI defaults now prefer applicant-canonical `name`, `email`, and `profilePictureUrl` instead of relying only on the session’s legacy `users` payload.
+3. Alias handling still falls back safely to session/user values for unlinked rows, keeping the page compatible while removing another `users`-canonical display assumption.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

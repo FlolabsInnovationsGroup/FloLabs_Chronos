@@ -95,7 +95,6 @@ Workflow file:
 - `.github/workflows/deploy-aws-apprunner.yml`
 
 Required GitHub secrets:
-- `AWS_GITHUB_ACTIONS_ROLE_ARN`
 - `AUTH_SECRET`
 - `CRON_SECRET`
 - `DATABASE_URL`

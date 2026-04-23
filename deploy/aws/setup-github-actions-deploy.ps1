@@ -43,7 +43,6 @@ function Get-EnvMap {
 $envMap = Get-EnvMap -Path $EnvPath
 
 $requiredSecrets = [ordered]@{
-  AWS_GITHUB_ACTIONS_ROLE_ARN = $RoleArn
   AUTH_SECRET = [string]$envMap['AUTH_SECRET']
   CRON_SECRET = [string]$Provision.cronSecret
   DATABASE_URL = [string]$Provision.databaseUrl

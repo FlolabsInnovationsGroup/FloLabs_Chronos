@@ -24,7 +24,6 @@ powershell -ExecutionPolicy Bypass -File deploy/aws/setup-github-actions-deploy.
 
 ## GitHub secrets written
 
-- `AWS_GITHUB_ACTIONS_ROLE_ARN`
 - `AUTH_SECRET`
 - `CRON_SECRET`
 - `DATABASE_URL`

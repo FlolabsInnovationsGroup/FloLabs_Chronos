@@ -17,6 +17,7 @@ env:
   APP_RUNNER_SERVICE_ARN: arn:aws:apprunner:us-east-1:975049954782:service/flolabs-chronos/b6416d84200e4c5a9d884f8f4c134aaf
   VPC_CONNECTOR_ARN: arn:aws:apprunner:us-east-1:975049954782:vpcconnector/flolabs-chronos-vpc-connector/1/41208035860d463f92e083af41247fe1
   APP_RUNNER_ECR_ACCESS_ROLE_ARN: arn:aws:iam::975049954782:role/flolabs-chronos-apprunner-ecr-access-role
+  GITHUB_ACTIONS_DEPLOY_ROLE_ARN: arn:aws:iam::975049954782:role/flolabs-chronos-github-actions-deploy
   APP_RUNNER_URL: https://hcmsmnfq5q.us-east-1.awsapprunner.com
 
 jobs:
@@ -33,7 +34,7 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          role-to-assume: ${{ env.GITHUB_ACTIONS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Set up Docker Buildx

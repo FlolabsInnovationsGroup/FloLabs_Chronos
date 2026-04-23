@@ -2,6 +2,18 @@
 
 Internal time-tracking and team-management app for FloLabs.
 
+## Documentation map (for humans and coding agents)
+
+| Doc | Purpose |
+|-----|---------|
+| **`ARCHITECTURE.md`** | **Start here.** Product model, identity (`applicants` vs `users`), data rules, timers, Notion — plus **“System architecture (for agents)”** (AWS App Runner, RDS, Redis, deploy/secret layout). |
+| **`DEPLOYMENT.md`** | Proven path: GitHub Actions → ECR → App Runner; SSM parameters; post-deploy checks. |
+| **`AGENT.md`** | Agent workflow: AWS-only validation, read order, priorities. |
+| **`CLAUDE.md`** | Maintainer/agent guardrails, credentials context, theme rules. |
+| **`GAME_MASTER.md`** | Implementation tracker and changelog-style notes. |
+
+Production runtime is **AWS** (App Runner + RDS + ElastiCache). **Vercel/Neon are legacy** references only.
+
 ## Core functionality
 
 - Live timer tracking with Redis-backed active timers
@@ -94,16 +106,9 @@ Current AWS target uses:
 Workflow file:
 - `.github/workflows/deploy-aws-apprunner.yml`
 
-Required GitHub secrets:
-- `AUTH_SECRET`
-- `NOTION_API_KEY`
-- `NOTION_DATABASE_ID`
-- `NOTION_ONBOARDINGS_DB_ID`
-- `NOTION_TASKS_DB_ID`
-- `NOTION_TEAMS_DB_ID`
-- `NOTION_TEAM_MEMBERS_DB_ID`
-- `RESEND_API_KEY`
-- `EMAIL_FROM`
+**GitHub Actions secrets** (see `.github/workflows/deploy-aws-apprunner.yml`): `AUTH_SECRET`, `NOTION_API_KEY`, `NOTION_DATABASE_ID`, `NOTION_ONBOARDINGS_DB_ID`, `NOTION_TASKS_DB_ID`, `NOTION_TEAMS_DB_ID`, `NOTION_TEAM_MEMBERS_DB_ID`.
+
+**AWS SSM parameters** (read at deploy, injected as `DATABASE_URL`, `KV_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, etc.): under `/flolabs-chronos/*` — full list in **`DEPLOYMENT.md`**.
 
 The workflow:
 1. assumes AWS credentials via GitHub OIDC

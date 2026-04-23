@@ -4,10 +4,11 @@ Project context for coding agents working on this repository.
 
 ## Read Order
 
-1. `ARCHITECTURE.md` — source of truth for product model, data model, and access rules
-2. `GAME_MASTER.md` — current implementation status, completed work, and next steps
-3. This `CLAUDE.md` handoff section, especially “Current Mission” and “Access / Credentials Context”
-4. Then inspect the actual code before changing behavior
+1. `ARCHITECTURE.md` — start with **“System architecture (for agents)”**, then the product/data contract (roles, identity, timers, Notion, etc.)
+2. `DEPLOYMENT.md` — how production gets to AWS (GitHub Actions, SSM, App Runner)
+3. `GAME_MASTER.md` — current implementation status, completed work, and next steps
+4. This `CLAUDE.md` handoff section, especially “Current Mission” and “Access / Credentials Context”
+5. Then inspect the actual code before changing behavior
 
 ## Workflow
 
@@ -179,12 +180,12 @@ This is not an open signup SaaS. Treat it as an internal operations tool with st
 - **Framework:** Next.js 16 App Router
 - **Language:** TypeScript
 - **ORM:** Drizzle ORM
-- **Database:** Neon Postgres
-- **Auth:** NextAuth v5 credentials
-- **Realtime:** Redis + SSE
+- **Database:** PostgreSQL — **production: AWS RDS**; local/dev uses `.env` `DATABASE_URL` (any Postgres)
+- **Auth:** NextAuth v5 credentials (applicant-canonical session; see `ARCHITECTURE.md`)
+- **Realtime:** Redis + SSE — **production: AWS ElastiCache** (`KV_URL` / `FL_KV_REDIS_URL`)
 - **Validation:** Zod
 - **Styling:** Tailwind CSS with Vellum Ink tokens; light/dark via CSS variables (`--c-*` on `:root` and `html.dark`)
-- **Deployment:** Vercel — project `flo-labs-chronos`, team `flomad-dev`
+- **Deployment (production):** **AWS App Runner** + **ECR** + **GitHub Actions** — see `DEPLOYMENT.md`
 
 ---
 
@@ -225,14 +226,14 @@ Chronos uses **one component tree** and **two palettes** defined in `src/app/glo
 
 ---
 
-## Vercel API Access
+## Vercel API Access (legacy / optional)
 
-A no-expiration Vercel personal access token is stored as `VERCEL_TOKEN` in both `.env.local` and `.env.production.local`. Use it for Vercel API calls (domain management, deployments, etc.):
+Production hosting is **AWS App Runner**, not Vercel. A Vercel token may still exist in local env files **only** for occasional API use (historical project cleanup, domain UI, or legacy scripts):
 
-- **Token env var:** `VERCEL_TOKEN`
+- **Token env var:** `VERCEL_TOKEN` (if present)
 - **Team ID:** `team_6Y3HFbsxBOKvTmB6Hft71t5G`
 - **Project ID:** `prj_3MFDCbI5X7AEOozfYWvlNd5wwUL7`
-- **Custom domain:** `athensgreecemarathon.com` — verified, DNS via Dynadot (`ns1.dyna-ns.net` / `ns2.dyna-ns.net`), A records pointing to Vercel IPs
+- **Custom domain:** `athensgreecemarathon.com` — DNS may need to target **AWS** (App Runner custom domain) when cutover is complete; do not assume records still point at Vercel.
 
 ---
 

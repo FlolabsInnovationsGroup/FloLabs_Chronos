@@ -1,11 +1,12 @@
 # GAME_MASTER.md — FloLabs Chronos Development Tracker
 
 ## Project Status
-**Date:** 2026-04-05
+**Date:** 2026-04-24
 **Phase:** V1 feature-complete → V1.1 active development
-**Stack:** Next.js 16 + Drizzle + Neon Postgres + Redis + NextAuth v5
-**URL:** https://athensgreecemarathon.com
-**Vercel project:** flo-labs-chronos (team: flomad-dev)
+**Stack:** Next.js 16 + Drizzle + **AWS RDS Postgres** + **AWS ElastiCache Redis** + NextAuth v5; **production app on AWS App Runner** (see `ARCHITECTURE.md` → “System architecture (for agents)”)
+**Public App Runner URL:** https://hcmsmnfq5q.us-east-1.awsapprunner.com — use `/api/health` for deployed commit
+**Custom domain (when cut over):** https://athensgreecemarathon.com
+**Legacy Vercel project (optional):** flo-labs-chronos (team: flomad-dev) — not canonical hosting
 
 ---
 

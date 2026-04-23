@@ -6,12 +6,27 @@ This file tells delegated coding agents how to work in this repository.
 
 Finish Chronos safely and quickly, with AWS as the only authoritative validation environment.
 
+## Architecture snapshot (read `ARCHITECTURE.md` for the full contract)
+
+Chronos is a **Next.js 16 App Router** app whose **production** deployment is:
+
+- **AWS App Runner** (container) in **`us-east-1`**, fed by **Amazon ECR** images built in **GitHub Actions** on pushes to **`main`** (workflow: `.github/workflows/deploy-aws-apprunner.yml`).
+- **AWS RDS PostgreSQL** for all relational data (Drizzle ORM).
+- **AWS ElastiCache Serverless Redis** for timers, pub/sub, and SSE-related state (`KV_URL` / `FL_KV_REDIS_URL`).
+- **Secrets:** runtime DB/Redis/cron/email from **AWS SSM** under `/flolabs-chronos/*`; app secrets (e.g. `AUTH_SECRET`, Notion keys) from **GitHub Actions secrets** at deploy time — see `DEPLOYMENT.md`.
+- **Auth:** NextAuth v5 **credentials**; canonical identity is **`applicants`** with **`chronosUserId`** pointing at **`users`** (password hash). See `src/lib/auth.ts`.
+- **Integrations:** Notion (mirror/sync), Discord (webhooks), Resend (password-reset mail).
+- **Default public service URL:** `https://hcmsmnfq5q.us-east-1.awsapprunner.com` — use **`GET /api/health`** to confirm the running **`commitSha`** matches your change after deploy.
+
+**Not production:** Vercel and Neon are **historical**; docs may mention them only as legacy. **Future** self-host on Hetzner+Plesk is described in `ARCHITECTURE.md` as a possible direction, not live AWS.
+
 ## Required Read Order
 
-1. `ARCHITECTURE.md`
-2. `GAME_MASTER.md`
-3. `CLAUDE.md`
-4. then inspect the relevant code
+1. `ARCHITECTURE.md` — especially **“System architecture (for agents)”**, then product and data rules
+2. `DEPLOYMENT.md` — production deploy and SSM/GitHub split
+3. `GAME_MASTER.md` — what is done vs in flight
+4. `CLAUDE.md` — validation rules and credentials context
+5. Then inspect the relevant code
 
 ## Non-Negotiable Rules
 

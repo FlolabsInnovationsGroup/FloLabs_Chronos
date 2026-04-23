@@ -4,6 +4,43 @@
 
 Chronos is FloLabs' internal time-tracking and workforce coordination tool. It replaces Toggl for time capture, but the product is broader than a timer: it manages projects, role-scoped reporting, invite-only onboarding, Notion-backed team data, and downstream sync into Notion for operational visibility.
 
+---
+
+## System architecture (for agents)
+
+Read this section first for **where code runs**, **what stores state**, and **how deploys work**. The rest of this file is the **product and data contract**.
+
+### Production runtime (canonical): AWS
+
+| Concern | Implementation |
+|--------|------------------|
+| **App server** | **Next.js 16** (App Router) in a **Docker** image on **AWS App Runner** (`us-east-1`). One container service handles SSR, route handlers (`src/app/api/**`), and Server Components. |
+| **Images & deploy** | Images live in **Amazon ECR** under immutable tags `git-<12-char-sha>`. **GitHub Actions** (`.github/workflows/deploy-aws-apprunner.yml`) builds on every push to `main` or manual `workflow_dispatch`, updates App Runner, and verifies **`GET /api/health`** reports the same **`commitSha`** as the deploy. |
+| **Transactional data** | **AWS RDS PostgreSQL** — source of truth for Chronos (`users`, `applicants`, `time_entries`, teams, tags, …). Access via **Drizzle ORM** (`src/lib/db`, `drizzle.config.ts`). |
+| **Timers / realtime** | **Redis** (AWS ElastiCache Serverless in production; env `KV_URL` / `FL_KV_REDIS_URL`) — active timers, pub/sub, SSE fan-out (`src/lib/redis.ts`, `/api/sse/**`). |
+| **Auth** | **NextAuth.js v5** credentials provider (`src/lib/auth.ts`). Session identity is **applicant-centric** (`session.user.id` → `applicants.id`); Chronos ownership FK is **`session.user.chronosUserId`** → `users.id`. Password hashes on `users`. |
+| **HTTP edge** | Default service URL: `https://hcmsmnfq5q.us-east-1.awsapprunner.com`. Custom domains (e.g. `athensgreecemarathon.com`) are a **DNS / App Runner custom domain** concern, not encoded in application logic. |
+| **Secrets split** | **AWS SSM Parameter Store** (`/flolabs-chronos/*`): `DATABASE_URL`, `REDIS_URL`, `CRON_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` (optional fallback `INVITE_FROM_EMAIL`), optional reset-password test params. **GitHub Actions secrets** (per workflow): `AUTH_SECRET`, Notion API/DB IDs, etc. Nothing in-repo contains production secrets. |
+| **Integrations** | **Notion API** (teams, team members, tasks, time-entry mirror), **Discord** webhooks (entry notifications), **Resend** (password-reset email via `src/lib/mail.ts`). |
+| **Request authorization** | **`src/proxy.ts`** wraps NextAuth for page-level redirects only — **not** authoritative. Every **API route** must enforce roles and scope (`src/lib/permissions.ts`). |
+
+### Repository / code layout (high level)
+
+- **`src/app/`** — App Router pages and **`src/app/api/`** REST handlers.
+- **`src/lib/db/`** — Drizzle schema and DB access.
+- **`src/lib/auth.ts`**, **`src/lib/notion.ts`**, **`src/lib/redis.ts`**, **`src/lib/mail.ts`** — core services.
+- **`src/proxy.ts`** — Next.js proxy/middleware-style auth gate for HTML routes (see Next.js config).
+
+### Validation expectation (agents)
+
+Chronos treats **the deployed AWS App Runner service** as the source of truth for “does it work in production?” Local `pnpm dev` is for development only. See **`AGENT.md`** and **`CLAUDE.md`** for the non-negotiable AWS-only validation rule.
+
+### Future / alternate hosting (not current production)
+
+The **Hetzner + Plesk** subsection below describes a **possible** self-hosted layout on an existing FloLabs server. It is **aspirational / migration direction**, not what runs production today unless explicitly switched.
+
+---
+
 ### Hetzner + Plesk target deployment architecture (2026-04)
 
 The current target production direction is to run Chronos on the existing Hetzner server that already hosts multiple domains through Plesk, while keeping Chronos operationally isolated from those hosted sites.
@@ -232,15 +269,15 @@ The entry-list edit experience must be considered authoritative for user-facing 
 
 | Layer | Technology | Why |
 |---|---|---|
-| Frontend + API | **Next.js 16** (App Router) on **Vercel** | SSR, route handlers, server components, straightforward deployment |
+| Frontend + API | **Next.js 16** (App Router), deployed as a **container on AWS App Runner** | SSR, route handlers, Server Components; production deploy via GitHub Actions → ECR |
 | Auth | **NextAuth.js v5** credentials flow | Session enrichment and app-level role checks |
-| Database | **PostgreSQL** (Neon / Vercel-managed Neon) | Durable relational source of truth |
+| Database | **PostgreSQL** (production: **AWS RDS**; local/dev: any Postgres URL) | Durable relational source of truth |
 | ORM | **Drizzle ORM** | Type-safe schema and query layer |
-| Real-time | **Redis** + **SSE** | Active timer state + fan-out |
+| Real-time | **Redis** + **SSE** | Active timer state + fan-out (production Redis: **ElastiCache**) |
 | Styling | **Tailwind CSS** with Vellum Ink tokens + CSS variables | Editorial UI; light/dark palettes via `--c-*` on `:root` and `html.dark` |
 | Validation | **Zod** | Shared request validation |
 | External ops integration | **Notion API** | Teams, Team Members, Tasks, and time-entry mirror |
-| Optional delivery | **Email provider** (future / optional) | Invitation delivery |
+| Email | **Resend** (`RESEND_API_KEY`, `EMAIL_FROM` or `INVITE_FROM_EMAIL`) | Password reset and any transactional mail (`src/lib/mail.ts`) |
 | Notifications | **Discord webhooks** | Branded embed notifications for entry lifecycle events |
 | Transitional local integration | **Python task linker script** | Legacy task relation patching from description URLs |
 
@@ -827,16 +864,22 @@ Future merge work should introduce a canonical person or identity layer above ac
 
 ## Deployment
 
-- **Vercel** hosts the app
-- **Neon Postgres** stores durable app data
-- **Redis** stores active timers and cache/pub-sub state
-- **Notion** is used for operational sync / mirror databases
-- **Discord webhooks** handle branded notification delivery
-- **Local Python task linker** may still be used during transition for entries that only contain pasted task URLs in descriptions
+**Production (canonical):**
 
-Current live deployment has used:
-- project: `flo-labs-chronos`
-- custom domain: `https://athensgreecemarathon.com`
+- **AWS App Runner** runs the Next.js container (see **System architecture (for agents)** above).
+- **AWS RDS PostgreSQL** stores durable app data.
+- **AWS ElastiCache Serverless Redis** stores active timers and cache/pub-sub state.
+- **Notion** is used for operational sync / mirror databases.
+- **Discord webhooks** handle branded notification delivery.
+- **Resend** sends password-reset email when configured.
+- **Local Python task linker** may still be used during transition for entries that only contain pasted task URLs in descriptions.
+
+**Historical note:** The app previously ran on **Vercel** with **Neon**; that stack is **not** the current production target. DNS or old env names may still reference Vercel during migration.
+
+**Operator references:**
+
+- GitHub → AWS deploy: **`DEPLOYMENT.md`**, workflow **`.github/workflows/deploy-aws-apprunner.yml`**
+- Custom domain has used **`athensgreecemarathon.com`** (configure in DNS / App Runner as appropriate).
 
 ---
 

@@ -2,6 +2,8 @@
 
 This file describes the **current proven deployment method** for Chronos as of 2026-04-23.
 
+**Architecture context:** For the full system picture (App Runner, RDS, Redis, auth, integrations), read **`ARCHITECTURE.md`** → section **“System architecture (for agents)”**. This file focuses on **how** that stack is released and verified.
+
 ## Status
 
 **Proven working method:** GitHub Actions -> AWS OIDC -> ECR -> App Runner -> live verification on AWS.

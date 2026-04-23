@@ -91,6 +91,26 @@ jobs:
           fi
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve runtime secrets from AWS SSM
+        id: runtime-secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          DATABASE_URL=$(aws ssm get-parameter --name /flolabs-chronos/DATABASE_URL --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
+          REDIS_URL=$(aws ssm get-parameter --name /flolabs-chronos/REDIS_URL --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
+          CRON_SECRET=$(aws ssm get-parameter --name /flolabs-chronos/CRON_SECRET --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
+          {
+            echo "database_url<<EOF"
+            echo "$DATABASE_URL"
+            echo "EOF"
+            echo "redis_url<<EOF"
+            echo "$REDIS_URL"
+            echo "EOF"
+            echo "cron_secret<<EOF"
+            echo "$CRON_SECRET"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Render App Runner source configuration
         shell: bash
         run: |
@@ -109,12 +129,12 @@ jobs:
                 "RuntimeEnvironmentVariables": {
                   "APP_URL": "${APP_RUNNER_URL}",
                   "AUTH_SECRET": "${{ secrets.AUTH_SECRET }}",
-                  "CRON_SECRET": "${{ secrets.CRON_SECRET }}",
-                  "DATABASE_URL": "${{ secrets.DATABASE_URL }}",
-                  "FL_CHRONOS_DATABASE_URL": "${{ secrets.DATABASE_URL }}",
-                  "FL_CHRONOS_DATABASE_URL_UNPOOLED": "${{ secrets.DATABASE_URL }}",
-                  "FL_KV_REDIS_URL": "${{ secrets.FL_KV_REDIS_URL }}",
-                  "KV_URL": "${{ secrets.FL_KV_REDIS_URL }}",
+                  "CRON_SECRET": "${{ steps.runtime-secrets.outputs.cron_secret }}",
+                  "DATABASE_URL": "${{ steps.runtime-secrets.outputs.database_url }}",
+                  "FL_CHRONOS_DATABASE_URL": "${{ steps.runtime-secrets.outputs.database_url }}",
+                  "FL_CHRONOS_DATABASE_URL_UNPOOLED": "${{ steps.runtime-secrets.outputs.database_url }}",
+                  "FL_KV_REDIS_URL": "${{ steps.runtime-secrets.outputs.redis_url }}",
+                  "KV_URL": "${{ steps.runtime-secrets.outputs.redis_url }}",
                   "NEXTAUTH_SECRET": "${{ secrets.AUTH_SECRET }}",
                   "NEXTAUTH_URL": "${APP_RUNNER_URL}",
                   "NODE_ENV": "production",

@@ -15,7 +15,7 @@ import { fetchRepliesForDiscussions } from "@/app/api/discussions/[id]/replies/r
 import type { EntryDiscussion } from "@/types";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
-import { chronosActorDisplay } from "@/lib/chronos-user-notion";
+import { chronosActorDisplay, chronosActorDisplayMap } from "@/lib/chronos-user-notion";
 
 function toDiscussion(row: {
   discussion: typeof entryDiscussions.$inferSelect;
@@ -133,16 +133,11 @@ export async function GET() {
     rows = rows.filter((r) => r.discussion.resolvedAt === null);
   }
 
-  const startedByMap = new Map<string, { id: string; name: string } | null>();
-  await Promise.all(
-    rows.map(async (r) => {
-      const key = `${r.discussion.startedById}:${r.discussion.startedByApplicantId ?? ""}`;
-      if (startedByMap.has(key)) return;
-      startedByMap.set(
-        key,
-        await chronosActorDisplay(r.discussion.startedById, r.discussion.startedByApplicantId ?? null)
-      );
-    })
+  const startedByMap = await chronosActorDisplayMap(
+    rows.map((r) => ({
+      userId: r.discussion.startedById,
+      applicantId: r.discussion.startedByApplicantId ?? null,
+    }))
   );
 
   const discussions = rows.map((row) =>

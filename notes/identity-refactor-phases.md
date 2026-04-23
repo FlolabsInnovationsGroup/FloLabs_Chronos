@@ -208,6 +208,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. The cron now loads linked applicants for all eligible Chronos users in one batched query and reuses that map inside the send loop.
 3. This preserves the applicant-first summary identity behavior while removing avoidable N+1 applicant reads from a production cron path.
 
+**Discussion actor batching slice (2026-04-23):**
+
+1. Added `chronosActorDisplayMap(...)` in `src/lib/chronos-user-notion.ts` so discussion/reply surfaces can resolve applicant-first actor names in batches instead of one lookup per row.
+2. Timer discussions, `/api/discussions`, `/api/discussions/entry/[entryId]`, and discussion replies now reuse the batched actor map for starter/resolver/reply-author identity.
+3. This keeps applicant-canonical actor presentation intact while removing repeated N+1 identity reads from live discussion paths.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

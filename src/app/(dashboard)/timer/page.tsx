@@ -11,7 +11,7 @@ import { TimerDashboardClient } from "@/components/timer/TimerDashboardClient";
 import { isAdmin, isTeamLead, getAccessibleUserIds } from "@/lib/permissions";
 import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 import type { Project, Tag, TimeEntry, EntryDiscussion } from "@/types";
-import { chronosActorDisplay, chronosEntryOwnerDisplayMap } from "@/lib/chronos-user-notion";
+import { chronosActorDisplayMap, chronosEntryOwnerDisplayMap } from "@/lib/chronos-user-notion";
 
 export const metadata: Metadata = { title: "Timer | FloLabs Chronos" };
 
@@ -203,16 +203,11 @@ async function getInitialDiscussions(
     rows = allRows.filter((r) => r.discussion.resolvedAt === null);
   }
 
-  const startedByMap = new Map<string, { id: string; name: string } | null>();
-  await Promise.all(
-    rows.map(async (r) => {
-      const key = `${r.discussion.startedById}:${r.discussion.startedByApplicantId ?? ""}`;
-      if (startedByMap.has(key)) return;
-      startedByMap.set(
-        key,
-        await chronosActorDisplay(r.discussion.startedById, r.discussion.startedByApplicantId ?? null)
-      );
-    })
+  const startedByMap = await chronosActorDisplayMap(
+    rows.map((r) => ({
+      userId: r.discussion.startedById,
+      applicantId: r.discussion.startedByApplicantId ?? null,
+    }))
   );
 
   const discussions = rows.map((r) => ({
@@ -250,13 +245,11 @@ async function getInitialDiscussions(
       )
       .orderBy(asc(discussionReplies.createdAt));
 
-    const authorMap = new Map<string, { id: string; name: string } | null>();
-    await Promise.all(
-      replyRows.map(async (r) => {
-        const key = `${r.reply.authorId}:${r.reply.authorApplicantId ?? ""}`;
-        if (authorMap.has(key)) return;
-        authorMap.set(key, await chronosActorDisplay(r.reply.authorId, r.reply.authorApplicantId ?? null));
-      })
+    const authorMap = await chronosActorDisplayMap(
+      replyRows.map((r) => ({
+        userId: r.reply.authorId,
+        applicantId: r.reply.authorApplicantId ?? null,
+      }))
     );
 
     const repliesMap = new Map<string, EntryDiscussion['replies']>();

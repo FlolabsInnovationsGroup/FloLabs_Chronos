@@ -6,7 +6,7 @@ import { eq, asc } from "drizzle-orm";
 import { canViewDiscussions } from "@/lib/permissions";
 import { fetchRepliesForDiscussions } from "@/app/api/discussions/[id]/replies/route";
 import type { EntryDiscussion } from "@/types";
-import { chronosActorDisplay } from "@/lib/chronos-user-notion";
+import { chronosActorDisplayMap } from "@/lib/chronos-user-notion";
 
 export async function GET(
   _req: NextRequest,
@@ -48,14 +48,7 @@ export async function GET(
       : null,
   ]).filter((v): v is { userId: string; applicantId: string | null } => Boolean(v));
 
-  const actorMap = new Map<string, { id: string; name: string } | null>();
-  await Promise.all(
-    actorKeys.map(async ({ userId, applicantId }) => {
-      const key = `${userId}:${applicantId ?? ""}`;
-      if (actorMap.has(key)) return;
-      actorMap.set(key, await chronosActorDisplay(userId, applicantId));
-    })
-  );
+  const actorMap = await chronosActorDisplayMap(actorKeys);
 
   const discussions: EntryDiscussion[] = rows.map((r) => ({
     id: r.discussion.id,

@@ -8,7 +8,7 @@ import { canViewDiscussions, isAdmin } from "@/lib/permissions";
 import { broadcastDiscussionChange } from "@/lib/realtime";
 import type { DiscussionReply } from "@/types";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
-import { chronosActorDisplay } from "@/lib/chronos-user-notion";
+import { chronosActorDisplay, chronosActorDisplayMap } from "@/lib/chronos-user-notion";
 
 function toReply(
   row: typeof discussionReplies.$inferSelect,
@@ -62,10 +62,12 @@ export async function GET(
     .where(eq(discussionReplies.discussionId, id))
     .orderBy(asc(discussionReplies.createdAt));
 
-  const authors = await Promise.all(
-    rows.map((r) => chronosActorDisplay(r.reply.authorId, r.reply.authorApplicantId ?? null))
+  const authorMap = await chronosActorDisplayMap(
+    rows.map((r) => ({ userId: r.reply.authorId, applicantId: r.reply.authorApplicantId ?? null }))
   );
-  const replies: DiscussionReply[] = rows.map((r, idx) => toReply(r.reply, authors[idx]));
+  const replies: DiscussionReply[] = rows.map((r) =>
+    toReply(r.reply, authorMap.get(`${r.reply.authorId}:${r.reply.authorApplicantId ?? ""}`) ?? null)
+  );
 
   return NextResponse.json({ replies });
 }
@@ -147,13 +149,13 @@ export async function fetchRepliesForDiscussions(
     )
     .orderBy(asc(discussionReplies.createdAt));
 
-  const authors = await Promise.all(
-    rows.map((r) => chronosActorDisplay(r.reply.authorId, r.reply.authorApplicantId ?? null))
+  const authorMap = await chronosActorDisplayMap(
+    rows.map((r) => ({ userId: r.reply.authorId, applicantId: r.reply.authorApplicantId ?? null }))
   );
 
-  for (const [idx, r] of rows.entries()) {
+  for (const r of rows) {
     const existing = map.get(r.reply.discussionId) ?? [];
-    existing.push(toReply(r.reply, authors[idx]));
+    existing.push(toReply(r.reply, authorMap.get(`${r.reply.authorId}:${r.reply.authorApplicantId ?? ""}`) ?? null));
     map.set(r.reply.discussionId, existing);
   }
 

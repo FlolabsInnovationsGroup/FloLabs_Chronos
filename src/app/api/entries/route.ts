@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
+import { timeEntries, projects, tags, timeEntryTags } from "@/lib/db/schema";
 import { eq, and, gte, lte, desc, inArray, isNotNull, type SQL } from "drizzle-orm";
 import { whereTagsForLinkedUser } from "@/lib/tag-applicant";
 import { z } from "zod";
@@ -81,11 +81,9 @@ export async function GET(req: Request) {
     .select({
       entry: timeEntries,
       project: projects,
-      user: { id: users.id, name: users.name, email: users.email },
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-    .leftJoin(users, eq(timeEntries.userId, users.id))
     .where(and(...conditions))
     .orderBy(desc(timeEntries.startedAt))
     .limit(limit);
@@ -95,10 +93,12 @@ export async function GET(req: Request) {
     chronosEntryOwnerDisplayMap(rows.map((r) => ({ userId: r.entry.userId, applicantId: r.entry.applicantId ?? null }))),
   ]);
 
-  const entries = rows.map(({ entry, project, user }) => ({
+  const entries = rows.map(({ entry, project }) => ({
     ...entry,
     project,
-    user: ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ?? user,
+    user:
+      ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ??
+      (entry.userId ? { id: entry.userId, name: "Unknown", email: null } : null),
     tags: tagMap.get(entry.id) ?? [],
   }));
 

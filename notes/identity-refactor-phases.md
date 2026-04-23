@@ -220,6 +220,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. The route now builds one applicant update payload from the admin edit request and applies it in a single write after the linked `users` row update.
 3. This preserves applicant-canonical profile mirroring while removing redundant applicant writes from a hot admin edit path.
 
+**Entries owner join removal slice (2026-04-23):**
+
+1. `GET /api/entries` no longer left-joins `users` in its main time-entry query just to populate owner display fallback.
+2. The route now relies on the existing batched `chronosEntryOwnerDisplayMap(...)` resolution for applicant-first owner identity and falls back to a lightweight unknown owner object only if no linked identity row exists.
+3. This removes a redundant join from a live entry-list path while keeping applicant-canonical owner display behavior intact.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

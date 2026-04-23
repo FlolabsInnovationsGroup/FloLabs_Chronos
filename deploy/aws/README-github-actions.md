@@ -10,6 +10,7 @@ This sets up Chronos for AWS-native deploys on every push to `main`.
   - ECR push / digest lookup
   - App Runner update / describe / list-operations
 - GitHub repo secrets for the Chronos workflow
+- AWS SSM runtime secret source for DB / Redis / cron values used during deploy
 
 ## Command
 
@@ -25,9 +26,6 @@ powershell -ExecutionPolicy Bypass -File deploy/aws/setup-github-actions-deploy.
 ## GitHub secrets written
 
 - `AUTH_SECRET`
-- `CRON_SECRET`
-- `DATABASE_URL`
-- `FL_KV_REDIS_URL`
 - `NOTION_API_KEY`
 - `NOTION_DATABASE_ID`
 - `NOTION_ONBOARDINGS_DB_ID`
@@ -40,3 +38,12 @@ powershell -ExecutionPolicy Bypass -File deploy/aws/setup-github-actions-deploy.
 ## Result
 
 After this bootstrap succeeds, pushes to `main` can deploy Chronos without desktop Docker.
+
+Routine deploys then use:
+- GitHub Actions for build/push
+- AWS OIDC for auth
+- AWS SSM for DB / Redis / cron runtime values
+- App Runner for rollout
+- `/api/health` for live build verification
+
+See `DEPLOYMENT.md` for the latest proven end-to-end method.

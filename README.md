@@ -74,13 +74,13 @@ Migrate data into AWS Postgres:
 pnpm aws:migrate-db
 ```
 
-Manual fallback deploy from a trusted operator machine:
+Legacy/emergency-only operator fallback (not the normal method):
 
 ```powershell
 pnpm aws:deploy
 ```
 
-Preferred production path: **GitHub Actions deploys automatically on every push to `main`** using AWS OIDC, ECR, and App Runner.
+Preferred and proven production path: **GitHub Actions deploys automatically on every push to `main`** using AWS OIDC, ECR, AWS SSM runtime secrets, ECR, and App Runner.
 
 Current AWS target uses:
 - App Runner for the web app
@@ -96,9 +96,6 @@ Workflow file:
 
 Required GitHub secrets:
 - `AUTH_SECRET`
-- `CRON_SECRET`
-- `DATABASE_URL`
-- `FL_KV_REDIS_URL`
 - `NOTION_API_KEY`
 - `NOTION_DATABASE_ID`
 - `NOTION_ONBOARDINGS_DB_ID`
@@ -111,8 +108,9 @@ Required GitHub secrets:
 The workflow:
 1. assumes AWS credentials via GitHub OIDC
 2. builds and pushes an immutable git-SHA image to ECR
-3. updates App Runner to that exact image
-4. verifies `/api/health` returns the pushed commit SHA
+3. reads DB/Redis/cron runtime values from AWS SSM
+4. updates App Runner to that exact image
+5. waits for the deployment to settle and verifies `/api/health` returns the pushed commit SHA
 
 Bootstrap the AWS/GitHub integration with:
 
@@ -123,7 +121,9 @@ powershell -ExecutionPolicy Bypass -File deploy/aws/setup-github-actions-deploy.
 See also:
 - `deploy/aws/README-github-actions.md`
 
-This is the intended long-term deployment path so Chronos deploys no longer depend on desktop Docker.
+This is the proven deployment path so routine Chronos deploys no longer depend on desktop Docker or local-machine runtime inputs.
+
+For the full proven method, see `DEPLOYMENT.md`.
 
 ## Notes
 

@@ -8,21 +8,22 @@ pnpm aws:migrate-db
 pnpm aws:deploy
 ```
 
+## Current role of these commands
+
+- `pnpm aws:provision` is an infrastructure/bootstrap command
+- `pnpm aws:migrate-db` is a one-off or operational database migration command
+- `pnpm aws:deploy` is now a **legacy/emergency operator fallback**, not the standard production workflow
+
 ## Runtime env philosophy
 
-Like `Emails_automation`, the App Runner deploy reads the checked-in local env file (`.env.production.local`, then `.env.local`) and applies the full runtime environment at deploy time, with AWS-only overrides for:
+The proven routine deploy path no longer depends on checked-in local env files as the production runtime source of truth.
 
-- `DATABASE_URL`
-- `FL_CHRONOS_DATABASE_URL`
-- `FL_CHRONOS_DATABASE_URL_UNPOOLED`
-- `KV_URL`
-- `FL_KV_REDIS_URL`
-- `CRON_SECRET`
-- `NODE_ENV`
-- `NEXTAUTH_URL`
-- `APP_URL`
+Current proven production behavior:
+- GitHub Actions builds the image
+- AWS SSM provides runtime `DATABASE_URL`, `REDIS_URL`, and `CRON_SECRET`
+- App Runner receives the rendered runtime env during deploy
 
-Vercel-only metadata variables are filtered out before deploy.
+Checked-in env files may still exist for bootstrap/operator continuity, but they are not the preferred source of truth for routine production deploys.
 
 ## AWS-native replacements
 

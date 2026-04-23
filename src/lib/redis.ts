@@ -101,18 +101,37 @@ async function kvKeys(pattern: string): Promise<string[]> {
   return [...memStore.keys()].filter((k) => k.startsWith(prefix));
 }
 
-export async function setActiveTimer(userId: string, timer: ActiveTimer) {
-  await kvSet(`timer:${userId}`, JSON.stringify(timer));
+async function kvMGet(keys: string[]): Promise<Array<string | null>> {
+  if (!keys.length) return [];
+  try {
+    const client = getRedisClient();
+    if (client) return (await client).mGet(keys);
+  } catch {}
+  if (isKvAvailable) {
+    try {
+      return await kv.mget<string[]>(...keys);
+    } catch (error) {
+      console.error('[redis] kv mget failed', error);
+    }
+  }
+  return keys.map((key) => memStore.get(key) ?? null);
 }
 
-export async function getActiveTimer(userId: string): Promise<ActiveTimer | null> {
-  const raw = await kvGet(`timer:${userId}`);
+function parseActiveTimer(raw: string | null): ActiveTimer | null {
   if (!raw) return null;
   try {
     return JSON.parse(raw) as ActiveTimer;
   } catch {
     return null;
   }
+}
+
+export async function setActiveTimer(userId: string, timer: ActiveTimer) {
+  await kvSet(`timer:${userId}`, JSON.stringify(timer));
+}
+
+export async function getActiveTimer(userId: string): Promise<ActiveTimer | null> {
+  return parseActiveTimer(await kvGet(`timer:${userId}`));
 }
 
 export async function deleteActiveTimer(userId: string) {
@@ -122,18 +141,18 @@ export async function deleteActiveTimer(userId: string) {
 export async function getAllActiveTimers(): Promise<Record<string, ActiveTimer>> {
   const keys = await kvKeys("timer:*");
   if (!keys.length) return {};
+
+  const rawTimers = await kvMGet(keys);
   const result: Record<string, ActiveTimer> = {};
-  for (const key of keys) {
-    const raw = await kvGet(key);
-    if (raw) {
-      try {
-        const userId = key.replace("timer:", "");
-        result[userId] = JSON.parse(raw) as ActiveTimer;
-      } catch {
-        // skip
-      }
-    }
+
+  for (let i = 0; i < keys.length; i += 1) {
+    const timer = parseActiveTimer(rawTimers[i] ?? null);
+    if (!timer) continue;
+    const userId = keys[i]?.replace("timer:", "");
+    if (!userId) continue;
+    result[userId] = timer;
   }
+
   return result;
 }
 

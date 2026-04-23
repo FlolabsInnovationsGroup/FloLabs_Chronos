@@ -178,6 +178,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. Applicant activity updates now prefer exact `applicants.id` matching, with legacy `chronosUserId` / email fallback preserved for older session shapes.
 3. This removes another subtle `users`-canonical assumption from live activity tracking without changing behavior for unlinked rows.
 
+**Redis active-timer fanout slice (2026-04-23):**
+
+1. `src/lib/redis.ts` now batches active-timer value fetches with `mget` after the `timer:*` key lookup instead of issuing one extra KV read per active timer.
+2. `getActiveTimer(...)` and `getAllActiveTimers()` now share the same parser so malformed Redis payloads are skipped consistently without duplicating JSON handling.
+3. This keeps the Phase 3 live-timer compatibility layer on Chronos `user_id` keys for now, but removes avoidable N+1 Redis round-trips from team/users timer surfaces while Phase 4 key migration is still pending.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

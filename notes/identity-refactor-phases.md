@@ -190,6 +190,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. `GET /api/users` now limits Redis timer reads to the currently accessible Chronos user ids instead of scanning every `timer:*` key before filtering.
 3. `GET /api/teams/[id]/members` now does the same for the team member set, preserving the current `user_id`-keyed compatibility layer while reducing unnecessary Redis fanout on shared team surfaces.
 
+**Directory applicant-count scope slice (2026-04-23):**
+
+1. `GET /api/users` no longer scans the full `applicants` table just to compute `applicantCount` for visible users on the admin directory.
+2. The count query now scopes to the currently returned Chronos user ids and aggregates in SQL with `count(*)`, instead of loading every applicant row into Node and counting there.
+3. This keeps the Phase 3 applicant-first directory overlay intact while reducing avoidable DB work on a production-facing admin surface.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

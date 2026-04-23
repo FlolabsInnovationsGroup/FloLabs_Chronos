@@ -242,12 +242,19 @@ export async function GET() {
     }
 
     const applicantCounts = new Map<string, number>();
-    if (db && session.user.role === 'admin') {
+    if (db && session.user.role === 'admin' && rows.length > 0) {
       try {
-        const applicantRows = await db.select({ chronosUserId: applicants.chronosUserId }).from(applicants);
+        const applicantRows = await db
+          .select({
+            chronosUserId: applicants.chronosUserId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(applicants)
+          .where(inArray(applicants.chronosUserId, rows.map((r) => r.id)))
+          .groupBy(applicants.chronosUserId);
         for (const row of applicantRows) {
           if (!row.chronosUserId) continue;
-          applicantCounts.set(row.chronosUserId, (applicantCounts.get(row.chronosUserId) ?? 0) + 1);
+          applicantCounts.set(row.chronosUserId, row.count);
         }
       } catch (error) {
         console.error("[api/users] applicants count query failed", error);

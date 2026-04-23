@@ -11,6 +11,7 @@ This sets up Chronos for AWS-native deploys on every push to `main`.
   - App Runner update / describe / list-operations
 - GitHub repo secrets for the Chronos workflow
 - AWS SSM runtime secret source for DB / Redis / cron values used during deploy
+- optional canary reset-password test settings for live verification
 
 ## Command
 
@@ -45,5 +46,9 @@ Routine deploys then use:
 - AWS SSM for DB / Redis / cron runtime values
 - App Runner for rollout
 - `/api/health` for live build verification
+
+Optional `.env.production.local` / `.env.local` values that will also be mirrored to SSM when present:
+- `RESET_PASSWORD_TEST_EMAIL`
+- `RESET_PASSWORD_TEST_SECRET`
 
 See `DEPLOYMENT.md` for the latest proven end-to-end method.

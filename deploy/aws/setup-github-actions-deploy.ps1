@@ -95,6 +95,12 @@ if (-not [string]::IsNullOrWhiteSpace([string]$Provision.redisUrl)) {
 }
 & aws ssm put-parameter --name "$ssmPrefix/RESEND_API_KEY" --type SecureString --value ([string]$envMap['RESEND_API_KEY']) --overwrite --region $Region | Out-Null
 & aws ssm put-parameter --name "$ssmPrefix/EMAIL_FROM" --type SecureString --value ([string]$envMap['EMAIL_FROM']) --overwrite --region $Region | Out-Null
+if (-not [string]::IsNullOrWhiteSpace([string]$envMap['RESET_PASSWORD_TEST_EMAIL'])) {
+  & aws ssm put-parameter --name "$ssmPrefix/RESET_PASSWORD_TEST_EMAIL" --type SecureString --value ([string]$envMap['RESET_PASSWORD_TEST_EMAIL']) --overwrite --region $Region | Out-Null
+}
+if (-not [string]::IsNullOrWhiteSpace([string]$envMap['RESET_PASSWORD_TEST_SECRET'])) {
+  & aws ssm put-parameter --name "$ssmPrefix/RESET_PASSWORD_TEST_SECRET" --type SecureString --value ([string]$envMap['RESET_PASSWORD_TEST_SECRET']) --overwrite --region $Region | Out-Null
+}
 
 Write-Host "GitHub Actions AWS deploy bootstrap ready." -ForegroundColor Green
 Write-Host "Role ARN: $RoleArn"

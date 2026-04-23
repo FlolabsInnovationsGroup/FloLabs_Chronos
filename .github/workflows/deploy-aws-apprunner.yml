@@ -101,6 +101,8 @@ jobs:
           CRON_SECRET=$(aws ssm get-parameter --name /flolabs-chronos/CRON_SECRET --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
           RESEND_API_KEY=$(aws ssm get-parameter --name /flolabs-chronos/RESEND_API_KEY --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
           EMAIL_FROM=$(aws ssm get-parameter --name /flolabs-chronos/EMAIL_FROM --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
+          RESET_PASSWORD_TEST_EMAIL=$(aws ssm get-parameter --name /flolabs-chronos/RESET_PASSWORD_TEST_EMAIL --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text 2>/dev/null || true)
+          RESET_PASSWORD_TEST_SECRET=$(aws ssm get-parameter --name /flolabs-chronos/RESET_PASSWORD_TEST_SECRET --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text 2>/dev/null || true)
           {
             echo "database_url<<EOF"
             echo "$DATABASE_URL"
@@ -116,6 +118,12 @@ jobs:
             echo "EOF"
             echo "email_from<<EOF"
             echo "$EMAIL_FROM"
+            echo "EOF"
+            echo "reset_password_test_email<<EOF"
+            echo "$RESET_PASSWORD_TEST_EMAIL"
+            echo "EOF"
+            echo "reset_password_test_secret<<EOF"
+            echo "$RESET_PASSWORD_TEST_SECRET"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -154,6 +162,8 @@ jobs:
                   "NOTION_TEAM_MEMBERS_DB_ID": "${{ secrets.NOTION_TEAM_MEMBERS_DB_ID }}",
                   "RESEND_API_KEY": "${{ steps.runtime-secrets.outputs.resend_api_key }}",
                   "EMAIL_FROM": "${{ steps.runtime-secrets.outputs.email_from }}",
+                  "RESET_PASSWORD_TEST_EMAIL": "${{ steps.runtime-secrets.outputs.reset_password_test_email }}",
+                  "RESET_PASSWORD_TEST_SECRET": "${{ steps.runtime-secrets.outputs.reset_password_test_secret }}",
                   "NX_DAEMON": "false",
                   "BUILD_COMMIT_SHA": "${{ github.sha }}",
                   "BUILD_COMMIT_REF": "${{ github.ref_name }}",

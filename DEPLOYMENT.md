@@ -40,6 +40,9 @@ The normal production deploy path is now fully AWS-native after initial bootstra
    - `/flolabs-chronos/CRON_SECRET`
    - `/flolabs-chronos/RESEND_API_KEY`
    - `/flolabs-chronos/EMAIL_FROM`
+   - optional canary reset-password test settings:
+     - `/flolabs-chronos/RESET_PASSWORD_TEST_EMAIL`
+     - `/flolabs-chronos/RESET_PASSWORD_TEST_SECRET`
 7. The workflow updates the App Runner service to the exact pushed image
 8. The workflow waits for App Runner to become idle before update
 9. The workflow waits for the App Runner deployment operation to succeed
@@ -58,6 +61,24 @@ A deployment is only considered proven when all of the following are true:
 
 On 2026-04-23, the critical path used for proof was:
 - `POST /api/auth/forgot-password`
+
+## Reliable reset-password testing
+
+A plain `200 {"ok":true}` from `POST /api/auth/forgot-password` is not enough to prove delivery.
+
+Chronos now supports a safer canary test path for a dedicated reset-password test account:
+- set optional SSM params `/flolabs-chronos/RESET_PASSWORD_TEST_EMAIL` and `/flolabs-chronos/RESET_PASSWORD_TEST_SECRET`
+- trigger the live flow with header `x-reset-password-test-secret`
+- the route will bypass cooldown **only for that configured canary email**, return the Resend email id plus reset token for testing, and log structured success/failure metadata to CloudWatch
+- `pnpm run test:reset-password:live` then verifies:
+  1. live forgot-password route works
+  2. the token can be read back through `GET /api/auth/reset-password`
+  3. Resend reports the message as `delivered`
+  4. optionally, the script can complete `POST /api/auth/reset-password` if `RESET_PASSWORD_TEST_NEW_PASSWORD` is provided
+
+Important:
+- use a dedicated synthetic account for this canary path
+- if email sending fails, Chronos now marks the just-created token used so failed sends do not poison the 2-hour cooldown window
 
 ## Files that define the deploy path
 
@@ -87,6 +108,9 @@ Current SSM parameters used by the workflow:
 - `/flolabs-chronos/CRON_SECRET`
 - `/flolabs-chronos/RESEND_API_KEY`
 - `/flolabs-chronos/EMAIL_FROM`
+- optional:
+  - `/flolabs-chronos/RESET_PASSWORD_TEST_EMAIL`
+  - `/flolabs-chronos/RESET_PASSWORD_TEST_SECRET`
 
 GitHub secrets are still used for the remaining application secrets such as:
 - `AUTH_SECRET`

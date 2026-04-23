@@ -112,6 +112,10 @@ The workflow:
 4. updates App Runner to that exact image
 5. waits for the deployment to settle and verifies `/api/health` returns the pushed commit SHA
 
+Optional canary reset-password runtime settings can also be sourced from SSM:
+- `RESET_PASSWORD_TEST_EMAIL`
+- `RESET_PASSWORD_TEST_SECRET`
+
 Bootstrap the AWS/GitHub integration with:
 
 ```powershell
@@ -124,6 +128,23 @@ See also:
 This is the proven deployment path so routine Chronos deploys no longer depend on desktop Docker or local-machine runtime inputs.
 
 For the full proven method, see `DEPLOYMENT.md`.
+
+### Live reset-password verification
+
+For a reliable production check of the reset-password flow, use a dedicated canary account and run:
+
+```powershell
+pnpm run test:reset-password:live
+```
+
+Expected env inputs:
+- `CHRONOS_BASE_URL` (or `NEXTAUTH_URL`)
+- `RESET_PASSWORD_TEST_EMAIL`
+- `RESET_PASSWORD_TEST_SECRET`
+- `RESEND_API_KEY`
+- optional: `RESET_PASSWORD_TEST_NEW_PASSWORD`
+
+This probes the live forgot-password route, checks the live reset-token read path, and verifies the Resend message reaches `delivered`.
 
 ## Notes
 

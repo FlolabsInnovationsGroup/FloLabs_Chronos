@@ -12,6 +12,7 @@
     "db:studio": "drizzle-kit studio",
     "test:e2e": "playwright test",
     "test:e2e:production": "playwright test -c playwright.production.config.ts e2e/users-page-production.spec.ts e2e/test-accounts-users-reports.spec.ts",
+    "test:reset-password:live": "tsx scripts/test-reset-password-live.ts",
     "test:task-search": "tsx scripts/test-task-search-integration.ts",
     "seed": "tsx scripts/seed.ts",
     "db:migrate:invitations-notion": "tsx scripts/migrate-invitations-notion-team-member-id.ts",

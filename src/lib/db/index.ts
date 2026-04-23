@@ -9,6 +9,31 @@ const connectionString =
 
 let pool: Pool | null = null;
 
+function buildPgConfig(rawConnectionString: string) {
+  const needsRelaxedSsl = /sslmode=require/i.test(rawConnectionString);
+  if (!needsRelaxedSsl) {
+    return { connectionString: rawConnectionString };
+  }
+
+  let normalizedConnectionString = rawConnectionString;
+  try {
+    const parsed = new URL(rawConnectionString);
+    parsed.searchParams.delete("sslmode");
+    normalizedConnectionString = parsed.toString();
+  } catch {
+    normalizedConnectionString = rawConnectionString.replace(/([?&])sslmode=require(&?)/i, (_match, prefix: string, suffix: string) => {
+      if (prefix === "?" && suffix) return "?";
+      if (prefix === "&" && suffix) return "&";
+      return "";
+    }).replace(/[?&]$/, "");
+  }
+
+  return {
+    connectionString: normalizedConnectionString,
+    ssl: { rejectUnauthorized: false },
+  };
+}
+
 // Allow app to run without DB for development
 function createDb() {
   if (!connectionString) {
@@ -16,11 +41,7 @@ function createDb() {
     return null as never;
   }
 
-  const needsRelaxedSsl = /sslmode=require/i.test(connectionString);
-  pool = new Pool({
-    connectionString,
-    ...(needsRelaxedSsl ? { ssl: { rejectUnauthorized: false } } : {}),
-  });
+  pool = new Pool(buildPgConfig(connectionString));
   return drizzleNode(pool, { schema });
 }
 

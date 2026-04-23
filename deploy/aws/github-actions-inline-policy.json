@@ -35,7 +35,9 @@
       "Resource": [
         "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/DATABASE_URL",
         "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/REDIS_URL",
-        "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/CRON_SECRET"
+        "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/CRON_SECRET",
+        "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/RESEND_API_KEY",
+        "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/EMAIL_FROM"
       ]
     },
     {

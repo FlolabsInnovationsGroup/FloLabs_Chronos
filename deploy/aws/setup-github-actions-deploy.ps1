@@ -87,6 +87,15 @@ foreach ($entry in $requiredSecrets.GetEnumerator()) {
   $entry.Value | gh secret set $entry.Key --repo $Repo --body - | Out-Null
 }
 
+$ssmPrefix = "/$AppName"
+& aws ssm put-parameter --name "$ssmPrefix/CRON_SECRET" --type SecureString --value ([string]$Provision.cronSecret) --overwrite --region $Region | Out-Null
+& aws ssm put-parameter --name "$ssmPrefix/DATABASE_URL" --type SecureString --value ([string]$Provision.databaseUrl) --overwrite --region $Region | Out-Null
+if (-not [string]::IsNullOrWhiteSpace([string]$Provision.redisUrl)) {
+  & aws ssm put-parameter --name "$ssmPrefix/REDIS_URL" --type SecureString --value ([string]$Provision.redisUrl) --overwrite --region $Region | Out-Null
+}
+& aws ssm put-parameter --name "$ssmPrefix/RESEND_API_KEY" --type SecureString --value ([string]$envMap['RESEND_API_KEY']) --overwrite --region $Region | Out-Null
+& aws ssm put-parameter --name "$ssmPrefix/EMAIL_FROM" --type SecureString --value ([string]$envMap['EMAIL_FROM']) --overwrite --region $Region | Out-Null
+
 Write-Host "GitHub Actions AWS deploy bootstrap ready." -ForegroundColor Green
 Write-Host "Role ARN: $RoleArn"
 Write-Host "Repo secrets updated for $Repo"

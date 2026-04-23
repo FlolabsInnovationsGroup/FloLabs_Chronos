@@ -38,6 +38,8 @@ The normal production deploy path is now fully AWS-native after initial bootstra
    - `/flolabs-chronos/DATABASE_URL`
    - `/flolabs-chronos/REDIS_URL`
    - `/flolabs-chronos/CRON_SECRET`
+   - `/flolabs-chronos/RESEND_API_KEY`
+   - `/flolabs-chronos/EMAIL_FROM`
 7. The workflow updates the App Runner service to the exact pushed image
 8. The workflow waits for App Runner to become idle before update
 9. The workflow waits for the App Runner deployment operation to succeed
@@ -77,12 +79,14 @@ On 2026-04-23, the critical path used for proof was:
 
 ## Runtime secret source of truth
 
-Production runtime values for DB/Redis/cron are sourced from AWS SSM during deploy, not from GitHub secrets and not from checked-in env files.
+Production runtime values for DB/Redis/cron/email are sourced from AWS SSM during deploy, not from GitHub secrets and not from checked-in env files.
 
 Current SSM parameters used by the workflow:
 - `/flolabs-chronos/DATABASE_URL`
 - `/flolabs-chronos/REDIS_URL`
 - `/flolabs-chronos/CRON_SECRET`
+- `/flolabs-chronos/RESEND_API_KEY`
+- `/flolabs-chronos/EMAIL_FROM`
 
 GitHub secrets are still used for the remaining application secrets such as:
 - `AUTH_SECRET`
@@ -92,8 +96,6 @@ GitHub secrets are still used for the remaining application secrets such as:
 - `NOTION_TASKS_DB_ID`
 - `NOTION_TEAMS_DB_ID`
 - `NOTION_TEAM_MEMBERS_DB_ID`
-- `RESEND_API_KEY`
-- `EMAIL_FROM`
 
 ## Bootstrap vs normal operation
 

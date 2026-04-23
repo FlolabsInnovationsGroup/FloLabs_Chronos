@@ -99,6 +99,8 @@ jobs:
           DATABASE_URL=$(aws ssm get-parameter --name /flolabs-chronos/DATABASE_URL --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
           REDIS_URL=$(aws ssm get-parameter --name /flolabs-chronos/REDIS_URL --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
           CRON_SECRET=$(aws ssm get-parameter --name /flolabs-chronos/CRON_SECRET --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
+          RESEND_API_KEY=$(aws ssm get-parameter --name /flolabs-chronos/RESEND_API_KEY --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
+          EMAIL_FROM=$(aws ssm get-parameter --name /flolabs-chronos/EMAIL_FROM --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
           {
             echo "database_url<<EOF"
             echo "$DATABASE_URL"
@@ -108,6 +110,12 @@ jobs:
             echo "EOF"
             echo "cron_secret<<EOF"
             echo "$CRON_SECRET"
+            echo "EOF"
+            echo "resend_api_key<<EOF"
+            echo "$RESEND_API_KEY"
+            echo "EOF"
+            echo "email_from<<EOF"
+            echo "$EMAIL_FROM"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -144,8 +152,8 @@ jobs:
                   "NOTION_TASKS_DB_ID": "${{ secrets.NOTION_TASKS_DB_ID }}",
                   "NOTION_TEAMS_DB_ID": "${{ secrets.NOTION_TEAMS_DB_ID }}",
                   "NOTION_TEAM_MEMBERS_DB_ID": "${{ secrets.NOTION_TEAM_MEMBERS_DB_ID }}",
-                  "RESEND_API_KEY": "${{ secrets.RESEND_API_KEY }}",
-                  "EMAIL_FROM": "${{ secrets.EMAIL_FROM }}",
+                  "RESEND_API_KEY": "${{ steps.runtime-secrets.outputs.resend_api_key }}",
+                  "EMAIL_FROM": "${{ steps.runtime-secrets.outputs.email_from }}",
                   "NX_DAEMON": "false",
                   "BUILD_COMMIT_SHA": "${{ github.sha }}",
                   "BUILD_COMMIT_REF": "${{ github.ref_name }}",

@@ -108,7 +108,7 @@ Required GitHub secrets:
 The workflow:
 1. assumes AWS credentials via GitHub OIDC
 2. builds and pushes an immutable git-SHA image to ECR
-3. reads DB/Redis/cron runtime values from AWS SSM
+3. reads DB/Redis/cron/email runtime values from AWS SSM
 4. updates App Runner to that exact image
 5. waits for the deployment to settle and verifies `/api/health` returns the pushed commit SHA
 

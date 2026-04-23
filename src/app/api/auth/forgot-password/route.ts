@@ -39,10 +39,10 @@ export async function POST(req: Request) {
       }
     : null;
 
-  if (!applicant || !applicant.isActive) return NextResponse.json({ ok: true });
+  if (applicant && !applicant.isActive) return NextResponse.json({ ok: true });
 
   let user =
-    applicant.chronosUserId
+    applicant?.chronosUserId
       ? (
           await db
             .select({ id: users.id, email: users.email, name: users.name, isActive: users.isActive })
@@ -51,14 +51,33 @@ export async function POST(req: Request) {
             .limit(1)
         )[0]
       : undefined;
+  if (!user && applicant?.email) {
+    const byApplicantEmail = await findUserByAnyEmail(applicant.email.toLowerCase());
+    if (byApplicantEmail) {
+      user = {
+        id: byApplicantEmail.id,
+        email: byApplicantEmail.email,
+        name: byApplicantEmail.name,
+        isActive: byApplicantEmail.isActive,
+      };
+    }
+  }
   if (!user) {
-    const byEmail = await findUserByAnyEmail(applicant.email.toLowerCase());
-    if (byEmail) {
-      user = { id: byEmail.id, email: byEmail.email, name: byEmail.name, isActive: byEmail.isActive };
+    const byRequestedEmail = await findUserByAnyEmail(email);
+    if (byRequestedEmail) {
+      user = {
+        id: byRequestedEmail.id,
+        email: byRequestedEmail.email,
+        name: byRequestedEmail.name,
+        isActive: byRequestedEmail.isActive,
+      };
     }
   }
 
   if (!user || !user.isActive) return NextResponse.json({ ok: true });
+
+  const recipientEmail = applicant?.email?.trim() || user.email;
+  const recipientName = applicant?.name?.trim() || user.name;
 
   const [existing] = await db
     .select({ id: passwordResetTokens.id, token: passwordResetTokens.token, expiresAt: passwordResetTokens.expiresAt })
@@ -89,10 +108,10 @@ export async function POST(req: Request) {
 
   try {
     const delivery = await sendEmail({
-      to: applicant.email,
+      to: recipientEmail,
       subject: "Reset your FloLabs Chronos password",
-      text: `Hi ${applicant.name},\n\nUse this link to reset your password: ${resetUrl}\n\nThis link expires in 2 hours.`,
-      html: `<p>Hi ${applicant.name},</p><p>Use this link to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in 2 hours.</p>`,
+      text: `Hi ${recipientName},\n\nUse this link to reset your password: ${resetUrl}\n\nThis link expires in 2 hours.`,
+      html: `<p>Hi ${recipientName},</p><p>Use this link to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in 2 hours.</p>`,
       headers: {
         "X-Chronos-Flow": "password-reset",
         "X-Chronos-User-Id": user.id,
@@ -105,8 +124,8 @@ export async function POST(req: Request) {
 
     console.info("[auth/forgot-password] reset email accepted", {
       userId: user.id,
-      applicantId: applicant.id,
-      email: applicant.email,
+      applicantId: applicant?.id ?? null,
+      email: recipientEmail,
       tokenId: createdReset?.id ?? null,
       resendEmailId: delivery.id,
       isTest: isAuthorizedResetPasswordTest,
@@ -132,8 +151,8 @@ export async function POST(req: Request) {
 
     console.error("[auth/forgot-password] reset email send failed", {
       userId: user.id,
-      applicantId: applicant.id,
-      email: applicant.email,
+      applicantId: applicant?.id ?? null,
+      email: recipientEmail,
       tokenId: createdReset.id,
       isTest: isAuthorizedResetPasswordTest,
       error: error instanceof Error ? error.message : String(error),

@@ -39,6 +39,20 @@ export async function GET(req: Request) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  const applicantByChronosUserId = new Map<string, { id: string; name: string; email: string }>();
+  const linkedApplicants = await db
+    .select({ id: applicants.id, chronosUserId: applicants.chronosUserId, name: applicants.name, email: applicants.email })
+    .from(applicants)
+    .where(inArray(applicants.chronosUserId, eligibleUsers.map((user) => user.id)));
+  for (const applicant of linkedApplicants) {
+    if (!applicant.chronosUserId) continue;
+    applicantByChronosUserId.set(applicant.chronosUserId, {
+      id: applicant.id,
+      name: applicant.name,
+      email: applicant.email,
+    });
+  }
+
   let sent = 0;
   const errors: string[] = [];
 
@@ -46,11 +60,7 @@ export async function GET(req: Request) {
     if (!user.discordWebhookUrl) continue;
 
     try {
-      const [linkedApplicant] = await db
-        .select({ id: applicants.id, name: applicants.name, email: applicants.email })
-        .from(applicants)
-        .where(eq(applicants.chronosUserId, user.id))
-        .limit(1);
+      const linkedApplicant = applicantByChronosUserId.get(user.id);
 
       const rows = await db
         .select({

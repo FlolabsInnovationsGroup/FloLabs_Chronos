@@ -202,6 +202,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. Each pass now asks Postgres directly for only provisionable applicants with `chronos_user_id is null`, capped by the existing per-pass limit.
 3. This preserves the Phase 3 applicant-first directory linking behavior while removing repeated full-table scans from a hot admin directory route.
 
+**Daily-summary applicant batching slice (2026-04-23):**
+
+1. `/api/cron/daily-summary` no longer queries `applicants` once per eligible user just to recover the linked applicant identity for summary naming and owner scoping.
+2. The cron now loads linked applicants for all eligible Chronos users in one batched query and reuses that map inside the send loop.
+3. This preserves the applicant-first summary identity behavior while removing avoidable N+1 applicant reads from a production cron path.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

@@ -100,7 +100,13 @@ jobs:
           REDIS_URL=$(aws ssm get-parameter --name /flolabs-chronos/REDIS_URL --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
           CRON_SECRET=$(aws ssm get-parameter --name /flolabs-chronos/CRON_SECRET --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
           RESEND_API_KEY=$(aws ssm get-parameter --name /flolabs-chronos/RESEND_API_KEY --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
-          EMAIL_FROM=$(aws ssm get-parameter --name /flolabs-chronos/EMAIL_FROM --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
+          set +e
+          EMAIL_FROM=$(aws ssm get-parameter --name /flolabs-chronos/EMAIL_FROM --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text 2>/dev/null)
+          email_from_code=$?
+          set -e
+          if [[ "$email_from_code" -ne 0 ]] || [[ -z "${EMAIL_FROM//[$'\t\r\n ']}" ]]; then
+            EMAIL_FROM=$(aws ssm get-parameter --name /flolabs-chronos/INVITE_FROM_EMAIL --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text)
+          fi
           RESET_PASSWORD_TEST_EMAIL=$(aws ssm get-parameter --name /flolabs-chronos/RESET_PASSWORD_TEST_EMAIL --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text 2>/dev/null || true)
           RESET_PASSWORD_TEST_SECRET=$(aws ssm get-parameter --name /flolabs-chronos/RESET_PASSWORD_TEST_SECRET --with-decryption --region "${AWS_REGION}" --query 'Parameter.Value' --output text 2>/dev/null || true)
           {

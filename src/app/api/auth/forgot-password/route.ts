@@ -5,7 +5,7 @@ import { passwordResetTokens, users } from "@/lib/db/schema";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { sendEmail } from "@/lib/mail";
-import { normalizeEmail } from "@/lib/invitations";
+import { normalizeEmail, resolvePublicAppOrigin } from "@/lib/invitations";
 import { findApplicantForCredentialEmail } from "@/lib/applicant-auth";
 import { findUserByAnyEmail } from "@/lib/user-email-aliases";
 
@@ -38,8 +38,6 @@ export async function POST(req: Request) {
         chronosUserId: applicantRow.chronosUserId,
       }
     : null;
-
-  if (applicant && !applicant.isActive) return NextResponse.json({ ok: true });
 
   let user =
     applicant?.chronosUserId
@@ -103,8 +101,7 @@ export async function POST(req: Request) {
     .values({ userId: user.id, token, expiresAt })
     .returning({ id: passwordResetTokens.id });
 
-  const appUrl = process.env.NEXTAUTH_URL ?? new URL(req.url).origin;
-  const resetUrl = `${appUrl}/register?reset=${encodeURIComponent(token)}`;
+  const resetUrl = `${resolvePublicAppOrigin(req.url)}/register?reset=${encodeURIComponent(token)}`;
 
   try {
     const delivery = await sendEmail({

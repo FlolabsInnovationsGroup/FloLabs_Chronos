@@ -190,7 +190,13 @@ function RegisterForm() {
       }
 
       if (forgotMode) {
-        setStatusMessage("Reset email sent. Check your inbox.");
+        if (data.cooldown === true) {
+          setStatusMessage(
+            "A reset link was already sent recently. Check your inbox or spam folder, or wait until it expires (about 2 hours) before requesting again."
+          );
+        } else {
+          setStatusMessage("Reset email sent. Check your inbox.");
+        }
         return;
       }
 

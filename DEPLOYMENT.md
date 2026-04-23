@@ -107,7 +107,7 @@ Current SSM parameters used by the workflow:
 - `/flolabs-chronos/REDIS_URL`
 - `/flolabs-chronos/CRON_SECRET`
 - `/flolabs-chronos/RESEND_API_KEY`
-- `/flolabs-chronos/EMAIL_FROM`
+- `/flolabs-chronos/EMAIL_FROM` (if unset or empty, deploy falls back to `/flolabs-chronos/INVITE_FROM_EMAIL` for legacy Vercel-style naming)
 - optional:
   - `/flolabs-chronos/RESET_PASSWORD_TEST_EMAIL`
   - `/flolabs-chronos/RESET_PASSWORD_TEST_SECRET`

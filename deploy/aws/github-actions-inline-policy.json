@@ -38,6 +38,7 @@
         "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/CRON_SECRET",
         "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/RESEND_API_KEY",
         "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/EMAIL_FROM",
+        "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/INVITE_FROM_EMAIL",
         "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/RESET_PASSWORD_TEST_EMAIL",
         "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/RESET_PASSWORD_TEST_SECRET"
       ]

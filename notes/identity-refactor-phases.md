@@ -226,6 +226,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. The route now relies on the existing batched `chronosEntryOwnerDisplayMap(...)` resolution for applicant-first owner identity and falls back to a lightweight unknown owner object only if no linked identity row exists.
 3. This removes a redundant join from a live entry-list path while keeping applicant-canonical owner display behavior intact.
 
+**Reports owner join removal slice (2026-04-23):**
+
+1. `GET /api/reports` no longer left-joins `users` in its main report-entry query just to populate owner labels for grouping/export fallback.
+2. The route now reuses the existing batched `chronosEntryOwnerDisplayMap(...)` result for CSV export and grouped report labels, with the same lightweight unknown-owner fallback used by `/api/entries`.
+3. This trims another redundant identity join from a live reporting path while preserving applicant-canonical owner display behavior.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

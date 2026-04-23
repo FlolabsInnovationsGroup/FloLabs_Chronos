@@ -102,11 +102,9 @@ export async function GET(req: Request) {
     .select({
       entry: timeEntries,
       project: { id: projects.id, name: projects.name, color: projects.color },
-      user: { id: users.id, name: users.name, email: users.email },
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-    .leftJoin(users, eq(timeEntries.userId, users.id))
     .leftJoin(applicants, eq(timeEntries.applicantId, applicants.id))
     .where(and(...conditions))
     .orderBy(desc(timeEntries.startedAt));
@@ -139,10 +137,12 @@ export async function GET(req: Request) {
   if (format === "csv") {
     const csvLines = [
       "Date,User,Project,Tags,Description,Duration (h),Started,Stopped",
-      ...rows.map(({ entry, project, user }) => {
+      ...rows.map(({ entry, project }) => {
         const durationH = ((entry.durationMs ?? 0) / 3600000).toFixed(2);
         const entryTags = (tagMap.get(entry.id) ?? []).map((t) => t.name).join("; ");
-        const owner = ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ?? user;
+        const owner =
+          ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ??
+          (entry.userId ? { id: entry.userId, name: "Unknown", email: null } : null);
         return [
           new Date(entry.startedAt).toISOString().split("T")[0],
           owner?.name ?? "",
@@ -167,8 +167,10 @@ export async function GET(req: Request) {
   // Grouping
   const groups: Record<string, { label: string; totalMs: number; entryCount: number }> = {};
 
-  for (const { entry, project, user } of rows) {
-    const owner = ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ?? user;
+  for (const { entry, project } of rows) {
+    const owner =
+      ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ??
+      (entry.userId ? { id: entry.userId, name: "Unknown", email: null } : null);
     let key = "";
     let label = "";
     const date = new Date(entry.startedAt);

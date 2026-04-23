@@ -36,7 +36,7 @@ async function getUserTags(chronosUserId: string, applicantId: string | null): P
 }
 
 async function buildEntriesWithTags(
-  rows: { entry: typeof timeEntries.$inferSelect; project: typeof projects.$inferSelect | null; user: { id: string; name: string; email: string } | null }[]
+  rows: { entry: typeof timeEntries.$inferSelect; project: typeof projects.$inferSelect | null }[]
 ): Promise<TimeEntry[]> {
   if (!db || rows.length === 0) return [];
 
@@ -57,11 +57,11 @@ async function buildEntriesWithTags(
     tagMap.set(r.timeEntryId, existing);
   }
 
-  return rows.map(({ entry, project, user }) => ({
+  return rows.map(({ entry, project }) => ({
     ...entry,
     project: project ?? undefined,
     tags: tagMap.get(entry.id) ?? [],
-    user: ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ?? user ?? undefined,
+    user: ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ?? undefined,
   })) as TimeEntry[];
 }
 
@@ -73,11 +73,9 @@ async function getWeekEntries(userId: string, applicantId: string | null): Promi
     .select({
       entry: timeEntries,
       project: projects,
-      user: { id: users.id, name: users.name, email: users.email },
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-    .leftJoin(users, eq(timeEntries.userId, users.id))
     .where(
       and(
         whereTimeEntriesForLinkedUser(userId, applicantId),
@@ -100,11 +98,9 @@ async function getRecentEntries(userId: string, applicantId: string | null): Pro
     .select({
       entry: timeEntries,
       project: projects,
-      user: { id: users.id, name: users.name, email: users.email },
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-    .leftJoin(users, eq(timeEntries.userId, users.id))
     .where(and(whereTimeEntriesForLinkedUser(userId, applicantId), isNotNull(timeEntries.stoppedAt), gte(timeEntries.startedAt, sevenDaysAgo)))
     .orderBy(desc(timeEntries.startedAt))
     .limit(50);

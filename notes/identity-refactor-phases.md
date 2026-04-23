@@ -232,6 +232,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. The route now reuses the existing batched `chronosEntryOwnerDisplayMap(...)` result for CSV export and grouped report labels, with the same lightweight unknown-owner fallback used by `/api/entries`.
 3. This trims another redundant identity join from a live reporting path while preserving applicant-canonical owner display behavior.
 
+**Timer history owner join removal slice (2026-04-23):**
+
+1. The timer dashboard week-history and recent-history queries no longer left-join `users` just to provide owner fallback fields.
+2. `buildEntriesWithTags(...)` now relies on the existing batched `chronosEntryOwnerDisplayMap(...)` owner resolution for timer history rows, matching `/api/entries` and `/api/reports`.
+3. This removes two more redundant identity joins from a live timer surface while keeping applicant-canonical owner display behavior intact.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

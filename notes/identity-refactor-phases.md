@@ -214,6 +214,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. Timer discussions, `/api/discussions`, `/api/discussions/entry/[entryId]`, and discussion replies now reuse the batched actor map for starter/resolver/reply-author identity.
 3. This keeps applicant-canonical actor presentation intact while removing repeated N+1 identity reads from live discussion paths.
 
+**User edit applicant-write collapse slice (2026-04-23):**
+
+1. `PATCH /api/users/[id]` no longer issues separate applicant updates for alternate-email mirroring, applicant program status, and canonical profile sync.
+2. The route now builds one applicant update payload from the admin edit request and applies it in a single write after the linked `users` row update.
+3. This preserves applicant-canonical profile mirroring while removing redundant applicant writes from a hot admin edit path.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

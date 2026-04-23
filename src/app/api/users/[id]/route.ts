@@ -210,38 +210,34 @@ export async function PATCH(
         )
         .onConflictDoNothing();
     }
-    await db
-      .update(applicants)
-      .set({ email: user.email.toLowerCase(), updatedAt: new Date() })
-      .where(eq(applicants.chronosUserId, id));
   }
 
-  if (parsed.data.applicantProgramStatus !== undefined) {
-    await db
-      .update(applicants)
-      .set({ status: parsed.data.applicantProgramStatus, updatedAt: new Date() })
-      .where(eq(applicants.chronosUserId, id));
-  }
-
-  // Canonical profile mirror: keep applicant profile fields in sync with admin edits.
-  await db
-    .update(applicants)
-    .set({
-      ...(parsed.data.role !== undefined ? { role: parsed.data.role } : {}),
-      ...(parsed.data.teamId !== undefined
-        ? { teamId: parsed.data.teamId }
-        : requestedTeamIds !== undefined
-          ? { teamId: requestedTeamIds[0] ?? null }
-          : {}),
-      ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
-      ...(parsed.data.weeklyTargetHours !== undefined ? { weeklyTargetHours: parsed.data.weeklyTargetHours } : {}),
-      ...(parsed.data.notionTeamMemberId !== undefined
-        ? { notionTeamMemberId: parsed.data.notionTeamMemberId }
+  const applicantUpdateData: Record<string, unknown> = {
+    ...(parsed.data.role !== undefined ? { role: parsed.data.role } : {}),
+    ...(parsed.data.teamId !== undefined
+      ? { teamId: parsed.data.teamId }
+      : requestedTeamIds !== undefined
+        ? { teamId: requestedTeamIds[0] ?? null }
         : {}),
-      ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
-      updatedAt: new Date(),
-    })
-    .where(eq(applicants.chronosUserId, id));
+    ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
+    ...(parsed.data.weeklyTargetHours !== undefined ? { weeklyTargetHours: parsed.data.weeklyTargetHours } : {}),
+    ...(parsed.data.notionTeamMemberId !== undefined
+      ? { notionTeamMemberId: parsed.data.notionTeamMemberId }
+      : {}),
+    ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
+    ...(parsed.data.applicantProgramStatus !== undefined ? { status: parsed.data.applicantProgramStatus } : {}),
+    ...(parsed.data.alternateEmails !== undefined ? { email: user.email.toLowerCase() } : {}),
+  };
+
+  if (Object.keys(applicantUpdateData).length > 0) {
+    await db
+      .update(applicants)
+      .set({
+        ...applicantUpdateData,
+        updatedAt: new Date(),
+      })
+      .where(eq(applicants.chronosUserId, id));
+  }
 
   const notionTeamMemberId = user.notionTeamMemberId?.trim() || null;
 

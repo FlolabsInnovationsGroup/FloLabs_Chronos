@@ -115,6 +115,15 @@ The workflow:
 3. updates App Runner to that exact image
 4. verifies `/api/health` returns the pushed commit SHA
 
+Bootstrap the AWS/GitHub integration with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/aws/setup-github-actions-deploy.ps1
+```
+
+See also:
+- `deploy/aws/README-github-actions.md`
+
 This is the intended long-term deployment path so Chronos deploys no longer depend on desktop Docker.
 
 ## Notes

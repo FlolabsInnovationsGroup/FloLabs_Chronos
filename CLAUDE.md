@@ -83,6 +83,7 @@ Future sessions should know where access currently comes from and how to continu
 - RDS + Redis details are available through `deploy/aws/provision-output.json` and the local env files
 - current manual fallback deployment entry point: `deploy/aws/deploy-app.ps1`
 - preferred deployment path is GitHub Actions -> AWS OIDC -> ECR -> App Runner on every push to `main`; see `.github/workflows/deploy-aws-apprunner.yml`
+- bootstrap that path with `deploy/aws/setup-github-actions-deploy.ps1`, which creates the GitHub OIDC provider/role and seeds the required GitHub Actions secrets from AWS provision output + local env files
 - deployment proof chain now needs commit/image metadata: build images with immutable git-SHA tags, publish the digest to ECR, and expose `/api/health` build info so AWS runtime can be tied back to an exact commit/image digest
 
 ### Vercel access context

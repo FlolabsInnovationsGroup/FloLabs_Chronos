@@ -81,7 +81,8 @@ Future sessions should know where access currently comes from and how to continu
 - Service ARN: `arn:aws:apprunner:us-east-1:975049954782:service/flolabs-chronos/b6416d84200e4c5a9d884f8f4c134aaf`
 - Service URL: `https://hcmsmnfq5q.us-east-1.awsapprunner.com`
 - RDS + Redis details are available through `deploy/aws/provision-output.json` and the local env files
-- deployment entry point: `deploy/aws/deploy-app.ps1`
+- current manual fallback deployment entry point: `deploy/aws/deploy-app.ps1`
+- preferred deployment path is GitHub Actions -> AWS OIDC -> ECR -> App Runner on every push to `main`; see `.github/workflows/deploy-aws-apprunner.yml`
 - deployment proof chain now needs commit/image metadata: build images with immutable git-SHA tags, publish the digest to ECR, and expose `/api/health` build info so AWS runtime can be tied back to an exact commit/image digest
 
 ### Vercel access context

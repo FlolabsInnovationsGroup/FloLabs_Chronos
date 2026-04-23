@@ -74,17 +74,48 @@ Migrate data into AWS Postgres:
 pnpm aws:migrate-db
 ```
 
-Deploy the current app image to AWS App Runner:
+Manual fallback deploy from a trusted operator machine:
 
 ```powershell
 pnpm aws:deploy
 ```
+
+Preferred production path: **GitHub Actions deploys automatically on every push to `main`** using AWS OIDC, ECR, and App Runner.
 
 Current AWS target uses:
 - App Runner for the web app
 - RDS Postgres for primary data
 - ElastiCache Serverless Redis for timers/pubsub
 - ECR for container images
+- GitHub Actions for AWS-native image build + deploy on `main`
+
+### GitHub Actions AWS-native deploy setup
+
+Workflow file:
+- `.github/workflows/deploy-aws-apprunner.yml`
+
+Required GitHub secrets:
+- `AWS_GITHUB_ACTIONS_ROLE_ARN`
+- `AUTH_SECRET`
+- `CRON_SECRET`
+- `DATABASE_URL`
+- `FL_KV_REDIS_URL`
+- `NOTION_API_KEY`
+- `NOTION_DATABASE_ID`
+- `NOTION_ONBOARDINGS_DB_ID`
+- `NOTION_TASKS_DB_ID`
+- `NOTION_TEAMS_DB_ID`
+- `NOTION_TEAM_MEMBERS_DB_ID`
+- `RESEND_API_KEY`
+- `EMAIL_FROM`
+
+The workflow:
+1. assumes AWS credentials via GitHub OIDC
+2. builds and pushes an immutable git-SHA image to ECR
+3. updates App Runner to that exact image
+4. verifies `/api/health` returns the pushed commit SHA
+
+This is the intended long-term deployment path so Chronos deploys no longer depend on desktop Docker.
 
 ## Notes
 

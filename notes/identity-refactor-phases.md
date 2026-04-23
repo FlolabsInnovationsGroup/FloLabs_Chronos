@@ -172,6 +172,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. Settings UI defaults now prefer applicant-canonical `name`, `email`, and `profilePictureUrl` instead of relying only on the session’s legacy `users` payload.
 3. Alias handling still falls back safely to session/user values for unlinked rows, keeping the page compatible while removing another `users`-canonical display assumption.
 
+**Website-visit identity slice (2026-04-23):**
+
+1. Dashboard page visits now pass the linked applicant id into `markUserWebsiteVisit(...)` instead of relying only on Chronos user id + email.
+2. Applicant activity updates now prefer exact `applicants.id` matching, with legacy `chronosUserId` / email fallback preserved for older session shapes.
+3. This removes another subtle `users`-canonical assumption from live activity tracking without changing behavior for unlinked rows.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

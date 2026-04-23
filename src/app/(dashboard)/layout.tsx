@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { TimerProvider } from "@/hooks/use-timer";
 import { redirect } from "next/navigation";
 import { markUserWebsiteVisit } from "@/lib/user-activity";
-import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -15,8 +15,9 @@ export default async function Layout({ children }: { children: React.ReactNode }
   if (!chronosUserId) {
     redirect("/login");
   }
+  const applicantId = applicantIdForSessionLinkedUser(session.user);
   try {
-    await markUserWebsiteVisit(chronosUserId, session.user.email);
+    await markUserWebsiteVisit(chronosUserId, session.user.email, applicantId);
   } catch (error) {
     console.error('[dashboard/layout] markUserWebsiteVisit failed', error);
   }

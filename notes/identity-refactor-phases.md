@@ -196,6 +196,12 @@ Follow-on Phase 3 slices (order negotiable): repeat the same pattern for `entry_
 2. The count query now scopes to the currently returned Chronos user ids and aggregates in SQL with `count(*)`, instead of loading every applicant row into Node and counting there.
 3. This keeps the Phase 3 applicant-first directory overlay intact while reducing avoidable DB work on a production-facing admin surface.
 
+**Directory auto-provision scope slice (2026-04-23):**
+
+1. `GET /api/users` no longer loads every applicant row on each bounded auto-provision pass just to find rows missing `chronosUserId`.
+2. Each pass now asks Postgres directly for only provisionable applicants with `chronos_user_id is null`, capped by the existing per-pass limit.
+3. This preserves the Phase 3 applicant-first directory linking behavior while removing repeated full-table scans from a hot admin directory route.
+
 Remaining for Phase 4+: optional removal of legacy `users`-only columns and FKs once nothing reads them.
 
 #### Explicit conclusion

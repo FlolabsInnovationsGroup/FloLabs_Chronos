@@ -37,20 +37,18 @@ export async function GET() {
       const PROVISION_PER_PASS = 250;
       const MAX_PASSES = 3;
       for (let pass = 0; pass < MAX_PASSES; pass++) {
-        const joinedApplicants = await db
+        const missingJoinedApplicants = await db
           .select({
             id: applicants.id,
             email: applicants.email,
             name: applicants.name,
-            chronosUserId: applicants.chronosUserId,
           })
           .from(applicants)
-          .where(provisionableWhere);
-        const missingJoinedApplicants = joinedApplicants.filter((a) => !a.chronosUserId).slice(0, PROVISION_PER_PASS);
+          .where(and(provisionableWhere, isNull(applicants.chronosUserId)))
+          .limit(PROVISION_PER_PASS);
         if (missingJoinedApplicants.length === 0) break;
         for (const applicant of missingJoinedApplicants) {
           try {
-            if (applicant.chronosUserId) continue;
             const normalizedApplicantEmail = applicant.email?.trim().toLowerCase();
             if (!normalizedApplicantEmail) {
               continue;

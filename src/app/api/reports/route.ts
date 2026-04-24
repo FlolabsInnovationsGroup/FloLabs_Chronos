@@ -15,7 +15,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { getAccessibleUserIds } from "@/lib/permissions";
-import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser, resolveChronosUserIdForSessionUser } from "@/lib/chronos-session";
 import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 import { chronosEntryOwnerDisplayMap } from "@/lib/chronos-user-notion";
 
@@ -36,7 +36,7 @@ export async function GET(req: Request) {
 
   const conditions: SQL[] = [isNotNull(timeEntries.stoppedAt)];
   const accessibleUserIds = await getAccessibleUserIds(session.user);
-  const ownerChronosUserId = chronosUserIdFromSessionUser(session.user);
+  const ownerChronosUserId = chronosUserIdFromSessionUser(session.user) ?? (await resolveChronosUserIdForSessionUser(session.user));
   const linkedApplicantId = applicantIdForSessionLinkedUser(session.user);
 
   if (accessibleUserIds !== null) {

@@ -3,6 +3,7 @@ import type { Role, Team } from "@/types";
 import { db } from "@/lib/db";
 import { teamMemberships, teams, users } from "@/lib/db/schema";
 import { isAdminLikeRole } from "@/lib/role-utils";
+import { resolveChronosUserIdForSessionUser } from "@/lib/chronos-session";
 
 export interface SessionUserLike {
   /** Canonical applicant id (leads pipeline). */
@@ -19,6 +20,11 @@ export function sessionOwnershipUserId(user: SessionUserLike): string {
   const linked = user.chronosUserId;
   if (typeof linked === "string" && linked.length > 0) return linked;
   return user.id;
+}
+
+async function resolveSessionOwnershipUserId(user: SessionUserLike): Promise<string> {
+  const linked = await resolveChronosUserIdForSessionUser(user as unknown as Parameters<typeof resolveChronosUserIdForSessionUser>[0]);
+  return linked ?? sessionOwnershipUserId(user);
 }
 
 export function isAdmin(user?: Pick<SessionUserLike, "role"> | null): boolean {
@@ -55,7 +61,7 @@ export async function getAccessibleTeamIds(user: SessionUserLike): Promise<strin
   if (isAdmin(user)) return null;
   if (!db) return user.teamId ? [user.teamId] : [];
 
-  const ownerId = sessionOwnershipUserId(user);
+  const ownerId = await resolveSessionOwnershipUserId(user);
   const rows = await db
     .select({ teamId: teamMemberships.teamId })
     .from(teamMemberships)
@@ -70,7 +76,7 @@ export async function getAccessibleTeamIds(user: SessionUserLike): Promise<strin
 
 export async function getAccessibleUserIds(user: SessionUserLike): Promise<string[] | null> {
   if (isAdmin(user)) return null;
-  const ownerId = sessionOwnershipUserId(user);
+  const ownerId = await resolveSessionOwnershipUserId(user);
   if (!db) return [ownerId];
   if (isMember(user)) return [ownerId];
 
@@ -94,7 +100,8 @@ export async function canAccessUser(user: SessionUserLike, targetUserId: string)
 /** Admins, entry owners, and team leads (for teammates in scope) may edit/delete time entries. */
 export async function canManageTimeEntry(user: SessionUserLike, entryOwnerUserId: string): Promise<boolean> {
   if (isAdmin(user)) return true;
-  if (sessionOwnershipUserId(user) === entryOwnerUserId) return true;
+  const ownerId = await resolveSessionOwnershipUserId(user);
+  if (ownerId === entryOwnerUserId) return true;
   if (isTeamLead(user)) return canAccessUser(user, entryOwnerUserId);
   return false;
 }
@@ -220,7 +227,7 @@ export function canResolveDiscussion(
 export async function canViewDiscussions(viewer: SessionUserLike, entryOwnerUserId: string): Promise<boolean> {
   if (isAdmin(viewer)) return true;
   if (isTeamLead(viewer)) return canAccessUser(viewer, entryOwnerUserId);
-  return sessionOwnershipUserId(viewer) === entryOwnerUserId;
+  return (await resolveSessionOwnershipUserId(viewer)) === entryOwnerUserId;
 }
 
 export async function replaceUserTeamMemberships(userId: string, teamIds: string[]) {

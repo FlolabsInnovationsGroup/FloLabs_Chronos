@@ -27,7 +27,7 @@ import {
   isAdmin as userIsAdmin,
   isTeamLead as userIsTeamLead,
 } from "@/lib/permissions";
-import { applicantIdForSessionLinkedUser, requireChronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, requireChronosUserIdFromSessionUser, resolveChronosUserIdForSessionUser } from "@/lib/chronos-session";
 import { whereTagsForLinkedUser } from "@/lib/tag-applicant";
 import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 import { chronosEntryOwnerDisplayMap } from "@/lib/chronos-user-notion";
@@ -288,7 +288,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const sessionUser = session?.user;
   const params = await searchParams;
 
-  const ownerChronosUserId = requireChronosUserIdFromSessionUser(sessionUser!);
+  const ownerChronosUserId =
+    (await resolveChronosUserIdForSessionUser(sessionUser!)) ??
+    requireChronosUserIdFromSessionUser(sessionUser!);
   const linkedApplicantId = applicantIdForSessionLinkedUser(sessionUser!);
 
   const [filterData, entries] = await Promise.all([

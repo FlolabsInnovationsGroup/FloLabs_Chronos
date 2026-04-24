@@ -32,6 +32,20 @@ export async function findApplicantForCredentialEmail(normalizedEmail: string) {
     .limit(1);
   if (byHubspotEmail) return byHubspotEmail;
 
+  // Last-resort compatibility for heterogeneous HubSpot payload shapes:
+  // match on serialized JSON text when the email is present but not in the canonical `emails` array.
+  const [byHubspotRawText] = await db
+    .select()
+    .from(applicants)
+    .where(
+      and(
+        ne(applicants.status, "terminated"),
+        sql`lower(COALESCE(${applicants.hubspotRawData}::text, '')) LIKE ${`%${normalizedEmail}%`}`
+      )
+    )
+    .limit(1);
+  if (byHubspotRawText) return byHubspotRawText;
+
   const user = await findUserByAnyEmail(normalizedEmail);
   if (!user) return null;
 

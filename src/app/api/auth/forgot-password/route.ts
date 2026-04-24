@@ -121,7 +121,16 @@ export async function POST(req: Request) {
     }
   }
 
-  if (!user || !user.isActive) return NextResponse.json({ ok: true });
+  if (!user || !user.isActive) {
+    console.info("[auth/forgot-password] reset skipped", {
+      requestedEmail: email,
+      applicantId: applicant?.id ?? null,
+      applicantMatchedEmail: applicant?.email ?? null,
+      resolvedUserId: user?.id ?? null,
+      resolvedUserIsActive: user?.isActive ?? null,
+    });
+    return NextResponse.json({ ok: true });
+  }
 
   // Always deliver to the exact address the user typed when we resolved a valid account.
   // This avoids sending reset links to a different historical primary address when the

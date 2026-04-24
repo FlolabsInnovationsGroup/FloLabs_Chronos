@@ -26,6 +26,16 @@ function notionEnvOrNull(value: string | undefined): string | null {
   return t;
 }
 
+/** First non-empty Notion integration secret; skips `-` / blank placeholders common in App Runner templates. */
+function pickNotionIntegrationSecret(...candidates: (string | undefined | null)[]): string | null {
+  for (const c of candidates) {
+    if (c == null) continue;
+    const t = String(c).trim();
+    if (t.length > 0 && t !== "-") return t;
+  }
+  return null;
+}
+
 /**
  * Canonical 32-char hex database id for Notion APIs (accepts hyphenated UUID, bare 32 hex, or Notion URLs).
  */
@@ -94,7 +104,12 @@ export async function getNotionConfig() {
     APP_CONFIG_KEYS.notionMasterClassesIndexDbId,
   ]);
 
-  const notionApiKey = notionEnvOrNull(process.env.NOTION_API_KEY) || map.get(APP_CONFIG_KEYS.notionApiKey) || null;
+  const notionApiKey = pickNotionIntegrationSecret(
+    process.env.NOTION_API_KEY,
+    process.env.NOTION_TOKEN,
+    process.env.NOTION_INTEGRATION_TOKEN,
+    map.get(APP_CONFIG_KEYS.notionApiKey),
+  );
 
   const rawTimeEntriesDbId =
     notionEnvOrNull(process.env.NOTION_DATABASE_ID) || map.get(APP_CONFIG_KEYS.notionDatabaseId) || null;

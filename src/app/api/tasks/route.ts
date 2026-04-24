@@ -4,7 +4,8 @@ import { getNotionConfig } from "@/lib/app-config";
 import { resolveNotionDatabaseIdsFromRelations, searchTasks } from "@/lib/notion";
 
 function taskSearchHint(config: Awaited<ReturnType<typeof getNotionConfig>>, resolvedTasksDbId: string | null): string | undefined {
-  if (!config.notionApiKey) return "Notion API key is not configured (Control page or deployment env).";
+  if (!config.notionApiKey)
+    return "Notion API key is missing. Save the integration secret on Control, or set NOTION_API_KEY (or NOTION_TOKEN) in deployment. Placeholder env values like \"-\" are ignored so app config can supply the key.";
   if (!config.notionDatabaseId && !config.notionTasksDbId)
     return "Set the Time Entries database ID on Control (or NOTION_DATABASE_ID / NOTION_TASKS_DB_ID in deployment).";
   if (!resolvedTasksDbId)

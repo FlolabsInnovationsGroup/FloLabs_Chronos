@@ -117,6 +117,77 @@ export async function GET(req: Request) {
         AND lower(a.email) = lower(u.email)
     `);
 
+    // Canonical access policy: every FloLabs account linked to Chronos is joined + active.
+    const normalizeJoinedAccess = await db.execute(sql`
+      UPDATE applicants
+      SET
+        status = 'joined',
+        stage = 'joined',
+        is_active = true,
+        updated_at = now()
+      WHERE chronos_user_id IS NOT NULL
+        AND (
+          lower(coalesce(status, '')) <> 'joined'
+          OR lower(coalesce(stage, '')) <> 'joined'
+          OR coalesce(is_active, false) = false
+        )
+    `);
+
+    // Mirror active status from applicants to users for linked accounts.
+    const normalizeLinkedUsersActive = await db.execute(sql`
+      UPDATE users u
+      SET is_active = true, updated_at = now()
+      FROM applicants a
+      WHERE a.chronos_user_id = u.id
+        AND (u.is_active IS DISTINCT FROM true)
+    `);
+
+    // Keep Team Member page ids and team ids mirrored both directions.
+    const syncApplicantTeamMemberFromUsers = await db.execute(sql`
+      UPDATE applicants a
+      SET notion_team_member_id = u.notion_team_member_id, updated_at = now()
+      FROM users u
+      WHERE a.chronos_user_id = u.id
+        AND a.notion_team_member_id IS NULL
+        AND u.notion_team_member_id IS NOT NULL
+    `);
+    const syncUsersTeamMemberFromApplicants = await db.execute(sql`
+      UPDATE users u
+      SET notion_team_member_id = a.notion_team_member_id, updated_at = now()
+      FROM applicants a
+      WHERE a.chronos_user_id = u.id
+        AND u.notion_team_member_id IS NULL
+        AND a.notion_team_member_id IS NOT NULL
+    `);
+    const syncApplicantTeamFromUsers = await db.execute(sql`
+      UPDATE applicants a
+      SET team_id = u.team_id, updated_at = now()
+      FROM users u
+      WHERE a.chronos_user_id = u.id
+        AND a.team_id IS NULL
+        AND u.team_id IS NOT NULL
+    `);
+    const syncUsersTeamFromApplicants = await db.execute(sql`
+      UPDATE users u
+      SET team_id = a.team_id, updated_at = now()
+      FROM applicants a
+      WHERE a.chronos_user_id = u.id
+        AND u.team_id IS NULL
+        AND a.team_id IS NOT NULL
+    `);
+    const backfillTeamMemberships = await db.execute(sql`
+      INSERT INTO team_memberships (user_id, team_id, created_at)
+      SELECT u.id, u.team_id, now()
+      FROM users u
+      WHERE u.team_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM team_memberships tm
+          WHERE tm.user_id = u.id
+            AND tm.team_id = u.team_id
+        )
+    `);
+
     // Legacy compatibility (applicant_id) and canonical FloLabs ownership columns.
     await db.execute(
       sql`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
@@ -292,18 +363,34 @@ export async function GET(req: Request) {
           te.id,
           te.user_id,
           te.applicant_id,
+          te.flolabs_id,
           u.id AS user_exists,
+          u.notion_team_member_id AS user_notion_team_member_id,
           a.id AS applicant_exists,
-          a.chronos_user_id AS applicant_chronos_user_id
+          a.chronos_user_id AS applicant_chronos_user_id,
+          a.notion_team_member_id AS applicant_notion_team_member_id
         FROM time_entries te
         LEFT JOIN users u ON u.id = te.user_id
         LEFT JOIN applicants a ON a.id = te.applicant_id
+      ),
+      account_health AS (
+        SELECT
+          a.id,
+          a.chronos_user_id,
+          a.status,
+          a.stage,
+          a.is_active,
+          a.notion_team_member_id,
+          u.notion_team_member_id AS user_notion_team_member_id
+        FROM applicants a
+        LEFT JOIN users u ON u.id = a.chronos_user_id
       )
       SELECT
         count(*)::int AS total_entries,
         count(*) FILTER (WHERE user_id IS NOT NULL)::int AS entries_with_user_id,
         count(*) FILTER (WHERE user_exists IS NOT NULL)::int AS entries_with_existing_user_fk,
         count(*) FILTER (WHERE applicant_id IS NOT NULL)::int AS entries_with_applicant_id,
+        count(*) FILTER (WHERE flolabs_id IS NOT NULL)::int AS entries_with_flolabs_id,
         count(*) FILTER (WHERE applicant_exists IS NOT NULL)::int AS entries_with_existing_applicant_fk,
         count(*) FILTER (
           WHERE applicant_id IS NOT NULL
@@ -313,11 +400,28 @@ export async function GET(req: Request) {
         count(*) FILTER (WHERE applicant_id IS NOT NULL AND applicant_exists IS NULL)::int AS orphan_applicant_fk,
         count(*) FILTER (WHERE user_id IS NOT NULL AND user_exists IS NULL)::int AS orphan_user_fk,
         count(*) FILTER (
+          WHERE coalesce(applicant_notion_team_member_id, user_notion_team_member_id) IS NULL
+        )::int AS entries_missing_team_member_link,
+        count(*) FILTER (
           WHERE applicant_id IS NOT NULL
             AND applicant_exists IS NOT NULL
             AND applicant_chronos_user_id IS NOT NULL
             AND applicant_chronos_user_id <> user_id
-        )::int AS applicant_user_mismatch
+        )::int AS applicant_user_mismatch,
+        (
+          SELECT count(*)::int FROM account_health ah
+          WHERE ah.chronos_user_id IS NOT NULL
+            AND (
+              lower(coalesce(ah.status, '')) <> 'joined'
+              OR lower(coalesce(ah.stage, '')) <> 'joined'
+              OR coalesce(ah.is_active, false) = false
+            )
+        ) AS linked_accounts_not_joined_or_inactive,
+        (
+          SELECT count(*)::int FROM account_health ah
+          WHERE ah.chronos_user_id IS NOT NULL
+            AND coalesce(ah.notion_team_member_id, ah.user_notion_team_member_id) IS NULL
+        ) AS linked_accounts_missing_team_member_page
       FROM t
     `);
 
@@ -348,6 +452,34 @@ export async function GET(req: Request) {
       applicantRelinkPostProvisionRowCount:
         (applicantRelinkPostProvision as unknown as { rowCount?: number }).rowCount ??
         (applicantRelinkPostProvision as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      normalizeJoinedAccessRowCount:
+        (normalizeJoinedAccess as unknown as { rowCount?: number }).rowCount ??
+        (normalizeJoinedAccess as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      normalizeLinkedUsersActiveRowCount:
+        (normalizeLinkedUsersActive as unknown as { rowCount?: number }).rowCount ??
+        (normalizeLinkedUsersActive as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      syncApplicantTeamMemberFromUsersRowCount:
+        (syncApplicantTeamMemberFromUsers as unknown as { rowCount?: number }).rowCount ??
+        (syncApplicantTeamMemberFromUsers as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      syncUsersTeamMemberFromApplicantsRowCount:
+        (syncUsersTeamMemberFromApplicants as unknown as { rowCount?: number }).rowCount ??
+        (syncUsersTeamMemberFromApplicants as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      syncApplicantTeamFromUsersRowCount:
+        (syncApplicantTeamFromUsers as unknown as { rowCount?: number }).rowCount ??
+        (syncApplicantTeamFromUsers as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      syncUsersTeamFromApplicantsRowCount:
+        (syncUsersTeamFromApplicants as unknown as { rowCount?: number }).rowCount ??
+        (syncUsersTeamFromApplicants as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      backfillTeamMembershipsRowCount:
+        (backfillTeamMemberships as unknown as { rowCount?: number }).rowCount ??
+        (backfillTeamMemberships as unknown as { rowsAffected?: number }).rowsAffected ??
         null,
       backfillRowCount:
         (backfill as unknown as { rowCount?: number }).rowCount ??

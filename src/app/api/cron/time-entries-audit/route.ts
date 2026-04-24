@@ -127,10 +127,16 @@ export async function GET(req: Request) {
       UPDATE time_entries te
       SET applicant_id = m.applicant_id
       FROM (
-        SELECT chronos_user_id AS user_id, min(id) AS applicant_id
-        FROM applicants
-        WHERE chronos_user_id IS NOT NULL
-        GROUP BY chronos_user_id
+        SELECT user_id, applicant_id
+        FROM (
+          SELECT
+            a.chronos_user_id AS user_id,
+            a.id AS applicant_id,
+            row_number() OVER (PARTITION BY a.chronos_user_id ORDER BY a.created_at ASC, a.id ASC) AS rn
+          FROM applicants a
+          WHERE a.chronos_user_id IS NOT NULL
+        ) ranked
+        WHERE ranked.rn = 1
       ) m
       WHERE te.user_id = m.user_id
         AND (te.applicant_id IS NULL OR te.applicant_id <> m.applicant_id)

@@ -169,13 +169,16 @@ export const tags = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    /** Phase 3: canonical owner pointer; backfilled from applicants.chronos_user_id = user_id. */
+    /** Canonical FloLabs owner pointer (replaces legacy applicant_id naming). */
+    flolabsId: uuid("flolabs_id").references(() => applicants.id, { onDelete: "set null" }),
+    /** @deprecated Legacy name kept temporarily for migration compatibility. */
     applicantId: uuid("applicant_id").references(() => applicants.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     uniqueIndex("tags_name_user_unique").on(t.name, t.userId),
     index("idx_tags_user").on(t.userId),
+    index("idx_tags_flolabs").on(t.flolabsId),
     index("idx_tags_applicant").on(t.applicantId),
   ]
 );
@@ -187,7 +190,9 @@ export const timeEntries = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id),
-    /** Phase 3: canonical owner pointer; backfilled from applicants.chronos_user_id = user_id. */
+    /** Canonical FloLabs owner pointer (replaces legacy applicant_id naming). */
+    flolabsId: uuid("flolabs_id").references(() => applicants.id, { onDelete: "set null" }),
+    /** @deprecated Legacy name kept temporarily for migration compatibility. */
     applicantId: uuid("applicant_id").references(() => applicants.id, { onDelete: "set null" }),
     projectId: uuid("project_id").references(() => projects.id),
     description: text("description").notNull(),
@@ -206,6 +211,7 @@ export const timeEntries = pgTable(
   },
   (t) => [
     index("idx_entries_user").on(t.userId, t.startedAt),
+    index("idx_entries_flolabs").on(t.flolabsId),
     index("idx_entries_applicant").on(t.applicantId),
     index("idx_entries_project").on(t.projectId, t.startedAt),
     index("idx_entries_date").on(t.startedAt),
@@ -237,12 +243,16 @@ export const entryDiscussions = pgTable(
     id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
     entryId: uuid('entry_id').notNull().references(() => timeEntries.id, { onDelete: 'cascade' }),
     startedById: uuid('started_by_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    /** Phase 3: canonical starter pointer; backfilled from applicants.chronos_user_id = started_by_id. */
+    /** Canonical FloLabs starter pointer. */
+    startedByFlolabsId: uuid('started_by_flolabs_id').references(() => applicants.id, { onDelete: 'set null' }),
+    /** @deprecated Legacy name kept temporarily for migration compatibility. */
     startedByApplicantId: uuid('started_by_applicant_id').references(() => applicants.id, { onDelete: 'set null' }),
     message: text('message').notNull(),
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),
     resolvedById: uuid('resolved_by_id').references(() => users.id, { onDelete: 'set null' }),
-    /** Phase 3: canonical resolver pointer; backfilled from applicants.chronos_user_id = resolved_by_id. */
+    /** Canonical FloLabs resolver pointer. */
+    resolvedByFlolabsId: uuid('resolved_by_flolabs_id').references(() => applicants.id, { onDelete: 'set null' }),
+    /** @deprecated Legacy name kept temporarily for migration compatibility. */
     resolvedByApplicantId: uuid('resolved_by_applicant_id').references(() => applicants.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
@@ -250,6 +260,8 @@ export const entryDiscussions = pgTable(
   (t) => [
     index('idx_discussions_entry').on(t.entryId),
     index('idx_discussions_started_by').on(t.startedById),
+    index('idx_discussions_started_by_flolabs').on(t.startedByFlolabsId),
+    index('idx_discussions_resolved_by_flolabs').on(t.resolvedByFlolabsId),
     index('idx_discussions_started_by_applicant').on(t.startedByApplicantId),
     index('idx_discussions_resolved_by_applicant').on(t.resolvedByApplicantId),
     index('idx_discussions_unresolved').on(t.entryId, t.resolvedAt),
@@ -265,7 +277,9 @@ export const discussionReplies = pgTable(
     id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
     discussionId: uuid('discussion_id').notNull().references(() => entryDiscussions.id, { onDelete: 'cascade' }),
     authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    /** Phase 3: canonical author pointer; backfilled from applicants.chronos_user_id = author_id. */
+    /** Canonical FloLabs author pointer. */
+    authorFlolabsId: uuid('author_flolabs_id').references(() => applicants.id, { onDelete: 'set null' }),
+    /** @deprecated Legacy name kept temporarily for migration compatibility. */
     authorApplicantId: uuid('author_applicant_id').references(() => applicants.id, { onDelete: 'set null' }),
     message: text('message').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -274,6 +288,7 @@ export const discussionReplies = pgTable(
   (t) => [
     index('idx_replies_discussion').on(t.discussionId),
     index('idx_replies_author').on(t.authorId),
+    index('idx_replies_author_flolabs').on(t.authorFlolabsId),
     index('idx_replies_author_applicant').on(t.authorApplicantId),
   ]
 );
@@ -301,7 +316,7 @@ export const applicants = pgTable(
     companyName: text("company_name"),
     roleAppliedFor: text("role_applied_for"),
     stage: text("stage").notNull().default("application_submitted"),
-    status: text("status").notNull().default("active"),
+    status: text("status").notNull().default("joined"),
     joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow(),
     lastWebsiteVisit: timestamp("last_website_visit", { withTimezone: true }),
     source: text("source"),

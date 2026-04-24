@@ -8,7 +8,7 @@ import { z } from "zod";
 import { deleteAndNotifyEntry, syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 import { canManageTimeEntry } from "@/lib/permissions";
 import { chronosUserDisplayAndNotionTeamMemberId } from "@/lib/chronos-user-notion";
-import { resolveApplicantIdForTimeEntryWrite } from "@/lib/time-entry-applicant";
+import { resolveFlolabsIdForTimeEntryWrite } from "@/lib/time-entry-applicant";
 
 const patchSchema = z.object({
   description: z.string().optional(),
@@ -122,23 +122,23 @@ export async function PATCH(
 
   let updated = entry;
   if (Object.keys(entryFields).length > 0) {
-    const applicantId = await resolveApplicantIdForTimeEntryWrite(session.user, entry.userId);
+    const flolabsId = await resolveFlolabsIdForTimeEntryWrite(session.user, entry.userId);
     const [u] = await db
       .update(timeEntries)
       .set({
         ...entryFields,
-        ...(applicantId ? { applicantId } : {}),
+        ...(flolabsId ? { flolabsId } : {}),
         updatedAt: new Date(),
       })
       .where(eq(timeEntries.id, id))
       .returning();
     updated = u;
   } else if (tagIds !== undefined) {
-    const applicantId = await resolveApplicantIdForTimeEntryWrite(session.user, entry.userId);
-    if (applicantId) {
+    const flolabsId = await resolveFlolabsIdForTimeEntryWrite(session.user, entry.userId);
+    if (flolabsId) {
       const [u] = await db
         .update(timeEntries)
-        .set({ applicantId, updatedAt: new Date() })
+        .set({ flolabsId, updatedAt: new Date() })
         .where(eq(timeEntries.id, id))
         .returning();
       updated = u;
@@ -153,7 +153,7 @@ export async function PATCH(
         .from(tags)
         .where(
           and(
-            whereTagsForLinkedUser(entry.userId, entry.applicantId ?? null),
+            whereTagsForLinkedUser(entry.userId, entry.flolabsId ?? entry.applicantId ?? null),
             inArray(tags.id, nextIds)
           )
         );

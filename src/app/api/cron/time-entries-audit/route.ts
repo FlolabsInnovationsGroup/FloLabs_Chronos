@@ -117,11 +117,49 @@ export async function GET(req: Request) {
         AND lower(a.email) = lower(u.email)
     `);
 
-    // Phase 3 safety: ensure canonical applicant FK exists before auditing reads.
+    // Legacy compatibility (applicant_id) and canonical FloLabs ownership columns.
     await db.execute(
       sql`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
     );
+    await db.execute(
+      sql`ALTER TABLE tags ADD COLUMN IF NOT EXISTS applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+    );
+    await db.execute(
+      sql`ALTER TABLE entry_discussions ADD COLUMN IF NOT EXISTS started_by_applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+    );
+    await db.execute(
+      sql`ALTER TABLE entry_discussions ADD COLUMN IF NOT EXISTS resolved_by_applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+    );
+    await db.execute(
+      sql`ALTER TABLE discussion_replies ADD COLUMN IF NOT EXISTS author_applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+    );
+
+    await db.execute(
+      sql`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS flolabs_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+    );
+    await db.execute(
+      sql`ALTER TABLE tags ADD COLUMN IF NOT EXISTS flolabs_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+    );
+    await db.execute(
+      sql`ALTER TABLE entry_discussions ADD COLUMN IF NOT EXISTS started_by_flolabs_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+    );
+    await db.execute(
+      sql`ALTER TABLE entry_discussions ADD COLUMN IF NOT EXISTS resolved_by_flolabs_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+    );
+    await db.execute(
+      sql`ALTER TABLE discussion_replies ADD COLUMN IF NOT EXISTS author_flolabs_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+    );
+
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_entries_applicant ON time_entries(applicant_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_tags_applicant ON tags(applicant_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_discussions_started_by_applicant ON entry_discussions(started_by_applicant_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_discussions_resolved_by_applicant ON entry_discussions(resolved_by_applicant_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_replies_author_applicant ON discussion_replies(author_applicant_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_entries_flolabs ON time_entries(flolabs_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_tags_flolabs ON tags(flolabs_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_discussions_started_by_flolabs ON entry_discussions(started_by_flolabs_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_discussions_resolved_by_flolabs ON entry_discussions(resolved_by_flolabs_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_replies_author_flolabs ON discussion_replies(author_flolabs_id)`);
 
     const backfill = await db.execute(sql`
       UPDATE time_entries te
@@ -140,6 +178,112 @@ export async function GET(req: Request) {
       ) m
       WHERE te.user_id = m.user_id
         AND (te.applicant_id IS NULL OR te.applicant_id <> m.applicant_id)
+    `);
+    const tagsBackfillApplicant = await db.execute(sql`
+      UPDATE tags t
+      SET applicant_id = a.id
+      FROM applicants a
+      WHERE t.applicant_id IS NULL
+        AND t.user_id = a.chronos_user_id
+    `);
+    const discussionsBackfillStartedApplicant = await db.execute(sql`
+      UPDATE entry_discussions d
+      SET started_by_applicant_id = a.id
+      FROM applicants a
+      WHERE d.started_by_applicant_id IS NULL
+        AND d.started_by_id = a.chronos_user_id
+    `);
+    const discussionsBackfillResolvedApplicant = await db.execute(sql`
+      UPDATE entry_discussions d
+      SET resolved_by_applicant_id = a.id
+      FROM applicants a
+      WHERE d.resolved_by_applicant_id IS NULL
+        AND d.resolved_by_id = a.chronos_user_id
+    `);
+    const repliesBackfillApplicant = await db.execute(sql`
+      UPDATE discussion_replies r
+      SET author_applicant_id = a.id
+      FROM applicants a
+      WHERE r.author_applicant_id IS NULL
+        AND r.author_id = a.chronos_user_id
+    `);
+
+    const entriesBackfillFlolabsLegacy = await db.execute(sql`
+      UPDATE time_entries
+      SET flolabs_id = applicant_id
+      WHERE flolabs_id IS NULL
+        AND applicant_id IS NOT NULL
+    `);
+    const tagsBackfillFlolabsLegacy = await db.execute(sql`
+      UPDATE tags
+      SET flolabs_id = applicant_id
+      WHERE flolabs_id IS NULL
+        AND applicant_id IS NOT NULL
+    `);
+    const discussionsStartedBackfillFlolabsLegacy = await db.execute(sql`
+      UPDATE entry_discussions
+      SET started_by_flolabs_id = started_by_applicant_id
+      WHERE started_by_flolabs_id IS NULL
+        AND started_by_applicant_id IS NOT NULL
+    `);
+    const discussionsResolvedBackfillFlolabsLegacy = await db.execute(sql`
+      UPDATE entry_discussions
+      SET resolved_by_flolabs_id = resolved_by_applicant_id
+      WHERE resolved_by_flolabs_id IS NULL
+        AND resolved_by_applicant_id IS NOT NULL
+    `);
+    const repliesBackfillFlolabsLegacy = await db.execute(sql`
+      UPDATE discussion_replies
+      SET author_flolabs_id = author_applicant_id
+      WHERE author_flolabs_id IS NULL
+        AND author_applicant_id IS NOT NULL
+    `);
+
+    const entriesBackfillFlolabsByUser = await db.execute(sql`
+      UPDATE time_entries te
+      SET flolabs_id = a.id
+      FROM applicants a
+      WHERE te.flolabs_id IS NULL
+        AND te.user_id = a.chronos_user_id
+    `);
+    const tagsBackfillFlolabsByUser = await db.execute(sql`
+      UPDATE tags t
+      SET flolabs_id = a.id
+      FROM applicants a
+      WHERE t.flolabs_id IS NULL
+        AND t.user_id = a.chronos_user_id
+    `);
+    const discussionsStartedBackfillFlolabsByUser = await db.execute(sql`
+      UPDATE entry_discussions d
+      SET started_by_flolabs_id = a.id
+      FROM applicants a
+      WHERE d.started_by_flolabs_id IS NULL
+        AND d.started_by_id = a.chronos_user_id
+    `);
+    const discussionsResolvedBackfillFlolabsByUser = await db.execute(sql`
+      UPDATE entry_discussions d
+      SET resolved_by_flolabs_id = a.id
+      FROM applicants a
+      WHERE d.resolved_by_flolabs_id IS NULL
+        AND d.resolved_by_id = a.chronos_user_id
+    `);
+    const repliesBackfillFlolabsByUser = await db.execute(sql`
+      UPDATE discussion_replies r
+      SET author_flolabs_id = a.id
+      FROM applicants a
+      WHERE r.author_flolabs_id IS NULL
+        AND r.author_id = a.chronos_user_id
+    `);
+
+    const normalizeActiveStatus = await db.execute(sql`
+      UPDATE applicants
+      SET status = 'joined'
+      WHERE lower(coalesce(status, '')) = 'active'
+    `);
+    const normalizeActiveStage = await db.execute(sql`
+      UPDATE applicants
+      SET stage = 'joined'
+      WHERE lower(coalesce(stage, '')) = 'active'
     `);
 
     const counts = await db.execute(sql`
@@ -208,6 +352,70 @@ export async function GET(req: Request) {
       backfillRowCount:
         (backfill as unknown as { rowCount?: number }).rowCount ??
         (backfill as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      tagsBackfillApplicantRowCount:
+        (tagsBackfillApplicant as unknown as { rowCount?: number }).rowCount ??
+        (tagsBackfillApplicant as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      discussionsBackfillStartedApplicantRowCount:
+        (discussionsBackfillStartedApplicant as unknown as { rowCount?: number }).rowCount ??
+        (discussionsBackfillStartedApplicant as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      discussionsBackfillResolvedApplicantRowCount:
+        (discussionsBackfillResolvedApplicant as unknown as { rowCount?: number }).rowCount ??
+        (discussionsBackfillResolvedApplicant as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      repliesBackfillApplicantRowCount:
+        (repliesBackfillApplicant as unknown as { rowCount?: number }).rowCount ??
+        (repliesBackfillApplicant as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      entriesBackfillFlolabsLegacyRowCount:
+        (entriesBackfillFlolabsLegacy as unknown as { rowCount?: number }).rowCount ??
+        (entriesBackfillFlolabsLegacy as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      tagsBackfillFlolabsLegacyRowCount:
+        (tagsBackfillFlolabsLegacy as unknown as { rowCount?: number }).rowCount ??
+        (tagsBackfillFlolabsLegacy as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      discussionsStartedBackfillFlolabsLegacyRowCount:
+        (discussionsStartedBackfillFlolabsLegacy as unknown as { rowCount?: number }).rowCount ??
+        (discussionsStartedBackfillFlolabsLegacy as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      discussionsResolvedBackfillFlolabsLegacyRowCount:
+        (discussionsResolvedBackfillFlolabsLegacy as unknown as { rowCount?: number }).rowCount ??
+        (discussionsResolvedBackfillFlolabsLegacy as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      repliesBackfillFlolabsLegacyRowCount:
+        (repliesBackfillFlolabsLegacy as unknown as { rowCount?: number }).rowCount ??
+        (repliesBackfillFlolabsLegacy as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      entriesBackfillFlolabsByUserRowCount:
+        (entriesBackfillFlolabsByUser as unknown as { rowCount?: number }).rowCount ??
+        (entriesBackfillFlolabsByUser as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      tagsBackfillFlolabsByUserRowCount:
+        (tagsBackfillFlolabsByUser as unknown as { rowCount?: number }).rowCount ??
+        (tagsBackfillFlolabsByUser as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      discussionsStartedBackfillFlolabsByUserRowCount:
+        (discussionsStartedBackfillFlolabsByUser as unknown as { rowCount?: number }).rowCount ??
+        (discussionsStartedBackfillFlolabsByUser as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      discussionsResolvedBackfillFlolabsByUserRowCount:
+        (discussionsResolvedBackfillFlolabsByUser as unknown as { rowCount?: number }).rowCount ??
+        (discussionsResolvedBackfillFlolabsByUser as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      repliesBackfillFlolabsByUserRowCount:
+        (repliesBackfillFlolabsByUser as unknown as { rowCount?: number }).rowCount ??
+        (repliesBackfillFlolabsByUser as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      normalizeActiveStatusRowCount:
+        (normalizeActiveStatus as unknown as { rowCount?: number }).rowCount ??
+        (normalizeActiveStatus as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      normalizeActiveStageRowCount:
+        (normalizeActiveStage as unknown as { rowCount?: number }).rowCount ??
+        (normalizeActiveStage as unknown as { rowsAffected?: number }).rowsAffected ??
         null,
       summary,
     });

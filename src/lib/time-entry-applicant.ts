@@ -1,14 +1,14 @@
 import type { Session } from "next-auth";
-import { and, eq, isNull, or } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { applicants, timeEntries } from "@/lib/db/schema";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 /**
- * Resolves `time_entries.applicant_id` for a write: session applicant when the editor owns the row,
+ * Resolves `time_entries.flolabs_id` for a write: session applicant when the editor owns the row,
  * otherwise the applicant linked to the entry owner's Chronos user (e.g. admin / team lead edits).
  */
-export async function resolveApplicantIdForTimeEntryWrite(
+export async function resolveFlolabsIdForTimeEntryWrite(
   sessionUser: Session["user"],
   entryOwnerChronosUserId: string
 ): Promise<string | null> {
@@ -26,16 +26,11 @@ export async function resolveApplicantIdForTimeEntryWrite(
   return row?.id ?? null;
 }
 
-/**
- * Phase 3 read scope for linked owners: prefer canonical applicant_id once backfilled,
- * but keep user_id fallback for rows not migrated yet.
- */
-export function whereTimeEntriesForLinkedUser(chronosUserId: string, applicantId: string | null) {
-  if (applicantId) {
-    return or(
-      eq(timeEntries.applicantId, applicantId),
-      and(isNull(timeEntries.applicantId), eq(timeEntries.userId, chronosUserId))
-    )!;
+/** Canonical scope for linked owners: only FloLabs owner id. */
+export function whereTimeEntriesForLinkedUser(_chronosUserId: string, flolabsId: string | null) {
+  if (!flolabsId) {
+    // No linked FloLabs id means no owner scope.
+    return sql`1 = 0`;
   }
-  return eq(timeEntries.userId, chronosUserId);
+  return eq(timeEntries.flolabsId, flolabsId);
 }

@@ -21,6 +21,7 @@ export async function GET() {
         id: tags.id,
         name: tags.name,
         userId: tags.userId,
+        flolabsId: tags.flolabsId,
         applicantId: tags.applicantId,
         createdAt: tags.createdAt,
         user: { id: users.id, name: users.name },
@@ -34,11 +35,11 @@ export async function GET() {
   const chronosUserId = chronosUserIdFromSessionUser(session.user);
   if (!chronosUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const applicantId = applicantIdForSessionLinkedUser(session.user);
+  const flolabsId = applicantIdForSessionLinkedUser(session.user);
   const rows = await db
     .select()
     .from(tags)
-    .where(whereTagsForLinkedUser(chronosUserId, applicantId))
+    .where(whereTagsForLinkedUser(chronosUserId, flolabsId))
     .orderBy(tags.name);
   return NextResponse.json({ tags: rows });
 }
@@ -55,12 +56,12 @@ export async function POST(req: Request) {
   const parsed = z.object({ name: z.string().min(1).max(50) }).safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
 
-  const applicantId = applicantIdForSessionLinkedUser(session.user);
+  const flolabsId = applicantIdForSessionLinkedUser(session.user);
   const existing = await db
     .select({ id: tags.id })
     .from(tags)
     .where(
-      and(eq(tags.name, parsed.data.name.trim()), whereTagsForLinkedUser(chronosUserId, applicantId))
+      and(eq(tags.name, parsed.data.name.trim()), whereTagsForLinkedUser(chronosUserId, flolabsId))
     )
     .limit(1);
 
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
     .values({
       name: parsed.data.name.trim(),
       userId: chronosUserId,
-      ...(applicantId ? { applicantId } : {}),
+      ...(flolabsId ? { flolabsId } : {}),
     })
     .returning();
 
@@ -105,7 +106,7 @@ export async function DELETE(req: Request) {
 
   if (!isAdmin) {
     const found = await db
-      .select({ id: tags.id, userId: tags.userId, applicantId: tags.applicantId })
+      .select({ id: tags.id, userId: tags.userId, flolabsId: tags.flolabsId, applicantId: tags.applicantId })
       .from(tags)
       .where(inArray(tags.id, ids));
     const forbidden = found.some((t) => !tagRowAccessibleBySession(t, session.user));

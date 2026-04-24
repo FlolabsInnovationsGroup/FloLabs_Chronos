@@ -17,6 +17,10 @@ async function readJson(res: Response) {
   return data;
 }
 
+async function loadControlConfig(): Promise<Record<string, unknown>> {
+  return readJson(await fetch("/api/control", { cache: "no-store" }));
+}
+
 export function ControlForm() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -42,24 +46,28 @@ export function ControlForm() {
   const [discordBotTokenPresent, setDiscordBotTokenPresent] = useState(false);
   const [discordBotTokenMasked, setDiscordBotTokenMasked] = useState("");
 
+  function applyControlPayload(data: Record<string, unknown>) {
+    const c = data.config as Record<string, unknown> | undefined;
+    setApiKeyPresent(Boolean(c?.notionApiKeyPresent));
+    setApiKeyMasked(String(c?.notionApiKeyMasked ?? ""));
+    setNotionDatabaseId(String(c?.notionDatabaseId ?? ""));
+    setNotionTasksDbId(String(c?.notionTasksDbId ?? ""));
+    setNotionTeamMembersDbId(String(c?.notionTeamMembersDbId ?? ""));
+    setTimeEntriesDatabaseIdConfigured(Boolean(c?.timeEntriesDatabaseIdConfigured));
+    setNotionOnboardingsDbId(String(c?.notionOnboardingsDbId ?? ""));
+    setNotionTeamsDbId(String(c?.notionTeamsDbId ?? ""));
+    setNotionMasterClassesIndexDbId(String(c?.notionMasterClassesIndexDbId ?? ""));
+    setDiscordBotTokenPresent(Boolean(c?.discordBotTokenPresent));
+    setDiscordBotTokenMasked(String(c?.discordBotTokenMasked ?? ""));
+    setDiscordGuildId(String(c?.discordGuildId ?? ""));
+    setDiscordCategoryId(String(c?.discordCategoryId ?? ""));
+    setDiscordChannelPrefix(String(c?.discordChannelPrefix ?? "chronos"));
+  }
+
   useEffect(() => {
     void (async () => {
       try {
-        const data = await readJson(await fetch("/api/control", { cache: "no-store" }));
-        setApiKeyPresent(Boolean(data.config?.notionApiKeyPresent));
-        setApiKeyMasked(data.config?.notionApiKeyMasked ?? "");
-        setNotionDatabaseId(data.config?.notionDatabaseId ?? "");
-        setNotionTasksDbId(data.config?.notionTasksDbId ?? "");
-        setNotionTeamMembersDbId(data.config?.notionTeamMembersDbId ?? "");
-        setTimeEntriesDatabaseIdConfigured(Boolean(data.config?.timeEntriesDatabaseIdConfigured));
-        setNotionOnboardingsDbId(data.config?.notionOnboardingsDbId ?? "");
-        setNotionTeamsDbId(data.config?.notionTeamsDbId ?? "");
-        setNotionMasterClassesIndexDbId(data.config?.notionMasterClassesIndexDbId ?? "");
-        setDiscordBotTokenPresent(Boolean(data.config?.discordBotTokenPresent));
-        setDiscordBotTokenMasked(data.config?.discordBotTokenMasked ?? "");
-        setDiscordGuildId(data.config?.discordGuildId ?? "");
-        setDiscordCategoryId(data.config?.discordCategoryId ?? "");
-        setDiscordChannelPrefix(data.config?.discordChannelPrefix ?? "chronos");
+        applyControlPayload(await loadControlConfig());
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load control settings.");
       } finally {
@@ -79,6 +87,7 @@ export function ControlForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notionApiKey, notionDatabaseId, notionMasterClassesIndexDbId, discordBotToken, discordGuildId, discordCategoryId, discordChannelPrefix }),
       }));
+      applyControlPayload(await loadControlConfig());
       setSuccess("Control settings saved.");
       setApiKeyPresent(true);
       setDiscordBotTokenPresent(discordBotTokenPresent || Boolean(discordBotToken.trim()));

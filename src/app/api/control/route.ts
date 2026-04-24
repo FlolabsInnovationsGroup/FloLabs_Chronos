@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { isAdmin } from "@/lib/permissions";
-import { APP_CONFIG_KEYS, getNotionConfig, setAppConfigValues } from "@/lib/app-config";
+import {
+  APP_CONFIG_KEYS,
+  getAppConfigValue,
+  getNotionConfig,
+  normalizeNotionDatabaseIdInput,
+  setAppConfigValues,
+} from "@/lib/app-config";
 import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 const controlSchema = z.object({
@@ -22,6 +28,10 @@ export async function GET() {
   }
 
   const config = await getNotionConfig();
+  const notionDatabaseIdStoredRaw = (await getAppConfigValue(APP_CONFIG_KEYS.notionDatabaseId)) ?? "";
+  const notionDatabaseIdStored = notionDatabaseIdStoredRaw
+    ? normalizeNotionDatabaseIdInput(notionDatabaseIdStoredRaw) || notionDatabaseIdStoredRaw
+    : "";
   const discordBotToken = await (await import("@/lib/app-config")).getAppConfigValue(APP_CONFIG_KEYS.discordBotToken as any);
   const discordGuildId = await (await import("@/lib/app-config")).getAppConfigValue(APP_CONFIG_KEYS.discordGuildId as any);
   const discordCategoryId = await (await import("@/lib/app-config")).getAppConfigValue(APP_CONFIG_KEYS.discordCategoryId as any);
@@ -31,7 +41,8 @@ export async function GET() {
     config: {
       notionApiKeyPresent: Boolean(config.notionApiKey),
       notionApiKeyMasked: config.notionApiKey ? `${config.notionApiKey.slice(0, 6)}••••••${config.notionApiKey.slice(-4)}` : "",
-      notionDatabaseId: config.notionDatabaseId ?? "",
+      notionDatabaseId: notionDatabaseIdStored,
+      notionDatabaseIdEffective: config.notionDatabaseId ?? "",
       notionTasksDbId: config.notionTasksDbId ?? "",
       notionTeamMembersDbId: config.notionTeamMembersDbId ?? "",
       timeEntriesDatabaseIdConfigured: Boolean(config.notionDatabaseId),
@@ -68,8 +79,13 @@ export async function POST(req: Request) {
   if (parsed.data.notionMasterClassesIndexDbId.trim()) {
     values.push({ key: APP_CONFIG_KEYS.notionMasterClassesIndexDbId, value: parsed.data.notionMasterClassesIndexDbId.trim(), updatedBy: chronosUserId });
   }
-  if (parsed.data.notionDatabaseId.trim()) {
-    values.push({ key: APP_CONFIG_KEYS.notionDatabaseId, value: parsed.data.notionDatabaseId.trim(), updatedBy: chronosUserId });
+  const normalizedTimeEntriesDbId = normalizeNotionDatabaseIdInput(parsed.data.notionDatabaseId);
+  if (normalizedTimeEntriesDbId.trim()) {
+    values.push({
+      key: APP_CONFIG_KEYS.notionDatabaseId,
+      value: normalizedTimeEntriesDbId.trim(),
+      updatedBy: chronosUserId,
+    });
   }
   if (parsed.data.notionApiKey.trim()) {
     values.unshift({ key: APP_CONFIG_KEYS.notionApiKey, value: parsed.data.notionApiKey.trim(), isSecret: true, updatedBy: chronosUserId });

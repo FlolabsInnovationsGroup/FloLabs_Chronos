@@ -75,15 +75,19 @@ export function TimerProvider({ children, userId }: TimerProviderProps) {
     let cancelled = false;
 
     async function loadInitialTimer() {
+      const ctrl = new AbortController();
+      const timeoutMs = 20_000;
+      const timeout = setTimeout(() => ctrl.abort(), timeoutMs);
       try {
-        const res = await fetch("/api/timer/active");
+        const res = await fetch("/api/timer/active", { signal: ctrl.signal });
         if (!res.ok) return;
 
         const { timer }: { timer: ActiveTimer | null } = await res.json();
         if (!cancelled) applyTimerState(timer);
       } catch {
-        // Keep the UI usable even if the initial timer fetch fails.
+        // Keep the UI usable even if the initial timer fetch fails or times out.
       } finally {
+        clearTimeout(timeout);
         if (!cancelled) setLoading(false);
       }
     }

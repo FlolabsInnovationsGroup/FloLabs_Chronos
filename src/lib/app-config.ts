@@ -18,6 +18,30 @@ export const APP_CONFIG_KEYS = {
 
 export type AppConfigKey = (typeof APP_CONFIG_KEYS)[keyof typeof APP_CONFIG_KEYS];
 
+/** Treat empty, whitespace-only, and common placeholder sentinels as unset for env-driven Notion IDs. */
+function notionEnvOrNull(value: string | undefined): string | null {
+  if (value == null) return null;
+  const t = value.trim();
+  if (!t || t === "-") return null;
+  return t;
+}
+
+/**
+ * Canonical 32-char hex database id for Notion APIs (accepts hyphenated UUID, bare 32 hex, or Notion URLs).
+ */
+export function normalizeNotionDatabaseIdInput(raw: string): string {
+  const t = raw.trim();
+  if (!t) return "";
+  const uuidInUrl = t.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+  if (uuidInUrl) {
+    const h = uuidInUrl[1]!.replace(/-/g, "").toLowerCase();
+    if (h.length === 32) return h;
+  }
+  const compact = t.replace(/-/g, "");
+  if (/^[0-9a-f]{32}$/i.test(compact)) return compact.toLowerCase();
+  return t;
+}
+
 export async function getAppConfigValue(key: AppConfigKey): Promise<string | null> {
   if (!db) return null;
   const [row] = await db.select().from(appConfig).where(eq(appConfig.key, key)).limit(1);
@@ -70,13 +94,15 @@ export async function getNotionConfig() {
     APP_CONFIG_KEYS.notionMasterClassesIndexDbId,
   ]);
 
-  const notionApiKey = process.env.NOTION_API_KEY || map.get(APP_CONFIG_KEYS.notionApiKey) || null;
+  const notionApiKey = notionEnvOrNull(process.env.NOTION_API_KEY) || map.get(APP_CONFIG_KEYS.notionApiKey) || null;
 
-  const notionDatabaseId = process.env.NOTION_DATABASE_ID || map.get(APP_CONFIG_KEYS.notionDatabaseId) || null;
-  let notionTasksDbId = process.env.NOTION_TASKS_DB_ID || null;
-  let notionTeamMembersDbId = process.env.NOTION_TEAM_MEMBERS_DB_ID || null;
-  let notionTeamsDbId = process.env.NOTION_TEAMS_DB_ID || null;
-  let notionOnboardingsDbId = process.env.NOTION_ONBOARDINGS_DB_ID || null;
+  const rawTimeEntriesDbId =
+    notionEnvOrNull(process.env.NOTION_DATABASE_ID) || map.get(APP_CONFIG_KEYS.notionDatabaseId) || null;
+  const notionDatabaseId = rawTimeEntriesDbId ? normalizeNotionDatabaseIdInput(rawTimeEntriesDbId) || rawTimeEntriesDbId : null;
+  let notionTasksDbId = notionEnvOrNull(process.env.NOTION_TASKS_DB_ID);
+  let notionTeamMembersDbId = notionEnvOrNull(process.env.NOTION_TEAM_MEMBERS_DB_ID);
+  let notionTeamsDbId = notionEnvOrNull(process.env.NOTION_TEAMS_DB_ID);
+  let notionOnboardingsDbId = notionEnvOrNull(process.env.NOTION_ONBOARDINGS_DB_ID);
 
   if (notionApiKey && notionDatabaseId) {
     try {
@@ -104,7 +130,7 @@ export async function getNotionConfig() {
     notionOnboardingsDbId,
     notionTeamsDbId,
     notionMasterClassesIndexDbId:
-      process.env.NOTION_MASTERCLASSES_INDEX_DB_ID ||
+      notionEnvOrNull(process.env.NOTION_MASTERCLASSES_INDEX_DB_ID) ||
       map.get(APP_CONFIG_KEYS.notionMasterClassesIndexDbId) ||
       null,
   };

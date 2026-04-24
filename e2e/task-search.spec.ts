@@ -5,14 +5,15 @@ const password = process.env.E2E_PASSWORD ?? "flchron2026";
 
 test.describe("Task picker (Notion)", () => {
   test("login, open task picker, /api/tasks returns tasks array and UI reflects response", async ({ page }) => {
+    test.setTimeout(180_000);
     await page.goto("/login");
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: "Sign In" }).click();
     await page.waitForURL(/\/timer/, { timeout: 30_000 });
-
-    const taskInput = page.getByPlaceholder("Search Notion tasks…");
-    await expect(taskInput).toBeVisible({ timeout: 15_000 });
+    /** Timer controls stay in a loading skeleton until the client timer store initializes — allow slow networks. */
+    const taskInput = page.getByRole("textbox", { name: /^Task/ });
+    await expect(taskInput).toBeVisible({ timeout: 60_000 });
     await taskInput.click();
     await taskInput.fill("");
 

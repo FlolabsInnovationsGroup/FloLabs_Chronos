@@ -73,7 +73,7 @@ export function TaskPicker({
         const res = await fetch(`/api/tasks?q=${encodeURIComponent(query)}`, { signal: ctrl.signal });
         const data = (await res.json()) as {
           tasks?: TaskOption[];
-          meta?: { taskSearchConfigured?: boolean; query?: string };
+          meta?: { taskSearchConfigured?: boolean; query?: string; hint?: string };
           error?: string;
         };
 
@@ -91,12 +91,8 @@ export function TaskPicker({
           return;
         }
 
-        if (
-          tasks.length === 0 &&
-          data.meta &&
-          data.meta.taskSearchConfigured === false
-        ) {
-          setErrorMessage("Task search is not configured in the running environment.");
+        if (tasks.length === 0 && data.meta?.taskSearchConfigured === false) {
+          setErrorMessage(data.meta.hint ?? "Task search is not configured in the running environment.");
         }
       } catch (e) {
         const aborted =

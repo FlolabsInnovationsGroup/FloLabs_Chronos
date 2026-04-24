@@ -11,7 +11,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "test:e2e": "playwright test",
-    "test:e2e:production": "playwright test -c playwright.production.config.ts e2e/users-page-production.spec.ts e2e/test-accounts-users-reports.spec.ts",
+    "test:e2e:production": "playwright test -c playwright.production.config.ts e2e/users-page-production.spec.ts e2e/test-accounts-users-reports.spec.ts e2e/task-search.spec.ts e2e/control-production.spec.ts",
     "test:reset-password:live": "tsx scripts/test-reset-password-live.ts",
     "test:task-search": "tsx scripts/test-task-search-integration.ts",
     "seed": "tsx scripts/seed.ts",

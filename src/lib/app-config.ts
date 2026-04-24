@@ -4,6 +4,7 @@ import { appConfig } from "@/lib/db/schema";
 
 export const APP_CONFIG_KEYS = {
   notionApiKey: "notion.apiKey",
+  notionDatabaseId: "notion.databaseId",
   notionTasksDbId: "notion.tasksDbId",
   notionTeamMembersDbId: "notion.teamMembersDbId",
   notionOnboardingsDbId: "notion.onboardingsDbId",
@@ -61,6 +62,7 @@ export async function setAppConfigValues(values: Array<{ key: AppConfigKey; valu
 export async function getNotionConfig() {
   const map = await getAppConfigMap([
     APP_CONFIG_KEYS.notionApiKey,
+    APP_CONFIG_KEYS.notionDatabaseId,
     APP_CONFIG_KEYS.notionTasksDbId,
     APP_CONFIG_KEYS.notionTeamMembersDbId,
     APP_CONFIG_KEYS.notionOnboardingsDbId,
@@ -70,15 +72,16 @@ export async function getNotionConfig() {
 
   const notionApiKey = process.env.NOTION_API_KEY || map.get(APP_CONFIG_KEYS.notionApiKey) || null;
 
+  const notionDatabaseId = process.env.NOTION_DATABASE_ID || map.get(APP_CONFIG_KEYS.notionDatabaseId) || null;
   let notionTasksDbId = process.env.NOTION_TASKS_DB_ID || null;
   let notionTeamMembersDbId = process.env.NOTION_TEAM_MEMBERS_DB_ID || null;
   let notionTeamsDbId = process.env.NOTION_TEAMS_DB_ID || null;
   let notionOnboardingsDbId = process.env.NOTION_ONBOARDINGS_DB_ID || null;
 
-  if (notionApiKey && process.env.NOTION_DATABASE_ID) {
+  if (notionApiKey && notionDatabaseId) {
     try {
       const { resolveNotionDatabaseIdsFromRelations } = await import("@/lib/notion");
-      const derived = await resolveNotionDatabaseIdsFromRelations(notionApiKey);
+      const derived = await resolveNotionDatabaseIdsFromRelations(notionApiKey, notionDatabaseId);
       if (!notionTasksDbId) notionTasksDbId = derived.tasksDbId;
       if (!notionTeamMembersDbId) notionTeamMembersDbId = derived.teamMembersDbId;
       if (!notionTeamsDbId) notionTeamsDbId = derived.teamsDbId;
@@ -95,6 +98,7 @@ export async function getNotionConfig() {
 
   return {
     notionApiKey,
+    notionDatabaseId,
     notionTasksDbId,
     notionTeamMembersDbId,
     notionOnboardingsDbId,

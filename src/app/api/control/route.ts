@@ -7,6 +7,7 @@ import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 const controlSchema = z.object({
   notionApiKey: z.string().optional().default(""),
+  notionDatabaseId: z.string().optional().default(""),
   notionMasterClassesIndexDbId: z.string().min(1),
   discordBotToken: z.string().optional().default(""),
   discordGuildId: z.string().optional().default(""),
@@ -30,9 +31,10 @@ export async function GET() {
     config: {
       notionApiKeyPresent: Boolean(config.notionApiKey),
       notionApiKeyMasked: config.notionApiKey ? `${config.notionApiKey.slice(0, 6)}••••••${config.notionApiKey.slice(-4)}` : "",
+      notionDatabaseId: config.notionDatabaseId ?? "",
       notionTasksDbId: config.notionTasksDbId ?? "",
       notionTeamMembersDbId: config.notionTeamMembersDbId ?? "",
-      timeEntriesDatabaseIdConfigured: Boolean(process.env.NOTION_DATABASE_ID),
+      timeEntriesDatabaseIdConfigured: Boolean(config.notionDatabaseId),
       notionOnboardingsDbId: config.notionOnboardingsDbId ?? "",
       notionTeamsDbId: config.notionTeamsDbId ?? "",
       notionMasterClassesIndexDbId: config.notionMasterClassesIndexDbId ?? "",
@@ -65,6 +67,9 @@ export async function POST(req: Request) {
   const values: Array<{ key: (typeof APP_CONFIG_KEYS)[keyof typeof APP_CONFIG_KEYS]; value: string; isSecret?: boolean; updatedBy?: string }> = [
     { key: APP_CONFIG_KEYS.notionMasterClassesIndexDbId, value: parsed.data.notionMasterClassesIndexDbId, updatedBy: chronosUserId },
   ];
+  if (parsed.data.notionDatabaseId.trim()) {
+    values.push({ key: APP_CONFIG_KEYS.notionDatabaseId, value: parsed.data.notionDatabaseId.trim(), updatedBy: chronosUserId });
+  }
   if (parsed.data.notionApiKey.trim()) {
     values.unshift({ key: APP_CONFIG_KEYS.notionApiKey, value: parsed.data.notionApiKey.trim(), isSecret: true, updatedBy: chronosUserId });
   }

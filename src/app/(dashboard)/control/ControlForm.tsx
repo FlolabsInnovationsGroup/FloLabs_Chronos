@@ -24,6 +24,7 @@ export function ControlForm() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [notionApiKey, setNotionApiKey] = useState("");
+  const [notionDatabaseId, setNotionDatabaseId] = useState("");
   const [notionTasksDbId, setNotionTasksDbId] = useState("");
   const [notionTeamMembersDbId, setNotionTeamMembersDbId] = useState("");
   const [timeEntriesDatabaseIdConfigured, setTimeEntriesDatabaseIdConfigured] = useState(false);
@@ -47,6 +48,7 @@ export function ControlForm() {
         const data = await readJson(await fetch("/api/control", { cache: "no-store" }));
         setApiKeyPresent(Boolean(data.config?.notionApiKeyPresent));
         setApiKeyMasked(data.config?.notionApiKeyMasked ?? "");
+        setNotionDatabaseId(data.config?.notionDatabaseId ?? "");
         setNotionTasksDbId(data.config?.notionTasksDbId ?? "");
         setNotionTeamMembersDbId(data.config?.notionTeamMembersDbId ?? "");
         setTimeEntriesDatabaseIdConfigured(Boolean(data.config?.timeEntriesDatabaseIdConfigured));
@@ -75,7 +77,7 @@ export function ControlForm() {
       await readJson(await fetch("/api/control", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notionApiKey, notionMasterClassesIndexDbId, discordBotToken, discordGuildId, discordCategoryId, discordChannelPrefix }),
+        body: JSON.stringify({ notionApiKey, notionDatabaseId, notionMasterClassesIndexDbId, discordBotToken, discordGuildId, discordCategoryId, discordChannelPrefix }),
       }));
       setSuccess("Control settings saved.");
       setApiKeyPresent(true);
@@ -138,6 +140,7 @@ export function ControlForm() {
                   </div>
                 )}
               </div>
+              <Input label="Time Entries Database ID" value={notionDatabaseId} onChange={(e) => setNotionDatabaseId(e.target.value)} placeholder="Notion Time Entries database id" hint="Used as the base database to resolve Tasks/Team Members/Teams/Onboardings relations." />
               <Input label="MasterClasses Index Database ID" value={notionMasterClassesIndexDbId} onChange={(e) => setNotionMasterClassesIndexDbId(e.target.value)} placeholder="286a1576955180488db8eb63daccc66c" hint="Database whose rows map teams to the target MasterClass databases." />
             </div>
 

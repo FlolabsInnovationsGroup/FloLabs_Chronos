@@ -462,13 +462,13 @@ async function fallbackTaskSearch(
 }
 
 export async function searchTasks(query: string): Promise<{ id: string; title: string }[]> {
-  const { notionApiKey, notionTasksDbId } = await getNotionConfig();
+  const { notionApiKey, notionTasksDbId, notionDatabaseId } = await getNotionConfig();
   if (!notionApiKey) return [];
 
   let dbId = notionTasksDbId;
-  if (!dbId && process.env.NOTION_DATABASE_ID) {
+  if (!dbId && notionDatabaseId) {
     try {
-      const derived = await resolveNotionDatabaseIdsFromRelations(notionApiKey);
+      const derived = await resolveNotionDatabaseIdsFromRelations(notionApiKey, notionDatabaseId);
       dbId = derived.tasksDbId;
     } catch {
       /* ignore — same derivation as getNotionConfig; second chance if config path failed */
@@ -566,7 +566,7 @@ export async function probeTaskSearchConfig(): Promise<{
     resolvedTitles: string[];
   };
 }> {
-  const { notionApiKey, notionTasksDbId } = await getNotionConfig();
+  const { notionApiKey, notionTasksDbId, notionDatabaseId } = await getNotionConfig();
   if (!notionApiKey) {
     return {
       tasksDbId: null,
@@ -582,9 +582,9 @@ export async function probeTaskSearchConfig(): Promise<{
   }
 
   let dbId: string | null = notionTasksDbId;
-  if (!dbId && process.env.NOTION_DATABASE_ID) {
+  if (!dbId && notionDatabaseId) {
     try {
-      const derived = await resolveNotionDatabaseIdsFromRelations(notionApiKey);
+      const derived = await resolveNotionDatabaseIdsFromRelations(notionApiKey, notionDatabaseId);
       dbId = derived.tasksDbId;
     } catch {
       /* ignore */
@@ -756,8 +756,10 @@ async function loadDatabaseSchemaById(notionApiKey: string, databaseId: string):
   }
 }
 
-async function loadTimeEntriesDatabaseSchema(notionApiKey: string): Promise<NotionDatabaseResponse | null> {
-  const entriesDbId = process.env.NOTION_DATABASE_ID;
+async function loadTimeEntriesDatabaseSchema(
+  notionApiKey: string,
+  entriesDbId: string | null
+): Promise<NotionDatabaseResponse | null> {
   if (!entriesDbId) return null;
   try {
     return await getDatabaseSchema(entriesDbId, NOTION_TEMPLATE_VERSION, notionApiKey);
@@ -774,13 +776,16 @@ async function loadTimeEntriesDatabaseSchema(notionApiKey: string): Promise<Noti
  * Resolves Tasks and Team Members DB IDs from Time Entries relations, and Teams / Onboardings from
  * Team Members relations (Team → Teams DB, Onboarding → Onboardings DB).
  */
-export async function resolveNotionDatabaseIdsFromRelations(notionApiKey: string): Promise<{
+export async function resolveNotionDatabaseIdsFromRelations(
+  notionApiKey: string,
+  timeEntriesDatabaseId: string | null
+): Promise<{
   tasksDbId: string | null;
   teamMembersDbId: string | null;
   teamsDbId: string | null;
   onboardingsDbId: string | null;
 }> {
-  const schema = await loadTimeEntriesDatabaseSchema(notionApiKey);
+  const schema = await loadTimeEntriesDatabaseSchema(notionApiKey, timeEntriesDatabaseId);
   if (!schema) {
     return { tasksDbId: null, teamMembersDbId: null, teamsDbId: null, onboardingsDbId: null };
   }
@@ -803,7 +808,8 @@ export async function resolveTimeEntriesRelationDatabaseIds(notionApiKey: string
   tasksDbId: string | null;
   teamMembersDbId: string | null;
 }> {
-  const r = await resolveNotionDatabaseIdsFromRelations(notionApiKey);
+  const { notionDatabaseId } = await getNotionConfig();
+  const r = await resolveNotionDatabaseIdsFromRelations(notionApiKey, notionDatabaseId);
   return { tasksDbId: r.tasksDbId, teamMembersDbId: r.teamMembersDbId };
 }
 
@@ -993,7 +999,8 @@ function buildSelectLikeValue(type: string, content: string) {
  *   FL-Chron ID  — Rich Text (used for deduplication)
  */
 export async function syncEntryToNotion(entry: TimeEntry): Promise<string> {
-  const dbId = process.env.NOTION_DATABASE_ID;
+  const { notionDatabaseId } = await getNotionConfig();
+  const dbId = notionDatabaseId;
   if (!dbId) throw new Error("NOTION_DATABASE_ID is not set");
   if (!process.env.NOTION_API_KEY) throw new Error("NOTION_API_KEY is not set");
 
@@ -1471,7 +1478,8 @@ export function buildNotionEntryProperties(
 }
 
 export async function syncEntryToNotionFull(entry: FullEntry): Promise<string | null> {
-  const dbId = process.env.NOTION_DATABASE_ID;
+  const { notionDatabaseId } = await getNotionConfig();
+  const dbId = notionDatabaseId;
   if (!dbId || !process.env.NOTION_API_KEY) return null;
 
   const isNew = !entry.notionPageId;
@@ -2508,7 +2516,8 @@ export async function markEntryDeleted(notionPageId: string): Promise<void> {
 export async function queryNotionEntriesWindow(
   sinceHours: number
 ): Promise<Array<{ notionPageId: string; entryId: string | null }>> {
-  const dbId = process.env.NOTION_DATABASE_ID;
+  const { notionDatabaseId } = await getNotionConfig();
+  const dbId = notionDatabaseId;
   if (!dbId || !process.env.NOTION_API_KEY) return [];
 
   const cutoff = new Date(Date.now() - sinceHours * 60 * 60 * 1000).toISOString();

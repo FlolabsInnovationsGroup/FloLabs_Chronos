@@ -549,7 +549,8 @@ export async function searchTasks(query: string): Promise<{ id: string; title: s
     );
   } catch (e) {
     console.error("[searchTasks]", e);
-    return [];
+    const message = e instanceof Error ? e.message : String(e);
+    throw new Error(`Task search failed: ${message}`);
   }
 }
 

@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import { passwordResetTokens, users } from "@/lib/db/schema";
+import { applicants, passwordResetTokens, users } from "@/lib/db/schema";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { sendEmail } from "@/lib/mail";
 import { normalizeEmail, resolvePublicAppOrigin } from "@/lib/invitations";
 import { findApplicantForCredentialEmail } from "@/lib/applicant-auth";
-import { findUserByAnyEmail } from "@/lib/user-email-aliases";
+import { addPrimaryEmailAlias, findUserByAnyEmail } from "@/lib/user-email-aliases";
+import bcrypt from "bcryptjs";
 
 const schema = z.object({ email: z.string().email() });
 
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
     email === resetPasswordTestEmail;
 
   const applicantRow = await findApplicantForCredentialEmail(email);
-  const applicant = applicantRow
+  let applicant = applicantRow
     ? {
         id: applicantRow.id,
         email: applicantRow.email,
@@ -58,6 +59,13 @@ export async function POST(req: Request) {
         name: byApplicantEmail.name,
         isActive: byApplicantEmail.isActive,
       };
+      if (!applicant.chronosUserId) {
+        await db
+          .update(applicants)
+          .set({ chronosUserId: byApplicantEmail.id, updatedAt: new Date() })
+          .where(eq(applicants.id, applicant.id));
+        applicant = { ...applicant, chronosUserId: byApplicantEmail.id };
+      }
     }
   }
   if (!user) {
@@ -69,6 +77,45 @@ export async function POST(req: Request) {
         name: byRequestedEmail.name,
         isActive: byRequestedEmail.isActive,
       };
+      if (applicant && !applicant.chronosUserId) {
+        await db
+          .update(applicants)
+          .set({ chronosUserId: byRequestedEmail.id, updatedAt: new Date() })
+          .where(eq(applicants.id, applicant.id));
+        applicant = { ...applicant, chronosUserId: byRequestedEmail.id };
+      }
+    }
+  }
+
+  // If applicant exists but no linked Chronos user row was found yet, provision and link one now.
+  if (!user && applicant?.email) {
+    const generatedPasswordHash = await bcrypt.hash(crypto.randomBytes(24).toString("hex"), 12);
+    const [createdUser] = await db
+      .insert(users)
+      .values({
+        email: applicant.email.toLowerCase(),
+        name: applicant.name?.trim() || applicant.email.toLowerCase(),
+        password: generatedPasswordHash,
+        role: "member",
+        isActive: Boolean(applicant.isActive),
+      })
+      .onConflictDoNothing()
+      .returning({ id: users.id, email: users.email, name: users.name, isActive: users.isActive });
+
+    const resolvedUser = createdUser ?? (await findUserByAnyEmail(applicant.email.toLowerCase()));
+    if (resolvedUser) {
+      await db
+        .update(applicants)
+        .set({ chronosUserId: resolvedUser.id, updatedAt: new Date() })
+        .where(eq(applicants.id, applicant.id));
+      await addPrimaryEmailAlias(resolvedUser.id, applicant.email.toLowerCase());
+      user = {
+        id: resolvedUser.id,
+        email: resolvedUser.email,
+        name: resolvedUser.name,
+        isActive: resolvedUser.isActive,
+      };
+      applicant = { ...applicant, chronosUserId: resolvedUser.id };
     }
   }
 

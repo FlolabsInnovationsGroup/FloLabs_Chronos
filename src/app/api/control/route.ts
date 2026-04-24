@@ -8,7 +8,7 @@ import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 const controlSchema = z.object({
   notionApiKey: z.string().optional().default(""),
   notionDatabaseId: z.string().optional().default(""),
-  notionMasterClassesIndexDbId: z.string().min(1),
+  notionMasterClassesIndexDbId: z.string().optional().default(""),
   discordBotToken: z.string().optional().default(""),
   discordGuildId: z.string().optional().default(""),
   discordCategoryId: z.string().optional().default(""),
@@ -64,9 +64,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const values: Array<{ key: (typeof APP_CONFIG_KEYS)[keyof typeof APP_CONFIG_KEYS]; value: string; isSecret?: boolean; updatedBy?: string }> = [
-    { key: APP_CONFIG_KEYS.notionMasterClassesIndexDbId, value: parsed.data.notionMasterClassesIndexDbId, updatedBy: chronosUserId },
-  ];
+  const values: Array<{ key: (typeof APP_CONFIG_KEYS)[keyof typeof APP_CONFIG_KEYS]; value: string; isSecret?: boolean; updatedBy?: string }> = [];
+  if (parsed.data.notionMasterClassesIndexDbId.trim()) {
+    values.push({ key: APP_CONFIG_KEYS.notionMasterClassesIndexDbId, value: parsed.data.notionMasterClassesIndexDbId.trim(), updatedBy: chronosUserId });
+  }
   if (parsed.data.notionDatabaseId.trim()) {
     values.push({ key: APP_CONFIG_KEYS.notionDatabaseId, value: parsed.data.notionDatabaseId.trim(), updatedBy: chronosUserId });
   }

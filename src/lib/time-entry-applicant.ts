@@ -1,5 +1,5 @@
 import type { Session } from "next-auth";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { applicants, timeEntries } from "@/lib/db/schema";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
@@ -26,11 +26,17 @@ export async function resolveFlolabsIdForTimeEntryWrite(
   return row?.id ?? null;
 }
 
-/** Canonical scope for linked owners: only FloLabs owner id. */
+/**
+ * Compatible read scope:
+ * - Prefer canonical `flolabs_id`
+ * - Fall back to legacy `user_id` for rows not yet backfilled
+ */
 export function whereTimeEntriesForLinkedUser(_chronosUserId: string, flolabsId: string | null) {
-  if (!flolabsId) {
-    // No linked FloLabs id means no owner scope.
-    return sql`1 = 0`;
+  if (flolabsId) {
+    return or(
+      eq(timeEntries.flolabsId, flolabsId),
+      and(isNull(timeEntries.flolabsId), eq(timeEntries.userId, _chronosUserId))
+    )!;
   }
-  return eq(timeEntries.flolabsId, flolabsId);
+  return eq(timeEntries.userId, _chronosUserId);
 }

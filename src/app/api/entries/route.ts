@@ -131,13 +131,13 @@ export async function POST(req: Request) {
   const { tagIds, ...rest } = parsed.data;
   const uniqueTagIds = [...new Set(tagIds)];
 
-  const applicantId = applicantIdForSessionLinkedUser(session.user);
+  const flolabsId = applicantIdForSessionLinkedUser(session.user);
   if (uniqueTagIds.length > 0) {
     const valid = await db
       .select({ id: tags.id })
       .from(tags)
       .where(
-        and(whereTagsForLinkedUser(chronosUserId, applicantId), inArray(tags.id, uniqueTagIds))
+        and(whereTagsForLinkedUser(chronosUserId, flolabsId), inArray(tags.id, uniqueTagIds))
       );
     if (valid.length !== uniqueTagIds.length) {
       return NextResponse.json({ error: "One or more tags are invalid" }, { status: 400 });
@@ -148,7 +148,7 @@ export async function POST(req: Request) {
     .insert(timeEntries)
     .values({
       userId: chronosUserId,
-      ...(applicantId ? { applicantId } : {}),
+      ...(flolabsId ? { flolabsId, applicantId: flolabsId } : {}),
       ...rest,
       startedAt: new Date(rest.startedAt),
       stoppedAt: new Date(rest.stoppedAt),

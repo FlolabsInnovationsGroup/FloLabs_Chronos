@@ -132,6 +132,11 @@ export async function POST(req: Request) {
     .where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt), gt(passwordResetTokens.expiresAt, new Date())))
     .limit(1);
 
+  let tokenToSend = existing?.token ?? "";
+  let tokenExpiresAt = existing?.expiresAt ?? new Date(0);
+  let tokenRowId = existing?.id ?? "";
+  let createdNewToken = false;
+
   if (existing) {
     if (isAuthorizedResetPasswordTest) {
       await db
@@ -139,18 +144,28 @@ export async function POST(req: Request) {
         .set({ usedAt: new Date() })
         .where(eq(passwordResetTokens.id, existing.id));
     } else {
-      return NextResponse.json({ ok: true, cooldown: true, expiresAt: existing.expiresAt });
+      // UX reliability: keep anti-enumeration response shape, but resend the
+      // same active token email instead of silently no-oping during cooldown.
+      tokenToSend = existing.token;
+      tokenExpiresAt = existing.expiresAt;
+      tokenRowId = existing.id;
     }
   }
 
-  const token = crypto.randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 2);
-  const [createdReset] = await db
-    .insert(passwordResetTokens)
-    .values({ userId: user.id, token, expiresAt })
-    .returning({ id: passwordResetTokens.id });
+  if (!existing || isAuthorizedResetPasswordTest) {
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 2);
+    const [createdReset] = await db
+      .insert(passwordResetTokens)
+      .values({ userId: user.id, token, expiresAt })
+      .returning({ id: passwordResetTokens.id });
+    tokenToSend = token;
+    tokenExpiresAt = expiresAt;
+    tokenRowId = createdReset.id;
+    createdNewToken = true;
+  }
 
-  const resetUrl = `${resolvePublicAppOrigin(req.url)}/register?reset=${encodeURIComponent(token)}`;
+  const resetUrl = `${resolvePublicAppOrigin(req.url)}/register?reset=${encodeURIComponent(tokenToSend)}`;
 
   try {
     const delivery = await sendEmail({
@@ -172,9 +187,10 @@ export async function POST(req: Request) {
       userId: user.id,
       applicantId: applicant?.id ?? null,
       email: recipientEmail,
-      tokenId: createdReset?.id ?? null,
+      tokenId: tokenRowId,
       resendEmailId: delivery.id,
       isTest: isAuthorizedResetPasswordTest,
+      cooldownResend: Boolean(existing && !isAuthorizedResetPasswordTest),
     });
 
     if (isAuthorizedResetPasswordTest) {
@@ -182,24 +198,29 @@ export async function POST(req: Request) {
         ok: true,
         test: {
           resendEmailId: delivery.id,
-          resetToken: token,
-          expiresAt,
+          resetToken: tokenToSend,
+          expiresAt: tokenExpiresAt,
         },
       });
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true,
+      ...(existing && !isAuthorizedResetPasswordTest ? { cooldown: true, expiresAt: tokenExpiresAt } : {}),
+    });
   } catch (error) {
-    await db
-      .update(passwordResetTokens)
-      .set({ usedAt: new Date() })
-      .where(eq(passwordResetTokens.id, createdReset.id));
+    if (createdNewToken) {
+      await db
+        .update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(eq(passwordResetTokens.id, tokenRowId));
+    }
 
     console.error("[auth/forgot-password] reset email send failed", {
       userId: user.id,
       applicantId: applicant?.id ?? null,
       email: recipientEmail,
-      tokenId: createdReset.id,
+      tokenId: tokenRowId,
       isTest: isAuthorizedResetPasswordTest,
       error: error instanceof Error ? error.message : String(error),
     });

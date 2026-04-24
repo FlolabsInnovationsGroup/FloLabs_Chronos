@@ -11,8 +11,8 @@ test.describe("Task picker (Notion)", () => {
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: "Sign In" }).click();
     await page.waitForURL(/\/timer/, { timeout: 30_000 });
-    /** Timer controls stay in a loading skeleton until the client timer store initializes — allow slow networks. */
-    const taskInput = page.getByRole("textbox", { name: /^Task/ });
+    /** Timer controls stay in a loading skeleton until the client timer store initializes (see use-timer fetch timeout). */
+    const taskInput = page.getByPlaceholder("Search Notion tasks…");
     await expect(taskInput).toBeVisible({ timeout: 60_000 });
     await taskInput.click();
     await taskInput.fill("");

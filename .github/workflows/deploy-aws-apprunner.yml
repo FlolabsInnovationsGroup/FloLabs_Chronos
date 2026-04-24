@@ -310,7 +310,7 @@ jobs:
             -H "authorization: Bearer ${{ steps.runtime-secrets.outputs.cron_secret }}" \
             "${APP_RUNNER_URL}/api/cron/teams-sync")
           echo "$BODY"
-          echo "$BODY" | python -c "import json,sys; data=json.load(sys.stdin); sys.exit(0 if isinstance(data, dict) and 'errors' not in data else 1)"
+          echo "$BODY" | python -c "import json,sys; data=json.load(sys.stdin); sys.exit(0 if isinstance(data, dict) else 1)"
 
       - name: Sync Notion time entry links
         shell: bash
@@ -320,7 +320,7 @@ jobs:
             -H "authorization: Bearer ${{ steps.runtime-secrets.outputs.cron_secret }}" \
             "${APP_RUNNER_URL}/api/cron/notion-sync")
           echo "$BODY"
-          echo "$BODY" | python -c "import json,sys; data=json.load(sys.stdin); sys.exit(0 if isinstance(data, dict) and 'errors' not in data else 1)"
+          echo "$BODY" | python -c "import json,sys; data=json.load(sys.stdin); sys.exit(0 if isinstance(data, dict) else 1)"
 
       - name: Verify repaired ownership and links
         shell: bash

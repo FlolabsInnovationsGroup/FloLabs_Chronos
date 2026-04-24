@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { applicants } from "@/lib/db/schema";
 import { findUserByAnyEmail } from "@/lib/user-email-aliases";
@@ -13,6 +13,24 @@ export async function findApplicantForCredentialEmail(normalizedEmail: string) {
     .where(and(eq(applicants.email, normalizedEmail), ne(applicants.status, "terminated")))
     .limit(1);
   if (byPrimary) return byPrimary;
+
+  // Legacy/import compatibility: some users type an alternate email that only exists
+  // inside applicant hubspotRawData.emails, not applicants.email.
+  const [byHubspotEmail] = await db
+    .select()
+    .from(applicants)
+    .where(
+      and(
+        ne(applicants.status, "terminated"),
+        sql`EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements_text(COALESCE(${applicants.hubspotRawData}->'emails', '[]'::jsonb)) AS e(email)
+          WHERE lower(e.email) = ${normalizedEmail}
+        )`
+      )
+    )
+    .limit(1);
+  if (byHubspotEmail) return byHubspotEmail;
 
   const user = await findUserByAnyEmail(normalizedEmail);
   if (!user) return null;

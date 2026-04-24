@@ -40,6 +40,7 @@ export async function POST(req: Request) {
       }
     : null;
 
+  let matchedByRequestedEmail = false;
   let user =
     applicant?.chronosUserId
       ? (
@@ -71,6 +72,7 @@ export async function POST(req: Request) {
   if (!user) {
     const byRequestedEmail = await findUserByAnyEmail(email);
     if (byRequestedEmail) {
+      matchedByRequestedEmail = true;
       user = {
         id: byRequestedEmail.id,
         email: byRequestedEmail.email,
@@ -121,7 +123,7 @@ export async function POST(req: Request) {
 
   if (!user || !user.isActive) return NextResponse.json({ ok: true });
 
-  const recipientEmail = applicant?.email?.trim() || user.email;
+  const recipientEmail = matchedByRequestedEmail ? email : applicant?.email?.trim() || user.email;
   const recipientName = applicant?.name?.trim() || user.name;
 
   const [existing] = await db

@@ -317,6 +317,36 @@ export async function GET(req: Request) {
       WHERE te.flolabs_id IS NULL
         AND te.user_id = a.chronos_user_id
     `);
+    const entriesRepointToBestApplicant = await db.execute(sql`
+      WITH preferred_applicant AS (
+        SELECT user_id, applicant_id
+        FROM (
+          SELECT
+            te.user_id,
+            a.id AS applicant_id,
+            row_number() OVER (
+              PARTITION BY te.user_id
+              ORDER BY
+                CASE WHEN a.notion_team_member_id IS NOT NULL THEN 0 ELSE 1 END,
+                a.created_at ASC,
+                a.id ASC
+            ) AS rn
+          FROM time_entries te
+          JOIN applicants a ON a.chronos_user_id = te.user_id
+        ) ranked
+        WHERE rn = 1
+      )
+      UPDATE time_entries te
+      SET
+        applicant_id = p.applicant_id,
+        flolabs_id = p.applicant_id
+      FROM preferred_applicant p
+      WHERE te.user_id = p.user_id
+        AND (
+          te.applicant_id IS DISTINCT FROM p.applicant_id
+          OR te.flolabs_id IS DISTINCT FROM p.applicant_id
+        )
+    `);
     const tagsBackfillFlolabsByUser = await db.execute(sql`
       UPDATE tags t
       SET flolabs_id = a.id
@@ -524,6 +554,10 @@ export async function GET(req: Request) {
       entriesBackfillFlolabsByUserRowCount:
         (entriesBackfillFlolabsByUser as unknown as { rowCount?: number }).rowCount ??
         (entriesBackfillFlolabsByUser as unknown as { rowsAffected?: number }).rowsAffected ??
+        null,
+      entriesRepointToBestApplicantRowCount:
+        (entriesRepointToBestApplicant as unknown as { rowCount?: number }).rowCount ??
+        (entriesRepointToBestApplicant as unknown as { rowsAffected?: number }).rowsAffected ??
         null,
       tagsBackfillFlolabsByUserRowCount:
         (tagsBackfillFlolabsByUser as unknown as { rowCount?: number }).rowCount ??

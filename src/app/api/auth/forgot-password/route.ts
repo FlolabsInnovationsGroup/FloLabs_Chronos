@@ -123,7 +123,10 @@ export async function POST(req: Request) {
 
   if (!user || !user.isActive) return NextResponse.json({ ok: true });
 
-  const recipientEmail = matchedByRequestedEmail ? email : applicant?.email?.trim() || user.email;
+  // Always deliver to the exact address the user typed when we resolved a valid account.
+  // This avoids sending reset links to a different historical primary address when the
+  // account is linked through applicant data or aliases.
+  const recipientEmail = email;
   const recipientName = applicant?.name?.trim() || user.name;
 
   const [existing] = await db

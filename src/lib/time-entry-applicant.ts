@@ -1,5 +1,5 @@
 import type { Session } from "next-auth";
-import { and, eq, isNull, or } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { applicants, timeEntries } from "@/lib/db/schema";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
@@ -33,10 +33,7 @@ export async function resolveFlolabsIdForTimeEntryWrite(
  */
 export function whereTimeEntriesForLinkedUser(_chronosUserId: string, flolabsId: string | null) {
   if (flolabsId) {
-    return or(
-      eq(timeEntries.flolabsId, flolabsId),
-      and(isNull(timeEntries.flolabsId), eq(timeEntries.userId, _chronosUserId))
-    )!;
+    return or(eq(timeEntries.userId, _chronosUserId), eq(timeEntries.flolabsId, flolabsId))!;
   }
   return eq(timeEntries.userId, _chronosUserId);
 }

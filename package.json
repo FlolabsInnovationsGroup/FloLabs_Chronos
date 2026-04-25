@@ -31,7 +31,9 @@
     "import:notion-entries:skip-ignored": "tsx scripts/import-notion-entries.ts --skip-ignored",
     "aws:provision": "powershell -ExecutionPolicy Bypass -File deploy/aws/provision.ps1",
     "aws:deploy": "powershell -ExecutionPolicy Bypass -File deploy/aws/deploy-app.ps1",
-    "aws:migrate-db": "powershell -ExecutionPolicy Bypass -File deploy/aws/migrate-db.ps1"
+    "aws:migrate-db": "powershell -ExecutionPolicy Bypass -File deploy/aws/migrate-db.ps1",
+    "db:backfill:imported-entry-owners": "tsx scripts/backfill-imported-entry-owners.ts",
+    "db:backfill:imported-entry-owners:live": "tsx scripts/backfill-imported-entry-owners.ts --live"
   },
   "dependencies": {
     "@auth/core": "^0.34.3",

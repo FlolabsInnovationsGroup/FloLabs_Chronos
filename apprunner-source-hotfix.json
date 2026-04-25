@@ -1,0 +1,45 @@
+{
+  "ImageRepository": {
+    "ImageRepositoryType": "ECR",
+    "ImageConfiguration": {
+      "RuntimeEnvironmentVariables": {
+        "APP_URL": "https://hcmsmnfq5q.us-east-1.awsapprunner.com",
+        "AUTH_SECRET": "0OpEymRZov8OBKt2nmSCUxi9+l2H4PdEMyjBTaSHmVI=",
+        "BUILD_COMMIT_REF": "main",
+        "BUILD_COMMIT_SHA": "7d95247c2deb4c54d4b8a5cbb8c63de044f13db6",
+        "BUILD_IMAGE_DIGEST": "sha256:45efff6310463aafd1c7a9115cbf79eb62c1d3a298f2d362f669f653560a83a1",
+        "BUILD_IMAGE_TAG": "git-7d95247c2deb",
+        "BUILD_TIMESTAMP": "2026-04-24T22:54:25Z",
+        "CRON_SECRET": "6IXvIoMfk8MCMOvWzBPAWgnlwl0T6gAPaAxpYMtO8xkA",
+        "DATABASE_URL": "postgresql://chronos:vBXSQMV3u8aFscRIKLFFCsBRTC7K8bUV@flolabs-chronos-db.ccxceiswgkrj.us-east-1.rds.amazonaws.com:5432/chronos?sslmode=require",
+        "EMAIL_FROM": "FL-Chron <chronos@flolabsinnovations.com>",
+        "FL_CHRONOS_DATABASE_URL": "postgresql://chronos:vBXSQMV3u8aFscRIKLFFCsBRTC7K8bUV@flolabs-chronos-db.ccxceiswgkrj.us-east-1.rds.amazonaws.com:5432/chronos?sslmode=require",
+        "FL_CHRONOS_DATABASE_URL_UNPOOLED": "postgresql://chronos:vBXSQMV3u8aFscRIKLFFCsBRTC7K8bUV@flolabs-chronos-db.ccxceiswgkrj.us-east-1.rds.amazonaws.com:5432/chronos?sslmode=require",
+        "FL_KV_REDIS_URL": "redis://flolabs-chronos-redis-nfbum3.serverless.use1.cache.amazonaws.com:6379",
+        "KV_URL": "redis://flolabs-chronos-redis-nfbum3.serverless.use1.cache.amazonaws.com:6379",
+        "NEXTAUTH_SECRET": "0OpEymRZov8OBKt2nmSCUxi9+l2H4PdEMyjBTaSHmVI=",
+        "NEXTAUTH_URL": "https://hcmsmnfq5q.us-east-1.awsapprunner.com",
+        "NEXT_PUBLIC_BUILD_COMMIT_REF": "main",
+        "NEXT_PUBLIC_BUILD_COMMIT_SHA": "7d95247c2deb4c54d4b8a5cbb8c63de044f13db6",
+        "NEXT_PUBLIC_BUILD_IMAGE_DIGEST": "sha256:45efff6310463aafd1c7a9115cbf79eb62c1d3a298f2d362f669f653560a83a1",
+        "NEXT_PUBLIC_BUILD_IMAGE_TAG": "git-7d95247c2deb",
+        "NEXT_PUBLIC_BUILD_TIMESTAMP": "2026-04-24T22:54:25Z",
+        "NODE_ENV": "production",
+        "NOTION_API_KEY": "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",
+        "NOTION_DATABASE_ID": "297a157695518075ab6cea94e60e4220",
+        "NOTION_ONBOARDINGS_DB_ID": "a1a106fab63548089279dc54d63eab89",
+        "NOTION_TASKS_DB_ID": "b5a15559fffc4a4f97161bf12e6fb400",
+        "NOTION_TEAMS_DB_ID": "9828e33b94e64dcba86f8b4ad7a21a23",
+        "NOTION_TEAM_MEMBERS_DB_ID": "286a1576955180d6acdec21f7a45dfcc",
+        "NX_DAEMON": "false",
+        "RESEND_API_KEY": "re_9Hu5XgLx_HTmqKN5PGPZYvX3RbSDFE1eY"
+      },
+      "Port": "3000"
+    },
+    "ImageIdentifier": "975049954782.dkr.ecr.us-east-1.amazonaws.com/flolabs-chronos:git-7d95247c2deb"
+  },
+  "AuthenticationConfiguration": {
+    "AccessRoleArn": "arn:aws:iam::975049954782:role/flolabs-chronos-apprunner-ecr-access-role"
+  },
+  "AutoDeploymentsEnabled": true
+}

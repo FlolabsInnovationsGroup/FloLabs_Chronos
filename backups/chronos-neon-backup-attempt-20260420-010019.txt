@@ -1,0 +1,12 @@
+Chronos Neon backup attempt
+Timestamp: 2026-04-20T01:00:19.7740573+02:00
+Source: postgresql://neondb_owner@ep-broad-shadow-anqzuaqr-pooler.c-6.us-east-1.aws.neon.tech/neondb?channel_binding=require&sslmode=require
+Method: docker run --rm postgres:16 pg_dump --format=custom --no-owner --no-privileges
+Result: FAILED
+Reason: Neon returned 'Your project has exceeded the data transfer quota. Upgrade your plan to increase limits.'
+
+This means a local backup could not be created from the Neon source at this time.
+Next options:
+1. Upgrade or temporarily unblock Neon quota, then rerun pg_dump.
+2. Use Neon console/export path if available to the account owner.
+3. Create a backup from the current AWS RDS database instead, knowing it is not the full historical Neon dataset.

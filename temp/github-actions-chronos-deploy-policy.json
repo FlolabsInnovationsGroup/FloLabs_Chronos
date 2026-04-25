@@ -1,0 +1,52 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EcrPushPull",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetAuthorizationToken",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:CompleteLayerUpload",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:PutImage",
+        "ecr:BatchGetImage",
+        "ecr:DescribeImages"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AppRunnerDeploy",
+      "Effect": "Allow",
+      "Action": [
+        "apprunner:UpdateService",
+        "apprunner:DescribeService",
+        "apprunner:ListOperations"
+      ],
+      "Resource": "arn:aws:apprunner:us-east-1:975049954782:service/flolabs-chronos/b6416d84200e4c5a9d884f8f4c134aaf"
+    },
+    {
+      "Sid": "ReadChronosRuntimeSecrets",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter"
+      ],
+      "Resource": [
+        "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/DATABASE_URL",
+        "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/REDIS_URL",
+        "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/CRON_SECRET",
+        "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/RESEND_API_KEY",
+        "arn:aws:ssm:us-east-1:975049954782:parameter/flolabs-chronos/EMAIL_FROM"
+      ]
+    },
+    {
+      "Sid": "PassAppRunnerEcrAccessRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole"
+      ],
+      "Resource": "arn:aws:iam::975049954782:role/flolabs-chronos-apprunner-ecr-access-role"
+    }
+  ]
+}

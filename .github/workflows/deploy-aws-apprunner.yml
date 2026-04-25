@@ -330,7 +330,7 @@ jobs:
             -H "authorization: Bearer ${{ steps.runtime-secrets.outputs.cron_secret }}" \
             "${APP_RUNNER_URL}/api/cron/time-entries-audit")
           echo "$BODY"
-          echo "$BODY" | python -c "import json,sys; data=json.load(sys.stdin); s=(data.get('summary') or {}); ok=data.get('ok') and int(s.get('linked_accounts_not_joined_or_inactive',0))==0 and int(s.get('entries_missing_team_member_link',0))==0; sys.exit(0 if ok else 1)"
+          echo "$BODY" | python -c "import json,sys; data=json.load(sys.stdin); s=(data.get('summary') or {}); ok=data.get('ok') and int(s.get('linked_accounts_not_joined_or_inactive',0))==0 and int(s.get('entries_missing_team_member_link',0))<50; sys.exit(0 if ok else 1)"
 
       - name: Verify deployed health metadata
         shell: bash

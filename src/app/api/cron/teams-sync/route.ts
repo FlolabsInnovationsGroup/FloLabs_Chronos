@@ -77,9 +77,9 @@ export async function GET(req: Request) {
 
   try {
     const config = await getNotionConfig();
-    const notionApiKey = process.env.NOTION_API_KEY || config.notionApiKey;
-    const teamsDbId = process.env.NOTION_TEAMS_DB_ID || config.notionTeamsDbId;
-    const teamMembersDbId = process.env.NOTION_TEAM_MEMBERS_DB_ID || config.notionTeamMembersDbId;
+    const notionApiKey = config.notionApiKey;
+    const teamsDbId = config.notionTeamsDbId;
+    const teamMembersDbId = config.notionTeamMembersDbId;
     if (!notionApiKey || !teamsDbId || !teamMembersDbId) {
       return NextResponse.json({ error: "Notion Teams DB not configured" }, { status: 503 });
     }

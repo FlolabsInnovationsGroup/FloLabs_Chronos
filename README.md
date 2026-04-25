@@ -14,6 +14,8 @@ Internal time-tracking and team-management app for FloLabs.
 
 Production runtime is **AWS** (App Runner + RDS + ElastiCache). **Vercel/Neon are legacy** references only.
 
+Chronos now serves as the shared account identity backend for Hephaestus International (same `users` / `user_email_aliases` / `applicants` model and shared `DATABASE_URL` runtime source on AWS SSM).
+
 ## Core functionality
 
 - Live timer tracking with Redis-backed active timers

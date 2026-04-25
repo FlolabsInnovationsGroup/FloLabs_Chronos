@@ -1,7 +1,7 @@
 export type Role = "admin" | "team_lead" | "member" | "hr";
 
 /** Linked `applicants.status` for Chronos users shown on the Users page (joined pipeline). */
-export type ApplicantProgramStatus = "active" | "graduated" | "terminated";
+export type ApplicantProgramStatus = "joined" | "graduated" | "terminated";
 
 export interface User {
   id: string;

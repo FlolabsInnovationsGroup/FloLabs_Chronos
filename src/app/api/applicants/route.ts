@@ -60,6 +60,99 @@ function mergeRoleHistory(input: {
   };
 }
 
+function toOptionalString(value: unknown): string | null {
+  const normalized = String(value ?? '').trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function mergePropertyHistory(existingRawData: unknown, incomingRawData: unknown) {
+  const existingObject =
+    existingRawData && typeof existingRawData === 'object'
+      ? (existingRawData as Record<string, unknown>)
+      : {};
+  const incomingObject =
+    incomingRawData && typeof incomingRawData === 'object'
+      ? (incomingRawData as Record<string, unknown>)
+      : {};
+  return { ...existingObject, ...incomingObject };
+}
+
+function deriveHubspotPropertyPatch(body: Record<string, unknown>, normalizedEmail: string, name: string) {
+  const nowIso = new Date().toISOString();
+  const splitName = name.split(/\s+/).filter(Boolean);
+  const firstName = toOptionalString(body.firstName) ?? splitName[0] ?? null;
+  const lastName =
+    toOptionalString(body.lastName) ??
+    (splitName.length > 1 ? splitName.slice(1).join(' ') : null);
+  const stage = toOptionalString(body.stage);
+  const status = toOptionalString(body.status);
+  const source = toOptionalString(body.source);
+  const roleAppliedFor = toOptionalString(body.roleAppliedFor);
+
+  const statusLike = status?.toLowerCase() ?? '';
+  const stageLike = stage?.toLowerCase() ?? '';
+  const lifecycleLike =
+    stage ??
+    (statusLike === 'joined' || statusLike === 'signed'
+      ? 'Signed Paid'
+      : statusLike === 'rejected'
+        ? 'Rejected by us'
+        : null);
+
+  return {
+    'Record ID': toOptionalString(body.hubspotRecordId) ?? toOptionalString(body.externalApplicantId),
+    Email: normalizedEmail,
+    'First Name': firstName,
+    'Last Name': lastName,
+    'First and Last Name': name,
+    'Phone Number': toOptionalString(body.phone),
+    'Mobile Phone Number': toOptionalString(body.phone),
+    'WhatsApp Phone Number': toOptionalString(body.phone),
+    'Country/Region': toOptionalString(body.country),
+    'State/Region': toOptionalString(body.stateRegion),
+    City: toOptionalString(body.city),
+    'Date of birth': toOptionalString(body.dateOfBirth),
+    Gender: toOptionalString(body.gender),
+    'LinkedIn URL': toOptionalString(body.linkedinUrl),
+    Education: toOptionalString(body.education),
+    'Field of study': toOptionalString(body.fieldOfStudy),
+    'Current role': toOptionalString(body.currentJobTitle) ?? toOptionalString(body.currentRole),
+    'Company Name': toOptionalString(body.companyName),
+    'Job Title': roleAppliedFor,
+    Source: source,
+    'Record source': source,
+    'Lifecycle Stage': lifecycleLike,
+    'Lead Status': toOptionalString(body.hubspotLeadStatus) ?? lifecycleLike,
+    'Status Flomad': toOptionalString(body.hubspotStatus) ?? status,
+    'Last Activity Date': toOptionalString(body.lastWebsiteVisit) ?? nowIso,
+    'Last Modified Date': toOptionalString(body.hubspotLastModifiedAt) ?? nowIso,
+    'Date of application': toOptionalString(body.joinedAt),
+    'Create Date': toOptionalString(body.joinedAt),
+    'Contact owner': toOptionalString(body.hubspotOwner),
+    'Additional email addresses': Array.isArray((body.hubspotRawData as { emails?: unknown } | null)?.emails)
+      ? ((body.hubspotRawData as { emails?: unknown[] }).emails ?? [])
+          .map((entry) => String(entry ?? '').trim().toLowerCase())
+          .filter(Boolean)
+          .join(', ')
+      : null,
+    'HubSpot last sync (Chronos)': nowIso,
+    'HubSpot stage key (Chronos)': stageLike || null,
+  } as Record<string, unknown>;
+}
+
+function normalizeApplicantStage(input: unknown): string {
+  const value = String(input ?? '').trim().toLowerCase();
+  if (!value) return 'application_submitted';
+  return value === 'active' ? 'joined' : value;
+}
+
+function normalizeApplicantStatus(input: unknown): string {
+  const value = String(input ?? '').trim().toLowerCase();
+  if (!value) return 'joined';
+  if (value === 'active' || value === 'signed') return 'joined';
+  return value;
+}
+
 export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user && !hasServiceAccess(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -134,6 +227,8 @@ export async function POST(request: Request) {
   const body = await request.json();
   const normalizedEmail = String(body.email ?? '').toLowerCase();
   const name = String(body.name ?? `${body.firstName ?? ''} ${body.lastName ?? ''}`.trim());
+  const normalizedStage = normalizeApplicantStage(body.stage);
+  const normalizedStatus = normalizeApplicantStatus(body.status);
   if (!body.email || !name) {
     return NextResponse.json({ error: 'email and name are required' }, { status: 400 });
   }
@@ -146,12 +241,18 @@ export async function POST(request: Request) {
     .from(applicants)
     .where(eq(applicants.email, normalizedEmail))
     .limit(1);
-  const mergedRawData = mergeRoleHistory({
+  const mergedRoleHistory = mergeRoleHistory({
     incomingRole: String(body.roleAppliedFor ?? ''),
     existingRole: existingApplicant?.roleAppliedFor ?? null,
     existingRawData: existingApplicant?.hubspotRawData ?? null,
     incomingRawData: body.hubspotRawData ?? body.rawData ?? null,
   });
+  const mergedRawDataBase = mergePropertyHistory(existingApplicant?.hubspotRawData ?? null, mergedRoleHistory);
+  const derivedPatch = deriveHubspotPropertyPatch(body as Record<string, unknown>, normalizedEmail, name);
+  const mergedRawData = {
+    ...mergedRawDataBase,
+    ...derivedPatch,
+  };
 
   const inserted = await db
     .insert(applicants)
@@ -171,8 +272,8 @@ export async function POST(request: Request) {
       currentJobTitle: body.currentJobTitle ?? body.currentRole ?? null,
       companyName: body.companyName ?? null,
       roleAppliedFor: body.roleAppliedFor ?? null,
-      stage: body.stage ?? 'application_submitted',
-      status: body.status ?? 'active',
+      stage: normalizedStage,
+      status: normalizedStatus,
       joinedAt: body.joinedAt ? new Date(body.joinedAt) : new Date(),
       lastWebsiteVisit: body.lastWebsiteVisit ? new Date(body.lastWebsiteVisit) : null,
       source: body.source ?? null,
@@ -209,8 +310,8 @@ export async function POST(request: Request) {
         currentJobTitle: body.currentJobTitle ?? body.currentRole ?? null,
         companyName: body.companyName ?? null,
         roleAppliedFor: body.roleAppliedFor ?? null,
-        stage: body.stage ?? 'application_submitted',
-        status: body.status ?? 'active',
+        stage: normalizedStage,
+        status: normalizedStatus,
         joinedAt: body.joinedAt ? new Date(body.joinedAt) : new Date(),
         lastWebsiteVisit: body.lastWebsiteVisit ? new Date(body.lastWebsiteVisit) : null,
         source: body.source ?? null,
@@ -234,10 +335,10 @@ export async function POST(request: Request) {
     .returning();
 
   const applicant = inserted[0];
-  const normalizedStage = String(body.stage ?? applicant.stage ?? '').trim().toLowerCase();
-  const normalizedStatus = String(body.status ?? applicant.status ?? '').trim().toLowerCase();
+  const accessStage = String(normalizedStage || applicant.stage || '').trim().toLowerCase();
+  const accessStatus = String(normalizedStatus || applicant.status || '').trim().toLowerCase();
   const shouldProvisionChronosUser = true;
-  const shouldEnableChronosAccess = normalizedStage === 'joined' || normalizedStatus === 'joined' || normalizedStatus === 'active' || normalizedStatus === 'signed';
+  const shouldEnableChronosAccess = accessStage === 'joined' || accessStatus === 'joined';
 
   if (shouldProvisionChronosUser) {
     try {

@@ -1,56 +1,13 @@
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-
-type TestUserEntry = { email?: string; emails?: string[]; password: string; role: string };
-
-function extractEmails(user: TestUserEntry): string[] {
-  const direct = typeof user.email === "string" ? [user.email] : [];
-  const fromList = Array.isArray(user.emails) ? user.emails : [];
-  const normalized = [...direct, ...fromList]
-    .flatMap((value) => value.split(","))
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-  return [...new Set(normalized)];
-}
-
-function loadTestUsers(): TestUserEntry[] {
-  const path = join(process.cwd(), "test_assets", "test_users.json");
-  if (!existsSync(path)) {
-    return [];
-  }
-  const raw = readFileSync(path, "utf8");
-  const data = JSON.parse(raw) as { users?: TestUserEntry[] };
-  return Array.isArray(data.users) ? data.users : [];
-}
+import { extractEmails, loadTestUsers, signInProduction } from "./lib/production-auth";
 
 async function signIn(page: import("@playwright/test").Page, email: string, password: string) {
-  await page.goto("/login", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("textbox", { name: "Email" })).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
-  await page.getByRole("textbox", { name: "Email" }).fill(email);
-  await page.getByRole("textbox", { name: "Password" }).fill(password);
-  await page.getByRole("button", { name: "Sign In" }).click();
-
-  const outcome = await Promise.race([
-    page.waitForURL(/\/timer/, { timeout: 90_000 }).then(() => "ok" as const),
-    page
-      .getByText("Invalid email or password.")
-      .waitFor({ state: "visible", timeout: 90_000 })
-      .then(() => "bad_creds" as const),
-    page
-      .getByText("Something went wrong. Please try again.")
-      .waitFor({ state: "visible", timeout: 90_000 })
-      .then(() => "error" as const),
-  ]);
-
-  if (outcome === "bad_creds") {
+  try {
+    await signInProduction(page, email, password);
+  } catch (e) {
     throw new Error(
-      `Sign-in failed (invalid credentials) for ${email}. Update passwords in test_assets/test_users.json to match production, or set PLAYWRIGHT_BASE_URL to the deployment where these accounts exist.`
+      `${e instanceof Error ? e.message : String(e)} Update test_assets/test_users.json or set PLAYWRIGHT_BASE_URL to the deployment where these accounts exist.`
     );
-  }
-  if (outcome === "error") {
-    throw new Error(`Sign-in failed (server error) for ${email}.`);
   }
 }
 

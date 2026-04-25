@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-SOURCE = Path(r'C:\Users\olire\Documents\workspace_python\FloLabs_Hermes\all-contacts.csv')
+SOURCE = Path(r'C:\Users\olire\Documents\workspace_python\FloLabs_Hermes\old_workflow_assets\all-contacts_2026-04-12.csv')
 OUT = Path(r'C:\Users\olire\Documents\workspace_python\FloLabs_Chronos\scripts\hubspot-import-data.jsonl')
 
 STAGE_MAP = {
@@ -23,6 +23,12 @@ def clean(value):
         return None
     value = str(value).replace('\x00', '').strip()
     return value or None
+
+def preserve_column_value(value):
+    if value is None:
+        return None
+    # Preserve full column coverage in hubspotRawData while removing null bytes.
+    return str(value).replace('\x00', '')
 
 def parse_date(value):
     value = clean(value)
@@ -77,7 +83,8 @@ with SOURCE.open('r', encoding='utf-8-sig', newline='') as f, OUT.open('w', enco
             'hubspotLifecycleStage': clean(row.get('Lifecycle Stage')),
             'hubspotLeadStatus': clean(row.get('Lead Status')),
             'hubspotLastModifiedAt': parse_date(row.get('Last Modified Date')),
-            'hubspotRawData': {k: v for k, v in row.items() if clean(v) is not None},
+            # Keep every CSV column key (including empty values) for full-fidelity backup.
+            'hubspotRawData': {k: preserve_column_value(v) for k, v in row.items()},
             'syncedToTeamMembers': False,
         }
         out.write(json.dumps(payload, ensure_ascii=False) + '\n')

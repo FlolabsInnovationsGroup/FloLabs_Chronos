@@ -37,7 +37,7 @@ const TEAM_MEMBER_DELETE_EXIT_OPTIONS = [
 ];
 
 const APPLICANT_PROGRAM_STATUS_OPTIONS: { value: ApplicantProgramStatus; label: string }[] = [
-  { value: "active", label: "Active (in program)" },
+  { value: "joined", label: "Joined (in program)" },
   { value: "graduated", label: "Graduated" },
   { value: "terminated", label: "Terminated" },
 ];
@@ -108,7 +108,7 @@ export default function TeamPage() {
   const [editTeamIds, setEditTeamIds] = useState<string[]>([]);
   const [editIsActive, setEditIsActive] = useState(true);
   const [editWeeklyTarget, setEditWeeklyTarget] = useState(40);
-  const [editApplicantProgramStatus, setEditApplicantProgramStatus] = useState<ApplicantProgramStatus>("active");
+  const [editApplicantProgramStatus, setEditApplicantProgramStatus] = useState<ApplicantProgramStatus>("joined");
   const [editAlternateEmails, setEditAlternateEmails] = useState("");
 
   const [sortKey, setSortKey] = useState<SortKey>("name");
@@ -225,7 +225,7 @@ export default function TeamPage() {
     setEditWeeklyTarget(editingUser.weeklyTargetHours ?? 40);
     const ps = editingUser.applicantProgramStatus;
     setEditApplicantProgramStatus(
-      ps === "graduated" || ps === "terminated" ? ps : "active",
+      ps === "graduated" || ps === "terminated" ? ps : "joined",
     );
     setEditAlternateEmails(
       Array.from(new Set([editingUser.email, ...(editingUser.alternateEmails ?? [])]))
@@ -792,7 +792,7 @@ export default function TeamPage() {
                                 ? "Graduated"
                                 : user.applicantProgramStatus === "terminated"
                                   ? "Terminated"
-                                  : "Active"}
+                                  : "Joined"}
                             </Badge>
                           </td>
                           <td className={compactBodyCellClass}>
@@ -923,7 +923,7 @@ export default function TeamPage() {
                 options={APPLICANT_PROGRAM_STATUS_OPTIONS}
                 value={editApplicantProgramStatus}
                 onChange={(v) => {
-                  if (v === "active" || v === "graduated" || v === "terminated") {
+                  if (v === "joined" || v === "graduated" || v === "terminated") {
                     setEditApplicantProgramStatus(v);
                   }
                 }}

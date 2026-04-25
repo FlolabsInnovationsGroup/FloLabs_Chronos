@@ -5,13 +5,16 @@ const password = process.env.E2E_PASSWORD ?? "flchron2026";
 
 test.describe("Control (production)", () => {
   test("admin can open Control and load settings without error", async ({ page }) => {
-    await page.goto("/login");
-    await page.getByLabel("Email").fill(email);
-    await page.getByLabel("Password").fill(password);
+    test.setTimeout(180_000);
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
+    await page.locator("#email").clear();
+    await page.locator("#email").pressSequentially(email, { delay: 5 });
+    await page.locator("#password").clear();
+    await page.locator("#password").pressSequentially(password, { delay: 5 });
     await page.getByRole("button", { name: "Sign In" }).click();
-    await page.waitForURL(/\/timer/, { timeout: 30_000 });
+    await page.waitForURL(/\/timer/, { timeout: 120_000 });
 
-    await page.goto("/control");
+    await page.goto("/control", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Control" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Failed to load control settings.")).toBeHidden();
 

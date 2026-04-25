@@ -14,6 +14,7 @@ import {
   notifyEntryDeleted,
   resolveDiscordWebhookForTeamMember,
 } from "@/lib/discord";
+import { getNotionConfig } from "@/lib/app-config";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -28,7 +29,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "DB not available" }, { status: 503 });
   }
 
-  if (!process.env.NOTION_API_KEY || !process.env.NOTION_DATABASE_ID) {
+  const notionConfig = await getNotionConfig();
+  if (!notionConfig.notionApiKey || !notionConfig.notionDatabaseId) {
     return NextResponse.json({ error: "Notion not configured" }, { status: 503 });
   }
 
@@ -177,7 +179,7 @@ export async function GET(req: Request) {
     }
   }
 
-  if (process.env.NOTION_DATABASE_ID) {
+  if (notionConfig.notionDatabaseId) {
     try {
       const notionPages = await queryNotionEntriesWindow(360);
       const notionEntryIds = notionPages
@@ -202,7 +204,7 @@ export async function GET(req: Request) {
 
             const pageRes = await fetch(`https://api.notion.com/v1/pages/${page.notionPageId}`, {
               headers: {
-                Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
+                Authorization: `Bearer ${notionConfig.notionApiKey}`,
                 "Content-Type": "application/json",
                 "Notion-Version": "2022-06-28",
               },

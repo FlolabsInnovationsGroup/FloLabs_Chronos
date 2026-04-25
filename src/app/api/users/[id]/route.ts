@@ -40,7 +40,7 @@ const updateSchema = z.object({
   notifyOnStop: z.boolean().optional(),
   dailySummary: z.boolean().optional(),
   /** Updates linked `applicants.status` rows for this Chronos user (admin / HR only). */
-  applicantProgramStatus: z.enum(["active", "graduated", "terminated"]).optional(),
+  applicantProgramStatus: z.enum(["joined", "graduated", "terminated"]).optional(),
   alternateEmails: z.array(z.string().email()).optional(),
 });
 

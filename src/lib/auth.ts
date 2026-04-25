@@ -11,7 +11,7 @@ const loginSchema = z.object({
 
 function normalizeApplicantStatus(input: string | null | undefined): ApplicantProgramStatus | null {
   const value = String(input ?? "").trim().toLowerCase();
-  if (value === "active") return "active";
+  if (value === "active" || value === "joined" || value === "signed") return "joined";
   if (value === "graduated") return "graduated";
   if (value === "terminated") return "terminated";
   return null;

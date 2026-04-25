@@ -185,7 +185,7 @@ export async function GET(req: Request) {
       const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const notionEntryIds = notionPages
         .map((p) => p.entryId)
-        .filter((id): id is string => Boolean(id) && UUID_RE.test(id));
+        .filter((id): id is string => typeof id === "string" && UUID_RE.test(id));
 
       if (notionEntryIds.length > 0) {
         const existing = await db

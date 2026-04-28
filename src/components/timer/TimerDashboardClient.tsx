@@ -31,7 +31,7 @@ export function TimerDashboardClient({
 }: TimerDashboardClientProps) {
   const { data: session } = useSession();
   const { activeTimer, start, stop } = useTimer();
-  const userId = session?.user.id;
+  const userId = session?.user.chronosUserId ?? session?.user.id;
 
   const [weekEntries, setWeekEntries] = useState<TimeEntry[]>(initialWeekEntries);
   const [recentEntries, setRecentEntries] = useState<TimeEntry[]>(initialRecentEntries);

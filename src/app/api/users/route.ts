@@ -6,9 +6,27 @@ import { db } from "@/lib/db";
 import { applicants, projects, timeEntries, userEmailAliases, users as usersTable } from "@/lib/db/schema";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { ActiveTimer, ApplicantProgramStatus } from "@/types";
-import bcrypt from "bcryptjs";
-import { randomBytes } from "crypto";
 import { isAdminLikeRole } from "@/lib/role-utils";
+
+async function withTimeout<T>(label: string, promise: Promise<T>, fallback: T, timeoutMs = 1500): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise.catch((error) => {
+        console.error(`[api/users] ${label} failed`, error);
+        return fallback;
+      }),
+      new Promise<T>((resolve) => {
+        timeout = setTimeout(() => {
+          console.warn(`[api/users] ${label} timed out after ${timeoutMs}ms; continuing without it`);
+          resolve(fallback);
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 export async function GET() {
   try {
@@ -29,80 +47,6 @@ export async function GET() {
     }
 
     let rows: Awaited<ReturnType<typeof getAccessibleUsers>> = [];
-    if (db) {
-      // Ensure every applicant already has a Chronos user account, with access gated only by applicant status.
-      // Multi-pass + bounded batches so more rows link per request without timing out.
-      const provisionableWhere = sql`${applicants.email} is not null and btrim(${applicants.email}) <> ''`;
-      const generatedPasswordHash = await bcrypt.hash(randomBytes(24).toString("hex"), 12);
-      const PROVISION_PER_PASS = 250;
-      const MAX_PASSES = 3;
-      for (let pass = 0; pass < MAX_PASSES; pass++) {
-        const missingJoinedApplicants = await db
-          .select({
-            id: applicants.id,
-            email: applicants.email,
-            name: applicants.name,
-          })
-          .from(applicants)
-          .where(and(provisionableWhere, isNull(applicants.chronosUserId)))
-          .limit(PROVISION_PER_PASS);
-        if (missingJoinedApplicants.length === 0) break;
-        for (const applicant of missingJoinedApplicants) {
-          try {
-            const normalizedApplicantEmail = applicant.email?.trim().toLowerCase();
-            if (!normalizedApplicantEmail) {
-              continue;
-            }
-            const [existingUser] = await db
-              .select({ id: usersTable.id, role: usersTable.role })
-              .from(usersTable)
-              .where(sql`lower(${usersTable.email}) = ${normalizedApplicantEmail}`)
-              .limit(1);
-            let userId = existingUser?.id ?? null;
-            if (!userId) {
-              try {
-                const [createdUser] = await db
-                  .insert(usersTable)
-                  .values({
-                    email: normalizedApplicantEmail,
-                    name: applicant.name?.trim() || normalizedApplicantEmail,
-                    password: generatedPasswordHash,
-                    role: "member",
-                    isActive: false,
-                  })
-                  .returning();
-                userId = createdUser?.id ?? null;
-              } catch {
-                const [retryUser] = await db
-                  .select({ id: usersTable.id })
-                  .from(usersTable)
-                  .where(sql`lower(${usersTable.email}) = ${normalizedApplicantEmail}`)
-                  .limit(1);
-                userId = retryUser?.id ?? null;
-              }
-            }
-            if (!userId) continue;
-            try {
-              await db
-                .update(applicants)
-                .set({ chronosUserId: userId, updatedAt: new Date() })
-                .where(sql`${applicants.id} = ${applicant.id}`);
-            } catch {
-              await db
-                .update(applicants)
-                .set({ chronosUserId: userId, updatedAt: new Date() })
-                .where(sql`${applicants.id} = ${applicant.id}`);
-            }
-          } catch (error) {
-            console.error("[api/users] applicant auto-provision skipped", {
-              applicantId: applicant.id,
-              error,
-            });
-            continue;
-          }
-        }
-      }
-    }
     try {
       if (db) {
         if (effectiveElevated) {
@@ -153,7 +97,11 @@ export async function GET() {
       }
     >();
 
-  const activeTimers: Record<string, ActiveTimer> = await getActiveTimersForUserIds(rows.map((r) => r.id)).catch(() => ({}));
+  const activeTimers: Record<string, ActiveTimer> = await withTimeout(
+    "active timer lookup",
+    getActiveTimersForUserIds(rows.map((r) => r.id)),
+    {},
+  );
   const activeUserIds = Object.keys(activeTimers);
 
   /** Running Postgres row may still have project_id when Redis timer predates projectName or projectId sync. */

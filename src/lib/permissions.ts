@@ -1,7 +1,7 @@
 import { eq, inArray, isNotNull } from "drizzle-orm";
 import type { Role, Team } from "@/types";
 import { db } from "@/lib/db";
-import { teamMemberships, teams, users } from "@/lib/db/schema";
+import { applicants, teamMemberships, teams, users } from "@/lib/db/schema";
 import { isAdminLikeRole } from "@/lib/role-utils";
 import { resolveChronosUserIdForSessionUser } from "@/lib/chronos-session";
 
@@ -88,8 +88,19 @@ export async function getAccessibleUserIds(user: SessionUserLike): Promise<strin
     .from(teamMemberships)
     .where(inArray(teamMemberships.teamId, teamIds));
 
-  const ids = rows.map((row) => row.id);
-  return ids.length > 0 ? ids : [ownerId];
+  const ids = new Set(rows.map((row) => row.id));
+
+  // FloLabs identity is canonical in `applicants`; some joined members/team leads do not
+  // have `team_memberships` rows yet. Include applicant-linked Chronos users by applicant team.
+  const applicantRows = await db
+    .selectDistinct({ id: applicants.chronosUserId })
+    .from(applicants)
+    .where(inArray(applicants.teamId, teamIds));
+  for (const row of applicantRows) {
+    if (row.id) ids.add(row.id);
+  }
+
+  return ids.size > 0 ? [...ids] : [ownerId];
 }
 
 export async function canAccessUser(user: SessionUserLike, targetUserId: string): Promise<boolean> {

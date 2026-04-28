@@ -8,7 +8,7 @@ import { z } from "zod";
 import { getAccessibleUserIds } from "@/lib/permissions";
 import { syncAndNotifyEntry } from "@/lib/entry-lifecycle";
 import { setNotionLinkedTaskInProgressOnStop } from "@/lib/notion";
-import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser, resolveChronosUserIdForSessionUser } from "@/lib/chronos-session";
 import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 import { chronosEntryOwnerDisplayMap } from "@/lib/chronos-user-notion";
 
@@ -42,20 +42,29 @@ export async function GET(req: Request) {
   const limit = parseInt(url.searchParams.get("limit") ?? "50");
   const requestedUserId = url.searchParams.get("userId");
   const accessibleUserIds = await getAccessibleUserIds(session.user);
-  const ownerChronosUserId = chronosUserIdFromSessionUser(session.user);
-  const linkedApplicantId = applicantIdForSessionLinkedUser(session.user);
+  const ownerChronosUserId =
+    chronosUserIdFromSessionUser(session.user) ?? (await resolveChronosUserIdForSessionUser(session.user));
+  const linkedApplicantId =
+    applicantIdForSessionLinkedUser(session.user) ??
+    (ownerChronosUserId && session.user.id !== ownerChronosUserId ? session.user.id : null);
+  const requestedSelf = Boolean(
+    requestedUserId &&
+      ownerChronosUserId &&
+      (requestedUserId === ownerChronosUserId || requestedUserId === linkedApplicantId)
+  );
+  const effectiveRequestedUserId = requestedSelf ? ownerChronosUserId : requestedUserId;
 
   const conditions: SQL[] = [isNotNull(timeEntries.stoppedAt)];
 
   if (accessibleUserIds !== null) {
-    if (requestedUserId && !accessibleUserIds.includes(requestedUserId)) {
+    if (effectiveRequestedUserId && !accessibleUserIds.includes(effectiveRequestedUserId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    if (requestedUserId) {
+    if (effectiveRequestedUserId) {
       conditions.push(
-        ownerChronosUserId && requestedUserId === ownerChronosUserId
+        requestedSelf && ownerChronosUserId
           ? whereTimeEntriesForLinkedUser(ownerChronosUserId, linkedApplicantId)
-          : eq(timeEntries.userId, requestedUserId)
+          : eq(timeEntries.userId, effectiveRequestedUserId)
       );
     } else if (ownerChronosUserId && accessibleUserIds.length === 1 && accessibleUserIds[0] === ownerChronosUserId) {
       conditions.push(whereTimeEntriesForLinkedUser(ownerChronosUserId, linkedApplicantId));
@@ -64,11 +73,11 @@ export async function GET(req: Request) {
     } else {
       conditions.push(inArray(timeEntries.userId, accessibleUserIds));
     }
-  } else if (requestedUserId) {
+  } else if (effectiveRequestedUserId) {
     conditions.push(
-      ownerChronosUserId && requestedUserId === ownerChronosUserId
+      requestedSelf && ownerChronosUserId
         ? whereTimeEntriesForLinkedUser(ownerChronosUserId, linkedApplicantId)
-        : eq(timeEntries.userId, requestedUserId)
+        : eq(timeEntries.userId, effectiveRequestedUserId)
     );
   }
 

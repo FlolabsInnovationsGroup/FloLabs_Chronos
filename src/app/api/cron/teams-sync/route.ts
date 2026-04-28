@@ -87,6 +87,10 @@ function notionPageEmails(page: NotionPage): string[] {
   );
 }
 
+function textArraySql(values: string[]) {
+  return sql`ARRAY[${sql.join(values.map((value) => sql`${value}`), sql`, `)}]::text[]`;
+}
+
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -179,6 +183,7 @@ export async function GET(req: Request) {
       const normalizedRole = normalizeChronosRole(page.properties["Role"]?.select?.name);
       const emails = notionPageEmails(page);
       if (emails.length === 0) continue;
+      const emailArray = textArraySql(emails);
 
       const applicantResult = await db.execute(sql`
         UPDATE applicants a
@@ -190,11 +195,11 @@ export async function GET(req: Request) {
           is_active = true,
           updated_at = now()
         WHERE a.notion_team_member_id = ${page.id}
-          OR lower(a.email) = ANY(${emails})
+          OR lower(a.email) = ANY(${emailArray})
           OR EXISTS (
             SELECT 1
             FROM jsonb_array_elements_text(COALESCE(a.hubspot_raw_data->'emails', '[]'::jsonb)) AS e(email)
-            WHERE lower(e.email) = ANY(${emails})
+            WHERE lower(e.email) = ANY(${emailArray})
           )
       `);
 
@@ -206,12 +211,12 @@ export async function GET(req: Request) {
           is_active = true,
           updated_at = now()
         WHERE u.notion_team_member_id = ${page.id}
-          OR lower(u.email) = ANY(${emails})
+          OR lower(u.email) = ANY(${emailArray})
           OR EXISTS (
             SELECT 1
             FROM user_email_aliases ua
             WHERE ua.user_id = u.id
-              AND lower(ua.email) = ANY(${emails})
+              AND lower(ua.email) = ANY(${emailArray})
           )
           OR EXISTS (
             SELECT 1
@@ -219,11 +224,11 @@ export async function GET(req: Request) {
             WHERE a.chronos_user_id = u.id
               AND (
                 a.notion_team_member_id = ${page.id}
-                OR lower(a.email) = ANY(${emails})
+                OR lower(a.email) = ANY(${emailArray})
                 OR EXISTS (
                   SELECT 1
                   FROM jsonb_array_elements_text(COALESCE(a.hubspot_raw_data->'emails', '[]'::jsonb)) AS e(email)
-                  WHERE lower(e.email) = ANY(${emails})
+                  WHERE lower(e.email) = ANY(${emailArray})
                 )
               )
           )

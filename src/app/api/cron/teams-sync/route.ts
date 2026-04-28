@@ -106,6 +106,7 @@ export async function GET(req: Request) {
   let activeAccountRolesSyncedFromNotion = 0;
   const errors: string[] = [];
   const seenNotionPageIds: string[] = [];
+  const shouldRefreshNotionTeamMembers = new URL(req.url).searchParams.get("refreshNotion") === "1";
 
   try {
     const config = await getNotionConfig();
@@ -293,44 +294,49 @@ export async function GET(req: Request) {
     }
 
     // ── STEP 4: For linked applicants eligible for Team Members refresh, push canonical profile data to Notion ─
-    const joinedApplicants = await db
-      .select({
-        id: applicants.id,
-        email: applicants.email,
-        name: applicants.name,
-        stage: applicants.stage,
-        status: applicants.status,
-        teamId: applicants.teamId,
-        notionTeamMemberId: applicants.notionTeamMemberId,
-        isActive: applicants.isActive,
-        syncedToTeamMembers: applicants.syncedToTeamMembers,
-      })
-      .from(applicants)
-      .where(isNotNull(applicants.chronosUserId));
+    // This is intentionally opt-in. The deploy pipeline needs this endpoint to repair local
+    // Chronos links/roles from Notion quickly; pushing every joined applicant back to Notion
+    // can exceed App Runner/GitHub curl timeouts and is not required for that repair path.
+    if (shouldRefreshNotionTeamMembers) {
+      const joinedApplicants = await db
+        .select({
+          id: applicants.id,
+          email: applicants.email,
+          name: applicants.name,
+          stage: applicants.stage,
+          status: applicants.status,
+          teamId: applicants.teamId,
+          notionTeamMemberId: applicants.notionTeamMemberId,
+          isActive: applicants.isActive,
+          syncedToTeamMembers: applicants.syncedToTeamMembers,
+        })
+        .from(applicants)
+        .where(isNotNull(applicants.chronosUserId));
 
-    for (const applicant of joinedApplicants) {
-      const stage = applicant.stage?.toLowerCase() ?? "";
-      const status = applicant.status?.toLowerCase() ?? "";
-      const eligibleForRefresh = applicant.syncedToTeamMembers || applicant.isActive || stage === "joined" || stage === "chronos_synced" || status === "joined" || status === "active" || status === "signed";
-      if (!eligibleForRefresh) continue;
-      if (!applicant.notionTeamMemberId || !applicant.teamId) continue;
-      const notionTeamPageId = notionPageIdByTeamId.get(applicant.teamId);
-      if (!notionTeamPageId) continue;
+      for (const applicant of joinedApplicants) {
+        const stage = applicant.stage?.toLowerCase() ?? "";
+        const status = applicant.status?.toLowerCase() ?? "";
+        const eligibleForRefresh = applicant.syncedToTeamMembers || applicant.isActive || stage === "joined" || stage === "chronos_synced" || status === "joined" || status === "active" || status === "signed";
+        if (!eligibleForRefresh) continue;
+        if (!applicant.notionTeamMemberId || !applicant.teamId) continue;
+        const notionTeamPageId = notionPageIdByTeamId.get(applicant.teamId);
+        if (!notionTeamPageId) continue;
 
-      try {
-        await ensureTeamMemberPage({
-          email: applicant.email,
-          name: applicant.name,
-          notionTeamPageIds: [notionTeamPageId],
-          notionTeamMemberPageId: applicant.notionTeamMemberId,
-        });
-        await db
-          .update(applicants)
-          .set({ syncedToTeamMembers: true, updatedAt: new Date() })
-          .where(eq(applicants.id, applicant.id));
-        applicantsSyncedToTeamMembers++;
-      } catch (err) {
-        errors.push(`Applicant ${applicant.email} Team Member sync: ${err instanceof Error ? err.message : String(err)}`);
+        try {
+          await ensureTeamMemberPage({
+            email: applicant.email,
+            name: applicant.name,
+            notionTeamPageIds: [notionTeamPageId],
+            notionTeamMemberPageId: applicant.notionTeamMemberId,
+          });
+          await db
+            .update(applicants)
+            .set({ syncedToTeamMembers: true, updatedAt: new Date() })
+            .where(eq(applicants.id, applicant.id));
+          applicantsSyncedToTeamMembers++;
+        } catch (err) {
+          errors.push(`Applicant ${applicant.email} Team Member sync: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
     }
   } catch (err) {

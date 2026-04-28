@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { applicants, teamMemberships, teams, users } from "@/lib/db/schema";
-import { and, eq, isNotNull, notInArray } from "drizzle-orm";
+import { and, eq, isNotNull, notInArray, sql } from "drizzle-orm";
 import { createTeamSlug } from "@/lib/invitations";
 import { getNotionConfig } from "@/lib/app-config";
 import { ensureTeamMemberPage } from "@/lib/notion";
@@ -25,6 +25,7 @@ interface NotionProperty {
   title?: { plain_text: string }[];
   rich_text?: { plain_text: string }[];
   status?: { name: string };
+  select?: { name: string } | null;
   url?: string | null;
   email?: string | null;
   relation?: { id: string }[];
@@ -61,6 +62,31 @@ function getTitle(page: NotionPage): string {
   return "";
 }
 
+function normalizeChronosRole(input: string | null | undefined): string | null {
+  const value = String(input ?? "").trim().toLowerCase();
+  if (!value) return null;
+  if (value === "administrator" || value === "admin") return "admin";
+  if (value === "human resources" || value === "hr" || value === "human_resources") return "hr";
+  if (value === "team lead" || value === "team_lead" || value === "teamlead") return "team_lead";
+  return "member";
+}
+
+function splitNotionEmails(input: string | null | undefined): string[] {
+  return String(input ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => email.length > 0 && email.includes("@"));
+}
+
+function notionPageEmails(page: NotionPage): string[] {
+  return Array.from(
+    new Set([
+      ...splitNotionEmails(page.properties["Email"]?.email),
+      ...splitNotionEmails(page.properties["Personal Email"]?.email),
+    ])
+  );
+}
+
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -72,6 +98,8 @@ export async function GET(req: Request) {
   let pagesMissingInNotion = 0;
   let membershipsSynced = 0;
   let applicantsSyncedToTeamMembers = 0;
+  let activeAccountsLinkedFromNotion = 0;
+  let activeAccountRolesSyncedFromNotion = 0;
   const errors: string[] = [];
   const seenNotionPageIds: string[] = [];
 
@@ -136,6 +164,79 @@ export async function GET(req: Request) {
     const memberPageById = new Map<string, NotionPage>();
     for (const p of memberPages) {
       memberPageById.set(p.id, p);
+    }
+
+    // ── STEP 2b: Notion Team Members is the canonical FloLabs account source for
+    // operational status/role. Chronos stores enabled accounts as joined, so an
+    // Active Notion Team Member page must become joined + active locally and must
+    // mirror Role into both applicants and users. This keeps Admin/Team Lead
+    // visibility aligned with the current FloLabs directory instead of stale
+    // HubSpot/applicant defaults.
+    for (const page of memberPages) {
+      const notionStatus = page.properties["Status"]?.status?.name ?? null;
+      if (notionStatus !== "Active") continue;
+
+      const normalizedRole = normalizeChronosRole(page.properties["Role"]?.select?.name);
+      const emails = notionPageEmails(page);
+      if (emails.length === 0) continue;
+
+      const applicantResult = await db.execute(sql`
+        UPDATE applicants a
+        SET
+          notion_team_member_id = ${page.id},
+          status = 'joined',
+          stage = 'joined',
+          role = COALESCE(${normalizedRole}, a.role),
+          is_active = true,
+          updated_at = now()
+        WHERE a.notion_team_member_id = ${page.id}
+          OR lower(a.email) = ANY(${emails})
+          OR EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements_text(COALESCE(a.hubspot_raw_data->'emails', '[]'::jsonb)) AS e(email)
+            WHERE lower(e.email) = ANY(${emails})
+          )
+      `);
+
+      const userResult = await db.execute(sql`
+        UPDATE users u
+        SET
+          notion_team_member_id = ${page.id},
+          role = COALESCE(${normalizedRole}, u.role),
+          is_active = true,
+          updated_at = now()
+        WHERE u.notion_team_member_id = ${page.id}
+          OR lower(u.email) = ANY(${emails})
+          OR EXISTS (
+            SELECT 1
+            FROM user_email_aliases ua
+            WHERE ua.user_id = u.id
+              AND lower(ua.email) = ANY(${emails})
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM applicants a
+            WHERE a.chronos_user_id = u.id
+              AND (
+                a.notion_team_member_id = ${page.id}
+                OR lower(a.email) = ANY(${emails})
+                OR EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements_text(COALESCE(a.hubspot_raw_data->'emails', '[]'::jsonb)) AS e(email)
+                  WHERE lower(e.email) = ANY(${emails})
+                )
+              )
+          )
+      `);
+
+      const applicantRows = (applicantResult as unknown as { rowCount?: number; rowsAffected?: number }).rowCount ??
+        (applicantResult as unknown as { rowsAffected?: number }).rowsAffected ??
+        0;
+      const userRows = (userResult as unknown as { rowCount?: number; rowsAffected?: number }).rowCount ??
+        (userResult as unknown as { rowsAffected?: number }).rowsAffected ??
+        0;
+      activeAccountsLinkedFromNotion += applicantRows;
+      if (normalizedRole) activeAccountRolesSyncedFromNotion += applicantRows + userRows;
     }
 
     // ── STEP 3: Sync `Team` relation from each applicant's linked Team Member page ─
@@ -236,6 +337,8 @@ export async function GET(req: Request) {
     deactivated,
     usersSyncedFromNotion,
     applicantsSyncedToTeamMembers,
+    activeAccountsLinkedFromNotion,
+    activeAccountRolesSyncedFromNotion,
     pagesMissingInNotion,
     membershipsSynced,
     errors: errors.length > 0 ? errors : undefined,

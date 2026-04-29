@@ -43,6 +43,12 @@ The WSL browser dependency step is required when Chromium fails with missing sha
 Run the primary Chronos timer/session acceptance test:
 
 ```bash
+pnpm run test:e2e:session:live
+```
+
+Equivalent explicit command:
+
+```bash
 PLAYWRIGHT_BASE_URL=https://hcmsmnfq5q.us-east-1.awsapprunner.com \
   npx playwright test -c playwright.production.config.ts \
   e2e/session-lifecycle-production.spec.ts --project=chromium

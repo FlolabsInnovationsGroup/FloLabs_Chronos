@@ -16,6 +16,24 @@ type CommandClient = ReturnType<typeof createClient>;
 let commandClientPromise: Promise<CommandClient> | null = null;
 let subscriptionPromise: Promise<void> | null = null;
 let redisDisabled = false;
+const REDIS_COMMAND_TIMEOUT_MS = Number(process.env.REDIS_COMMAND_TIMEOUT_MS ?? 1500);
+
+async function withRedisTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`[redis] ${label} timed out after ${REDIS_COMMAND_TIMEOUT_MS}ms`)),
+          REDIS_COMMAND_TIMEOUT_MS
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 function getRedisClient() {
   if (!redisUrl || redisDisabled) return null;
@@ -35,11 +53,11 @@ function getRedisClient() {
 async function kvGet(key: string): Promise<string | null> {
   try {
     const client = getRedisClient();
-    if (client) return (await client).get(key);
+    if (client) return await withRedisTimeout((await withRedisTimeout(client, "connect")).get(key), "get");
   } catch {}
   if (isKvAvailable) {
     try {
-      return await kv.get<string>(key);
+      return await withRedisTimeout(kv.get<string>(key), "kv get");
     } catch (error) {
       console.error('[redis] kv get failed', error);
     }
@@ -51,13 +69,13 @@ async function kvSet(key: string, value: string): Promise<void> {
   try {
     const client = getRedisClient();
     if (client) {
-      await (await client).set(key, value);
+      await withRedisTimeout((await withRedisTimeout(client, "connect")).set(key, value), "set");
       return;
     }
   } catch {}
   if (isKvAvailable) {
     try {
-      await kv.set(key, value);
+      await withRedisTimeout(kv.set(key, value), "kv set");
       return;
     } catch (error) {
       console.error('[redis] kv set failed', error);
@@ -70,13 +88,13 @@ async function kvDel(key: string): Promise<void> {
   try {
     const client = getRedisClient();
     if (client) {
-      await (await client).del(key);
+      await withRedisTimeout((await withRedisTimeout(client, "connect")).del(key), "del");
       return;
     }
   } catch {}
   if (isKvAvailable) {
     try {
-      await kv.del(key);
+      await withRedisTimeout(kv.del(key), "kv del");
       return;
     } catch (error) {
       console.error('[redis] kv del failed', error);
@@ -88,11 +106,11 @@ async function kvDel(key: string): Promise<void> {
 async function kvKeys(pattern: string): Promise<string[]> {
   try {
     const client = getRedisClient();
-    if (client) return (await client).keys(pattern);
+    if (client) return await withRedisTimeout((await withRedisTimeout(client, "connect")).keys(pattern), "keys");
   } catch {}
   if (isKvAvailable) {
     try {
-      return await kv.keys(pattern);
+      return await withRedisTimeout(kv.keys(pattern), "kv keys");
     } catch (error) {
       console.error('[redis] kv keys failed', error);
     }
@@ -105,11 +123,11 @@ async function kvMGet(keys: string[]): Promise<Array<string | null>> {
   if (!keys.length) return [];
   try {
     const client = getRedisClient();
-    if (client) return (await client).mGet(keys);
+    if (client) return await withRedisTimeout((await withRedisTimeout(client, "connect")).mGet(keys), "mget");
   } catch {}
   if (isKvAvailable) {
     try {
-      return await kv.mget<string[]>(...keys);
+      return await withRedisTimeout(kv.mget<string[]>(...keys), "kv mget");
     } catch (error) {
       console.error('[redis] kv mget failed', error);
     }
@@ -204,7 +222,7 @@ export async function broadcastTimerEvent(event: object) {
   try {
     const client = getRedisClient();
     if (client) {
-      await (await client).publish(TIMER_CHANNEL, JSON.stringify(event));
+      await withRedisTimeout((await withRedisTimeout(client, "connect")).publish(TIMER_CHANNEL, JSON.stringify(event)), "publish");
     }
   } catch (error) {
     console.error('[redis] publish failed', error);

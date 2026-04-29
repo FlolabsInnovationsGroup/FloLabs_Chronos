@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { execSync } from "node:child_process";
 import { defineConfig, devices } from "@playwright/test";
 
 /**
@@ -45,6 +46,16 @@ const baseURL =
   parseNextAuthUrlFromEnvFile(".env.local") ||
   "https://athensgreecemarathon.com";
 
+function chromiumHostResolverArgs(url: string): string[] {
+  try {
+    const host = new URL(url).hostname;
+    const firstIp = execSync(`getent hosts ${host} | awk 'NR==1 {print $1}'`, { encoding: "utf8" }).trim();
+    return firstIp ? [`--host-resolver-rules=MAP ${host} ${firstIp}`] : [];
+  } catch {
+    return [];
+  }
+}
+
 export default defineConfig({
   testDir: "e2e",
   fullyParallel: false,
@@ -57,5 +68,13 @@ export default defineConfig({
     baseURL,
     trace: "on-first-retry",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        launchOptions: { args: chromiumHostResolverArgs(baseURL) },
+      },
+    },
+  ],
 });

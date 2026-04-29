@@ -113,7 +113,7 @@ export function TimerDashboardClient({
       <div className="grid grid-cols-12 gap-5 md:gap-8 min-w-0">
         <div className="col-span-12 md:col-span-7 flex min-w-0 flex-col gap-6 md:gap-8">
           <TimerDisplay />
-          <TimerControls projects={projects} tags={tags} />
+          <TimerControls projects={projects} tags={tags} onSessionStopped={refreshEntries} />
         </div>
 
         <div className="col-span-12 md:col-span-5 min-w-0 flex flex-col gap-5">

@@ -13,9 +13,10 @@ import type { Project, Tag } from "@/types";
 interface TimerControlsProps {
   projects: Project[];
   tags: Tag[];
+  onSessionStopped?: () => void | Promise<void>;
 }
 
-export function TimerControls({ projects, tags: initialTags }: TimerControlsProps) {
+export function TimerControls({ projects, tags: initialTags, onSessionStopped }: TimerControlsProps) {
   const { activeTimer, start, update, stop, loading } = useTimer();
 
   const [description, setDescription] = useState("");
@@ -218,6 +219,7 @@ export function TimerControls({ projects, tags: initialTags }: TimerControlsProp
         await handleDescriptionPersist(description, selectedTask);
       }
       await stop(false);
+      await onSessionStopped?.();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Failed to stop timer.");
     } finally {

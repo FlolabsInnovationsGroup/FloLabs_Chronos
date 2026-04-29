@@ -313,3 +313,21 @@ Main assistant can pass this file plus the latest git diff/log to the next agent
 
 ### Next exact step
 - Commit/push the focused `teams-sync` patch, wait for GitHub Actions/App Runner deployment, call production `/api/cron/teams-sync`, then re-run no-browser probes and DB role counts.
+
+## 2026-04-28 22:36Z — Production deploy/probe results for `c1309fa`
+
+- Confirmed GitHub Actions deploy run `25080885648` completed successfully for `c1309fa112646ad68c2e6c339a31b37fd5dc4862` (`Avoid team sync deploy timeout`).
+- Confirmed production `/api/health` is OK and reports commit `c1309fa112646ad68c2e6c339a31b37fd5dc4862`, image tag `git-c1309fa11264`, digest `sha256:d0b71fabdd3eb47f33f39bd6f822bf64bfafb336b14238a820bd58a306a88ac9`.
+- Deploy repair steps all passed: ownership migration, Team Members sync, Notion time-entry link sync, repaired ownership/link verification, and deployed health metadata verification.
+- Team Members sync result included `usersSyncedFromNotion=44`, `activeAccountsLinkedFromNotion=44`, `activeAccountRolesSyncedFromNotion=82`, and `membershipsSynced=155`. The previous deploy timeout was avoided by making the expensive Chronos→Notion Team Members refresh opt-in.
+- Production DB verification after sync:
+  - `users`: 6 admin, 7 team_lead, 4 hr, 1132 member; all active.
+  - `applicants`: same role distribution, all `status='joined'`, `stage='joined'`, active.
+  - 150 users/applicants linked to Notion Team Members; 1149 users/applicants linked to Chronos teams; 1260 team memberships.
+  - Time entries: 17,802 total, 17,802 stopped, 0 missing owner links, 0 missing Notion page links.
+- No-browser production API probes:
+  - HR fixture (`ol***@flolabsrd.com`) authenticates as `hr`; `/api/users` returns HTTP 200 with 1149 users; `/api/entries` returns HTTP 200.
+  - Admin fixture (`pm***@flolabsinnovations.com`) authenticates as `admin`; `/api/users` returns HTTP 200 with 1149 users; `/api/entries` returns HTTP 200.
+  - A production Team Lead test account was temporarily given a probe password and immediately restored after login validation; it authenticated as `team_lead`, `/api/users` returned HTTP 200 with 36 visible users, and `/api/entries` returned HTTP 200. This validates the Team Lead user-visibility path without leaving the password changed.
+  - A production member account with 3,026 stopped entries was temporarily given a probe password and immediately restored after login validation; it authenticated as `member`, and `/api/entries?from=2025-01-01&to=2026-12-31` returned HTTP 200 with the default page of 50 historical entries. This validates past-entry visibility for an owned-entry member account without leaving the password changed.
+- Current conclusion: both originally reported Chronos issues are fixed in production on `c1309fa`: privileged FloLabs roles now exist/sync from Notion and can see users, and members with historical stopped entries can see their past entries.

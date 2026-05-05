@@ -41,35 +41,9 @@ The **Hetzner + Plesk** subsection below describes a **possible** self-hosted la
 
 ---
 
-### Hetzner + Plesk target deployment architecture (2026-04)
+### Note on Hetzner + Plesk (aspirational only — not production)
 
-The current target production direction is to run Chronos on the existing Hetzner server that already hosts multiple domains through Plesk, while keeping Chronos operationally isolated from those hosted sites.
-
-Chosen deployment principles:
-- Plesk remains the control plane for domain management, TLS certificates, and reverse-proxy ingress.
-- Chronos runs as an isolated application stack on the same host, not as a shared in-Plesk app mixed with other hosted sites.
-- Chronos data services must stay logically separate from unrelated workloads already on the server.
-- Resource consumption should stay modest enough for a base Hetzner plan.
-
-Preferred stack shape for this host:
-- one isolated Chronos app service running under its own system user
-- one isolated Chronos Postgres service/database local to the host
-- one isolated Chronos Redis service local to the host
-- persistent storage dedicated to Chronos data
-- Plesk reverse proxy forwarding the Chronos domain/subdomain to the Chronos app's internal port
-
-Runtime preference on this specific host:
-- prefer host-level system services over Docker to minimize moving parts on a Plesk-managed multi-domain server where Docker is not already installed
-- keep Chronos bound to localhost or a private host port and expose it only through Plesk-managed ingress
-- use dedicated service names, data directories, and least-privilege users so Chronos remains operationally separate from the other hosted sites
-
-Operational rules for this topology:
-- do not disturb the 13 existing hosted domains
-- do not replace or bypass Plesk for ingress, certificates, or domain ownership
-- minimize host-level changes outside the isolated Chronos stack and the required runtime dependencies
-- keep backup/export procedures explicit for Chronos DB and KV data
-- prefer low-RAM, low-CPU defaults and only scale upward if real usage requires it
-- initial migration strategy should separate deployment from data reconstruction: bring up the app first, then reconstruct historical data from the Notion export and reconcile live state from the current production database if needed
+A Hetzner + Plesk self-hosted layout was explored as a future direction. **It is not the current production deployment.** AWS App Runner (see **System architecture (for agents)** above) is the canonical production runtime. If a Hetzner migration is revisited, update this section before treating it as operational guidance.
 
 ### Current Users Directory Architecture (2026-04)
 
@@ -362,10 +336,21 @@ CREATE TABLE users (
   notify_on_stop         BOOLEAN DEFAULT false,
   daily_summary          BOOLEAN DEFAULT false,
   weekly_target_hours    BIGINT DEFAULT 40,
+  profile_picture_url    TEXT,
   notion_team_member_id  TEXT,
   created_at             TIMESTAMPTZ DEFAULT now(),
   updated_at             TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE TABLE user_email_aliases (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email       TEXT NOT NULL UNIQUE,
+  is_primary  BOOLEAN NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ DEFAULT now(),
+  updated_at  TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX idx_user_email_aliases_user ON user_email_aliases(user_id);
 
 CREATE TABLE team_memberships (
   user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -419,16 +404,20 @@ CREATE TABLE tags (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name          TEXT NOT NULL,
   user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  applicant_id  UUID REFERENCES applicants(id) ON DELETE SET NULL,
+  flolabs_id    UUID REFERENCES applicants(id) ON DELETE SET NULL,  -- canonical owner pointer
+  applicant_id  UUID REFERENCES applicants(id) ON DELETE SET NULL,  -- deprecated, kept for migration compatibility
   created_at    TIMESTAMPTZ DEFAULT now()
 );
 CREATE UNIQUE INDEX tags_name_user_unique ON tags(name, user_id);
 CREATE INDEX idx_tags_user ON tags(user_id);
+CREATE INDEX idx_tags_flolabs ON tags(flolabs_id);
 CREATE INDEX idx_tags_applicant ON tags(applicant_id);
 
 CREATE TABLE time_entries (
   id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id              UUID NOT NULL REFERENCES users(id),
+  flolabs_id           UUID REFERENCES applicants(id) ON DELETE SET NULL,  -- canonical owner pointer
+  applicant_id         UUID REFERENCES applicants(id) ON DELETE SET NULL,  -- deprecated, kept for migration compatibility
   project_id           UUID REFERENCES projects(id),
   description          TEXT NOT NULL,
   started_at           TIMESTAMPTZ NOT NULL,
@@ -450,30 +439,103 @@ CREATE TABLE time_entry_tags (
 );
 
 CREATE TABLE entry_discussions (
+  id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_id                    UUID NOT NULL REFERENCES time_entries(id) ON DELETE CASCADE,
+  started_by_id               UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  started_by_flolabs_id       UUID REFERENCES applicants(id) ON DELETE SET NULL,  -- canonical
+  started_by_applicant_id     UUID REFERENCES applicants(id) ON DELETE SET NULL,  -- deprecated
+  message                     TEXT NOT NULL,
+  resolved_at                 TIMESTAMPTZ,
+  resolved_by_id              UUID REFERENCES users(id) ON DELETE SET NULL,
+  resolved_by_flolabs_id      UUID REFERENCES applicants(id) ON DELETE SET NULL,  -- canonical
+  resolved_by_applicant_id    UUID REFERENCES applicants(id) ON DELETE SET NULL,  -- deprecated
+  created_at                  TIMESTAMPTZ DEFAULT now(),
+  updated_at                  TIMESTAMPTZ DEFAULT now()
+);
+-- Indexes: idx_discussions_entry, idx_discussions_started_by,
+--   idx_discussions_started_by_flolabs, idx_discussions_resolved_by_flolabs,
+--   idx_discussions_started_by_applicant, idx_discussions_resolved_by_applicant, idx_discussions_unresolved
+
+CREATE TABLE discussion_replies (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  discussion_id         UUID NOT NULL REFERENCES entry_discussions(id) ON DELETE CASCADE,
+  author_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  author_flolabs_id     UUID REFERENCES applicants(id) ON DELETE SET NULL,  -- canonical
+  author_applicant_id   UUID REFERENCES applicants(id) ON DELETE SET NULL,  -- deprecated
+  message               TEXT NOT NULL,
+  created_at            TIMESTAMPTZ DEFAULT now(),
+  updated_at            TIMESTAMPTZ DEFAULT now()
+);
+-- Indexes: idx_replies_discussion, idx_replies_author, idx_replies_author_flolabs, idx_replies_author_applicant
+
+CREATE TABLE applicants (
   id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  entry_id                  UUID NOT NULL REFERENCES time_entries(id) ON DELETE CASCADE,
-  started_by_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  started_by_applicant_id   UUID REFERENCES applicants(id) ON DELETE SET NULL,
-  message                   TEXT NOT NULL,
-  resolved_at               TIMESTAMPTZ,
-  resolved_by_id            UUID REFERENCES users(id) ON DELETE SET NULL,
-  resolved_by_applicant_id  UUID REFERENCES applicants(id) ON DELETE SET NULL,
+  external_applicant_id     TEXT,
+  email                     TEXT NOT NULL UNIQUE,
+  name                      TEXT NOT NULL,
+  phone                     TEXT,
+  country                   TEXT,
+  state_region              TEXT,
+  city                      TEXT,
+  date_of_birth             TEXT,
+  gender                    TEXT,
+  linkedin_url              TEXT,
+  education                 TEXT,
+  field_of_study            TEXT,
+  current_job_title         TEXT,
+  company_name              TEXT,
+  role_applied_for          TEXT,
+  stage                     TEXT NOT NULL DEFAULT 'application_submitted',
+  status                    TEXT NOT NULL DEFAULT 'joined',
+  joined_at                 TIMESTAMPTZ DEFAULT now(),
+  last_website_visit        TIMESTAMPTZ,
+  source                    TEXT,
+  hubspot_record_id         TEXT,
+  hubspot_status            TEXT,
+  hubspot_owner             TEXT,
+  hubspot_lifecycle_stage   TEXT,
+  hubspot_lead_status       TEXT,
+  hubspot_last_modified_at  TIMESTAMPTZ,
+  hubspot_raw_data          JSONB,
+  synced_to_team_members    BOOLEAN NOT NULL DEFAULT false,
+  -- Canonical Chronos-facing profile fields (Phase 3+)
+  role                      TEXT NOT NULL DEFAULT 'member',
+  team_id                   UUID REFERENCES teams(id),
+  is_active                 BOOLEAN NOT NULL DEFAULT false,
+  weekly_target_hours       BIGINT DEFAULT 40,
+  profile_picture_url       TEXT,
+  notion_team_member_id     TEXT,
+  chronos_user_id           UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at                TIMESTAMPTZ DEFAULT now(),
   updated_at                TIMESTAMPTZ DEFAULT now()
 );
--- Indexes: idx_discussions_entry, idx_discussions_started_by, idx_discussions_started_by_applicant,
---   idx_discussions_resolved_by_applicant, idx_discussions_unresolved
+CREATE INDEX idx_applicants_stage ON applicants(stage);
+CREATE INDEX idx_applicants_status ON applicants(status);
+CREATE INDEX idx_applicants_chronos_user_id ON applicants(chronos_user_id);
 
-CREATE TABLE discussion_replies (
-  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  discussion_id     UUID NOT NULL REFERENCES entry_discussions(id) ON DELETE CASCADE,
-  author_id          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  author_applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL,
-  message            TEXT NOT NULL,
-  created_at         TIMESTAMPTZ DEFAULT now(),
-  updated_at         TIMESTAMPTZ DEFAULT now()
+CREATE TABLE applicant_duplicate_reviews (
+  id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  primary_applicant_id   UUID NOT NULL REFERENCES applicants(id) ON DELETE CASCADE,
+  duplicate_applicant_id UUID NOT NULL REFERENCES applicants(id) ON DELETE CASCADE,
+  status                 TEXT NOT NULL DEFAULT 'pending',
+  confidence_score       BIGINT NOT NULL DEFAULT 0,
+  reasons                JSONB NOT NULL DEFAULT '[]',
+  reviewed_by_id         UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at            TIMESTAMPTZ,
+  notes                  TEXT,
+  canonical_applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL,
+  created_at             TIMESTAMPTZ DEFAULT now(),
+  updated_at             TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (primary_applicant_id, duplicate_applicant_id)
 );
--- Indexes: idx_replies_discussion, idx_replies_author, idx_replies_author_applicant
+
+CREATE TABLE app_config (
+  key         TEXT PRIMARY KEY,
+  value       TEXT NOT NULL,
+  is_secret   BOOLEAN NOT NULL DEFAULT false,
+  updated_by  UUID REFERENCES users(id),
+  updated_at  TIMESTAMPTZ DEFAULT now()
+);
 ```
 
 ### Data Rules
@@ -484,8 +546,8 @@ CREATE TABLE discussion_replies (
 - `invitations.team_id` is a compatibility/default pointer.
 - `invitation_team_memberships` stores full invited membership intent.
 - Tags are unique per `(name, user_id)`.
-- Phase 3: `tags.applicant_id` is the canonical owner pointer (dual-stored with `user_id`); new writes and API scope checks set or honor both; run `db:migrate:tags-applicant-id` to add and backfill the column.
-- Phase 3: `entry_discussions.started_by_applicant_id`, `resolved_by_applicant_id`, and `discussion_replies.author_applicant_id` mirror the user FKs; dual-write on create/resolve/reply; run `db:migrate:discussions-applicant-ids` per database. List/resolve/delete scope uses `discussionStarterMatchesViewer` in `src/lib/permissions.ts`.
+- Phase 3: `tags.flolabs_id` is the canonical owner pointer (dual-stored with `user_id`). The legacy `applicant_id` column is deprecated and kept only for migration compatibility; new writes set `flolabs_id`. Run `db:migrate:tags-applicant-id` to add and backfill the column; run `db:migrate:flolabs-id` to rename/alias.
+- Phase 3: `entry_discussions.started_by_flolabs_id` / `resolved_by_flolabs_id` and `discussion_replies.author_flolabs_id` are the canonical owner pointers, dual-written with the legacy `*_applicant_id` columns. Run `db:migrate:discussions-applicant-ids` per database. List/resolve/delete scope uses `discussionStarterMatchesViewer` in `src/lib/permissions.ts`.
 - Time entries never store a direct single tag column.
 - Project linkage is optional for timer-created entries and may be filled in later.
 - Task linkage is optional while the timer is running; stopping requires an explicit task selection only when the entry’s project has `requires_task_on_stop = true`.

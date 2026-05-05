@@ -47,6 +47,11 @@ function createDb() {
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
   });
+  // pg.Pool emits 'error' on idle clients when the backend drops a connection.
+  // Without this handler Node.js treats it as an uncaught exception and exits.
+  pool.on("error", (err) => {
+    console.error("[db] pool idle-client error (connection dropped by server)", err);
+  });
   return drizzleNode(pool, { schema });
 }
 

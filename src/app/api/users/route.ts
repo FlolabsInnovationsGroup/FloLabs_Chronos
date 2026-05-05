@@ -97,60 +97,18 @@ export async function GET() {
       }
     >();
 
-  const activeTimers: Record<string, ActiveTimer> = await withTimeout(
-    "active timer lookup",
-    getActiveTimersForUserIds(rows.map((r) => r.id)),
-    {},
-  );
-  const activeUserIds = Object.keys(activeTimers);
+  const userIds = rows.map((r) => r.id);
 
-  /** Running Postgres row may still have project_id when Redis timer predates projectName or projectId sync. */
-    const runningProjectIdByUser = new Map<string, string>();
-    if (db && activeUserIds.length > 0) {
-      try {
-        const runningRows = await db
-          .select({ userId: timeEntries.userId, projectId: timeEntries.projectId })
-          .from(timeEntries)
-          .where(and(isNull(timeEntries.stoppedAt), inArray(timeEntries.userId, activeUserIds)));
-        for (const row of runningRows) {
-          if (row.projectId) {
-            runningProjectIdByUser.set(row.userId, row.projectId);
-          }
-        }
-      } catch (error) {
-        console.error("[api/users] running entries query failed", error);
-      }
-    }
-
-  const projectIdSet = new Set<string>();
-  for (const timer of Object.values(activeTimers)) {
-    if (typeof timer.projectId === "string" && timer.projectId.length > 0) {
-      projectIdSet.add(timer.projectId);
-    }
-  }
-  for (const pid of runningProjectIdByUser.values()) {
-    if (pid) projectIdSet.add(pid);
-  }
-  const uniqueProjectIds = [...projectIdSet];
-
-    const activeProjectNameById = new Map<string, string>();
-    if (db && uniqueProjectIds.length > 0) {
-      try {
-        const activeProjectRows = await db
-          .select({ id: projects.id, name: projects.name })
-          .from(projects)
-          .where(inArray(projects.id, uniqueProjectIds));
-        for (const project of activeProjectRows) {
-          activeProjectNameById.set(project.id, project.name);
-        }
-      } catch (error) {
-        console.error("[api/users] active projects lookup failed", error);
-      }
-    }
-
-    if (db && rows.length > 0) {
-      try {
-        const applicantRows = await db
+  // Run Redis + all independent DB lookups in parallel after we have the user list
+  const [
+    activeTimers,
+    rawApplicantRows,
+    rawApplicantCounts,
+    aliasRows,
+  ] = await Promise.all([
+    withTimeout("active timer lookup", getActiveTimersForUserIds(userIds), {}),
+    db && rows.length > 0
+      ? db
           .select({
             chronosUserId: applicants.chronosUserId,
             status: applicants.status,
@@ -165,65 +123,103 @@ export async function GET() {
             hubspotRawData: applicants.hubspotRawData,
           })
           .from(applicants)
-          .where(inArray(applicants.chronosUserId, rows.map((r) => r.id)));
-
-        for (const row of applicantRows) {
-          if (!row.chronosUserId) continue;
-          programStatusByUserId.set(row.chronosUserId, row.status as ApplicantProgramStatus);
-          applicantProfileByUserId.set(row.chronosUserId, {
-            role: row.role,
-            teamId: row.teamId,
-            isActive: row.isActive,
-            weeklyTargetHours: row.weeklyTargetHours,
-            profilePictureUrl: row.profilePictureUrl,
-            notionTeamMemberId: row.notionTeamMemberId,
-            name: row.name,
-            email: row.email,
-            hubspotRawData: row.hubspotRawData,
-          });
-        }
-      } catch (error) {
-        console.error("[api/users] applicant profile overlay query failed", error);
-      }
-    }
-
-    const applicantCounts = new Map<string, number>();
-    if (db && session.user.role === 'admin' && rows.length > 0) {
-      try {
-        const applicantRows = await db
+          .where(inArray(applicants.chronosUserId, userIds))
+          .catch((e) => { console.error("[api/users] applicant profile overlay query failed", e); return []; })
+      : Promise.resolve([]),
+    db && session.user.role === "admin" && rows.length > 0
+      ? db
           .select({
             chronosUserId: applicants.chronosUserId,
             count: sql<number>`count(*)::int`,
           })
           .from(applicants)
-          .where(inArray(applicants.chronosUserId, rows.map((r) => r.id)))
-          .groupBy(applicants.chronosUserId);
-        for (const row of applicantRows) {
-          if (!row.chronosUserId) continue;
-          applicantCounts.set(row.chronosUserId, row.count);
-        }
-      } catch (error) {
-        console.error("[api/users] applicants count query failed", error);
-      }
-    }
-
-    let aliasRows: Array<{ userId: string; email: string }> = [];
-    if (db && rows.length > 0) {
-      try {
-        aliasRows = await db
+          .where(inArray(applicants.chronosUserId, userIds))
+          .groupBy(applicants.chronosUserId)
+          .catch((e) => { console.error("[api/users] applicants count query failed", e); return []; })
+      : Promise.resolve([]),
+    db && rows.length > 0
+      ? db
           .select({ userId: userEmailAliases.userId, email: userEmailAliases.email })
           .from(userEmailAliases)
-          .where(inArray(userEmailAliases.userId, rows.map((r) => r.id)));
-      } catch {
-        aliasRows = [];
+          .where(inArray(userEmailAliases.userId, userIds))
+          .catch(() => [] as Array<{ userId: string; email: string }>)
+      : Promise.resolve([] as Array<{ userId: string; email: string }>),
+  ]);
+
+  for (const row of rawApplicantRows) {
+    if (!row.chronosUserId) continue;
+    programStatusByUserId.set(row.chronosUserId, row.status as ApplicantProgramStatus);
+    applicantProfileByUserId.set(row.chronosUserId, {
+      role: row.role,
+      teamId: row.teamId,
+      isActive: row.isActive,
+      weeklyTargetHours: row.weeklyTargetHours,
+      profilePictureUrl: row.profilePictureUrl,
+      notionTeamMemberId: row.notionTeamMemberId,
+      name: row.name,
+      email: row.email,
+      hubspotRawData: row.hubspotRawData,
+    });
+  }
+
+  const applicantCounts = new Map<string, number>();
+  for (const row of rawApplicantCounts) {
+    if (!row.chronosUserId) continue;
+    applicantCounts.set(row.chronosUserId, row.count);
+  }
+
+  const aliasesByUserId = new Map<string, string[]>();
+  for (const row of aliasRows) {
+    const list = aliasesByUserId.get(row.userId) ?? [];
+    list.push(row.email);
+    aliasesByUserId.set(row.userId, list);
+  }
+
+  const activeUserIds = Object.keys(activeTimers);
+
+  /** Running Postgres row may still have project_id when Redis timer predates projectName or projectId sync. */
+  const runningProjectIdByUser = new Map<string, string>();
+  if (db && activeUserIds.length > 0) {
+    try {
+      const runningRows = await db
+        .select({ userId: timeEntries.userId, projectId: timeEntries.projectId })
+        .from(timeEntries)
+        .where(and(isNull(timeEntries.stoppedAt), inArray(timeEntries.userId, activeUserIds)));
+      for (const row of runningRows) {
+        if (row.projectId) {
+          runningProjectIdByUser.set(row.userId, row.projectId);
+        }
       }
+    } catch (error) {
+      console.error("[api/users] running entries query failed", error);
     }
-    const aliasesByUserId = new Map<string, string[]>();
-    for (const row of aliasRows) {
-      const list = aliasesByUserId.get(row.userId) ?? [];
-      list.push(row.email);
-      aliasesByUserId.set(row.userId, list);
+  }
+
+  const projectIdSet = new Set<string>();
+  for (const timer of Object.values(activeTimers)) {
+    if (typeof timer.projectId === "string" && timer.projectId.length > 0) {
+      projectIdSet.add(timer.projectId);
     }
+  }
+  for (const pid of runningProjectIdByUser.values()) {
+    if (pid) projectIdSet.add(pid);
+  }
+  const uniqueProjectIds = [...projectIdSet];
+
+  const activeProjectNameById = new Map<string, string>();
+  if (db && uniqueProjectIds.length > 0) {
+    try {
+      const activeProjectRows = await db
+        .select({ id: projects.id, name: projects.name })
+        .from(projects)
+        .where(inArray(projects.id, uniqueProjectIds));
+      for (const project of activeProjectRows) {
+        activeProjectNameById.set(project.id, project.name);
+      }
+    } catch (error) {
+      console.error("[api/users] active projects lookup failed", error);
+    }
+  }
 
     const users = rows.map((user) => {
       const activeTimer = activeTimers[user.id];

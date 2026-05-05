@@ -41,7 +41,12 @@ function createDb() {
     return null as never;
   }
 
-  pool = new Pool(buildPgConfig(connectionString));
+  pool = new Pool({
+    ...buildPgConfig(connectionString),
+    max: 20,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
+  });
   return drizzleNode(pool, { schema });
 }
 

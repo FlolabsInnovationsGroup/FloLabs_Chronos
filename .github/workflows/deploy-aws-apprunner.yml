@@ -193,8 +193,8 @@ jobs:
           set -euo pipefail
           cat > apprunner-service.json <<JSON
           {
-            "Cpu": "1 vCPU",
-            "Memory": "2 GB"
+            "Cpu": "2 vCPU",
+            "Memory": "4 GB"
           }
           JSON
 

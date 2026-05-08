@@ -98,7 +98,8 @@ Important:
 - GitHub Actions deploy role: `arn:aws:iam::975049954782:role/flolabs-chronos-github-actions-deploy`
 - App Runner ECR access role: `arn:aws:iam::975049954782:role/flolabs-chronos-apprunner-ecr-access-role`
 - AWS region: `us-east-1`
-- Service URL: `https://hcmsmnfq5q.us-east-1.awsapprunner.com`
+- AWS URL: `https://hcmsmnfq5q.us-east-1.awsapprunner.com`
+- Production domain: `https://athensgreecemarathon.com` (App Runner custom domain)
 
 ## Runtime secret source of truth
 

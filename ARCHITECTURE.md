@@ -19,7 +19,7 @@ Read this section first for **where code runs**, **what stores state**, and **ho
 | **Transactional data** | **AWS RDS PostgreSQL** — source of truth for Chronos (`users`, `applicants`, `time_entries`, teams, tags, …). Access via **Drizzle ORM** (`src/lib/db`, `drizzle.config.ts`). |
 | **Timers / realtime** | **Redis** (AWS ElastiCache Serverless in production; env `KV_URL` / `FL_KV_REDIS_URL`) — active timers, pub/sub, SSE fan-out (`src/lib/redis.ts`, `/api/sse/**`). |
 | **Auth** | **NextAuth.js v5** credentials provider (`src/lib/auth.ts`). Session identity is **applicant-centric** (`session.user.id` → `applicants.id`); Chronos ownership FK is **`session.user.chronosUserId`** → `users.id`. Password hashes on `users`. |
-| **HTTP edge** | Default service URL: `https://hcmsmnfq5q.us-east-1.awsapprunner.com`. Custom domains (e.g. `athensgreecemarathon.com`) are a **DNS / App Runner custom domain** concern, not encoded in application logic. |
+| **HTTP edge** | **AWS URL:** `https://hcmsmnfq5q.us-east-1.awsapprunner.com` — **Production domain:** `https://athensgreecemarathon.com` (App Runner custom domain). Neither is encoded in application logic. |
 | **Secrets split** | **AWS SSM Parameter Store** (`/flolabs-chronos/*`): `DATABASE_URL`, `REDIS_URL`, `CRON_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` (optional fallback `INVITE_FROM_EMAIL`), optional reset-password test params. **GitHub Actions secrets** (per workflow): `AUTH_SECRET`, Notion API/DB IDs, etc. Nothing in-repo contains production secrets. |
 | **Integrations** | **Notion API** (teams, team members, tasks, time-entry mirror), **Discord** webhooks (entry notifications), **Resend** (password-reset email via `src/lib/mail.ts`). |
 | **Request authorization** | **`src/proxy.ts`** wraps NextAuth for page-level redirects only — **not** authoritative. Every **API route** must enforce roles and scope (`src/lib/permissions.ts`). |
@@ -51,7 +51,7 @@ A Hetzner + Plesk self-hosted layout was explored as a future direction. **It is
 - Source of truth for inclusion is applicant lifecycle data plus Chronos account scope.
 - Directory inclusion targets applicants that are in program scope:
   - `stage = joined`, or
-  - `status in (joined, active)`.
+  - `status in (joined, active, terminated)`.
 - Applicant -> Chronos account linkage is resolved in this order:
   1. `applicants.chronosUserId`
   2. primary user email
@@ -941,7 +941,8 @@ Future merge work should introduce a canonical person or identity layer above ac
 **Operator references:**
 
 - GitHub → AWS deploy: **`DEPLOYMENT.md`**, workflow **`.github/workflows/deploy-aws-apprunner.yml`**
-- Custom domain has used **`athensgreecemarathon.com`** (configure in DNS / App Runner as appropriate).
+- AWS URL: `https://hcmsmnfq5q.us-east-1.awsapprunner.com`
+- Production domain: `https://athensgreecemarathon.com` (App Runner custom domain)
 
 ---
 

@@ -22,41 +22,17 @@ When starting a session, check `GAME_MASTER.md` first for current status and han
 
 ---
 
-## Current Mission
+## Production URLs
 
-The immediate goal is to make Chronos fully portable and production-ready on AWS while removing old Neon-specific deployment/runtime coupling.
-
-What has already been achieved:
-- README has AWS deployment guidance and operational notes
-- Hermes docs were updated to point to the real Chronos repo and include portability/backup notes
-- Chronos runtime and scripts were migrated away from Neon-specific code paths to standard Postgres / `pg`
-- App Runner was redeployed and the live runtime environment was cleaned so old Neon env vars are no longer present in the running AWS service
-- AWS is now the canonical production runtime target for the app layer
-
-What is still being pursued:
-- reconstruct missing historical production data in AWS RDS from the exported Notion Time Entries backup, not from Neon
-- link imported users to imported time entries through the Team Members database relation captured in the export
-- finish any remaining operational cleanup such as custom domain cutover
-- keep Hermes as the operations/backup/control repo for portability work
-
-The legacy Neon source is no longer the planned recovery path. The source of truth for historical recovery is now the exported Notion Time Entries CSV plus Team Member linkage.
+| | URL |
+|---|---|
+| **Production domain** | `https://athensgreecemarathon.com` |
+| **AWS App Runner URL** | `https://hcmsmnfq5q.us-east-1.awsapprunner.com` |
+| **Health check** | `GET https://hcmsmnfq5q.us-east-1.awsapprunner.com/api/health` |
 
 ## Non-Negotiable Validation Rule
 
 For Chronos, do not test features locally. Do not spin up or rely on a local test environment "just to check quickly." Do not use host-local Docker success, local HTTP checks, or local browser/UI smoke tests as evidence that a change works. If a task requires validation, perform it only through AWS/deployed surfaces such as App Runner, Lambda, EventBridge, CloudWatch, public deployment URLs, or other AWS-reachable interfaces. If AWS-only validation is temporarily impossible, report the blocker instead of falling back to local testing.
-
-### Restart Handoff Note
-
-If a session resumes after an OpenClaw or gateway restart, continue from this exact operational purpose first:
-- patch the installed OpenClaw WhatsApp watchdog so idle sessions do not force-reconnect every 30 minutes
-- restart the OpenClaw gateway
-- verify the repeating `status 499` WhatsApp disconnect loop stops
-- then continue normal Chronos and Hephaestus deployment work without re-investigating the disconnect issue from scratch
-
-Root cause already confirmed in installed OpenClaw dist files:
-- `...openclaw\\dist\\extensions\\whatsapp\\login-BPCVMYVA.js`
-- hardcoded `messageTimeoutMs = 1800 * 1e3`
-- watchdog forces reconnect with status `499` after 30m without inbound messages
 
 ---
 
@@ -77,35 +53,20 @@ Future sessions should know where access currently comes from and how to continu
 - never treat local env-backed execution on this machine as an acceptable Chronos test environment
 
 ### AWS access context
-- AWS CLI is already authenticated in this environment
+- AWS CLI is pre-authenticated in this environment
 - App Runner service: `flolabs-chronos`
 - Service ARN: `arn:aws:apprunner:us-east-1:975049954782:service/flolabs-chronos/b6416d84200e4c5a9d884f8f4c134aaf`
-- Service URL: `https://hcmsmnfq5q.us-east-1.awsapprunner.com`
-- RDS + Redis details are available through `deploy/aws/provision-output.json` and the local env files
-- current manual fallback deployment entry point: `deploy/aws/deploy-app.ps1`
-- preferred deployment path is GitHub Actions -> AWS OIDC -> ECR -> App Runner on every push to `main`; see `.github/workflows/deploy-aws-apprunner.yml`
-- bootstrap that path with `deploy/aws/setup-github-actions-deploy.ps1`, which creates the GitHub OIDC provider/role and seeds the required GitHub Actions secrets from AWS provision output + local env files
-- deployment proof chain now needs commit/image metadata: build images with immutable git-SHA tags, publish the digest to ECR, and expose `/api/health` build info so AWS runtime can be tied back to an exact commit/image digest
+- AWS URL: `https://hcmsmnfq5q.us-east-1.awsapprunner.com`
+- Production domain: `https://athensgreecemarathon.com`
+- RDS + Redis details available in `deploy/aws/provision-output.json` and local env files
+- Preferred deploy path: GitHub Actions → AWS OIDC → ECR → App Runner on push to `main`; see `.github/workflows/deploy-aws-apprunner.yml`
+- Bootstrap: `deploy/aws/setup-github-actions-deploy.ps1` creates the OIDC provider/role and seeds GitHub Actions secrets from provision output + local env files
 
-### Vercel access context
-A Vercel token is already present in local env files for domain/API operations.
+### Vercel access context (legacy / DNS only)
+Production hosting is **AWS App Runner**, not Vercel. A Vercel token may still exist in local env files for occasional API or domain management use only.
 - Team ID: `team_6Y3HFbsxBOKvTmB6Hft71t5G`
 - Project ID: `prj_3MFDCbI5X7AEOozfYWvlNd5wwUL7`
-- Custom domain in play: `athensgreecemarathon.com`
-
-### Neon access context
-Legacy Neon credentials still exist in local env files and were enough to attempt direct access, but backup/export is currently blocked by Neon quota.
-- direct `pg_dump` attempt failed with: `Your project has exceeded the data transfer quota. Upgrade your plan to increase limits.`
-- local record of this failed attempt exists in:
-  `backups\chronos-neon-backup-attempt-20260420-010019.txt`
-
-### How to regain "full access"
-If a future session needs the full historical source DB contents, one of these must happen:
-1. Neon quota is increased or reset, then rerun `pg_dump`
-2. a human downloads/export shares a Neon backup artifact
-3. another authoritative source DB dump is provided
-
-Until then, AWS app/runtime access is available, but full legacy data extraction is not.
+- Custom domain `athensgreecemarathon.com` — DNS should point to App Runner; do not assume records still target Vercel.
 
 ---
 
@@ -225,15 +186,6 @@ Chronos uses **one component tree** and **two palettes** defined in `src/app/glo
 - Optional maintenance: **`node scripts/apply-semantic-theme-classes.mjs`** helps migrate pasted hex classes toward semantic tokens.
 
 ---
-
-## Vercel API Access (legacy / optional)
-
-Production hosting is **AWS App Runner**, not Vercel. A Vercel token may still exist in local env files **only** for occasional API use (historical project cleanup, domain UI, or legacy scripts):
-
-- **Token env var:** `VERCEL_TOKEN` (if present)
-- **Team ID:** `team_6Y3HFbsxBOKvTmB6Hft71t5G`
-- **Project ID:** `prj_3MFDCbI5X7AEOozfYWvlNd5wwUL7`
-- **Custom domain:** `athensgreecemarathon.com` — DNS may need to target **AWS** (App Runner custom domain) when cutover is complete; do not assume records still point at Vercel.
 
 ---
 

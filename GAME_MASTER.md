@@ -1,8 +1,8 @@
 # GAME_MASTER.md — FloLabs Chronos Development Tracker
 
 ## Project Status
-**Date:** 2026-04-24
-**Phase:** V1 feature-complete → V1.1 active development
+**Date:** 2026-05-11
+**Phase:** V1.1 complete → V1.2 active development
 **Stack:** Next.js 16 + Drizzle + **AWS RDS Postgres** + **AWS ElastiCache Redis** + NextAuth v5; **production app on AWS App Runner** (see `ARCHITECTURE.md` → “System architecture (for agents)”)
 **Public App Runner URL:** https://hcmsmnfq5q.us-east-1.awsapprunner.com — use `/api/health` for deployed commit
 **Custom domain (when cut over):** https://athensgreecemarathon.com
@@ -100,9 +100,11 @@
 - [x] Updated palette: deep teal, slate, warm red, orange, sky blue, marine blue, violet, light green
 
 ### Domain & Infra ✅
-- [x] `athensgreecemarathon.com` connected to Vercel project, DNS verified
-- [x] `NEXTAUTH_URL` updated to `https://athensgreecemarathon.com`, redeployed
-- [x] `VERCEL_TOKEN` stored in `.env.local` and `.env.production.local`
+- [x] `athensgreecemarathon.com` custom domain connected to AWS App Runner (`flolabs-chronos`), DNS verified
+- [x] App Runner custom domain status: `active`, all ACM certificate validation records `SUCCESS`
+- [x] Both `https://athensgreecemarathon.com` and `https://www.athensgreecemarathon.com` return 200 with strict TLS
+- [x] `NEXTAUTH_URL` set to `https://athensgreecemarathon.com` in deploy environment
+- [x] Production hosting is **AWS App Runner**, not Vercel
 
 ---
 
@@ -196,7 +198,18 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 
 ## Recent Updates
 
-- 2026-04-22: Phase 3 identity refactor: aligned timer PATCH/stop running-entry lookup with applicant-owned time entries, including discard cleanup, so active DB timer rows no longer depend on `time_entries.user_id` alone. See `notes/identity-refactor-phases.md`.
+- 2026-05-11: ci(deploy): App Runner auto-scaling config (`flolabs-apps`, `MinSize=1, MaxConcurrency=25, MaxSize=3`) is now explicitly pinned in the deploy workflow so updates no longer reset the shared scaling config.
+- 2026-05-11: perf(db): pg connection pool max lowered from 20 to 10 per container (`idleTimeout=20s, connectionTimeout=5s`) to reduce contention on the shared RDS instance.
+- 2026-05-11: fix(users): Users directory now also requires `notionTeamMemberId` to be set for non-admin/HR users to appear in the directory. Admin and HR users bypass this requirement.
+- 2026-05-11: feat(users): Users directory filtered to `applicantProgramStatus === "joined"` members only. The `Status` (isActive badge) and `Program` columns were removed from the Users table since all visible rows are implicitly active and joined.
+- 2026-05-08: Docs: production URLs added to all key docs; stale Vercel/Neon/Hetzner sections cleaned out of ARCHITECTURE.md, CLAUDE.md, DEPLOYMENT.md.
+- 2026-05-05: Revert standalone output: the Next.js standalone `server.js` caused a silent process exit after ~19 minutes on App Runner due to a missing pg.Pool error handler; reverted to `next start` mode.
+- 2026-05-05: Perf: parallelize `/api/users`, bump App Runner to 2 vCPU / 4 GB RAM, fix build artifacts for standalone runner.
+- 2026-04-29: DNS routing: `athensgreecemarathon.com` App Runner custom domain now fully active with TLS — both apex and www return 200 with strict certificate verification. DNS via Dynadot ANAME/CNAME to App Runner target. See `ROUTING_PROGRESS.md`.
+- 2026-04-29: E2E testing: added Playwright session lifecycle acceptance test (`e2e/session-lifecycle-production.spec.ts`) that validates the full timer flow against the live production URL. See `TESTING.md`.
+- 2026-04-29: Production visibility fix: deployed `c1309fa` with teams-sync role/status mirror from Notion Team Members. Production now has correct `admin`, `hr`, `team_lead`, `member` roles. Admin `GET /api/users` returns all 1149 users; team lead returns scoped set; member returns own entries. Both bugs resolved and live-validated.
+- 2026-04-28: Performance: removed expensive GET-side applicant auto-provisioning from `/api/users`; added 1500ms Redis timer lookup timeout so `/api/users` no longer hangs on KV connect issues. See `CHRONOS_LONG_RUNNING_TASK.md`.
+- 2026-04-22: Phase 3 identity refactor: Phase 3 identity refactor: aligned timer PATCH/stop running-entry lookup with applicant-owned time entries, including discard cleanup, so active DB timer rows no longer depend on `time_entries.user_id` alone. See `notes/identity-refactor-phases.md`.
 - 2026-04-22: Phase 3 identity refactor: moved Notion sync and entry lifecycle hydration to applicant-first owner resolution, preferring `time_entries.applicant_id` and falling back to `users.id` only for non-backfilled rows, so background sync/notification paths stop treating `users` as the canonical applicant bridge. See `notes/identity-refactor-phases.md`.
 - 2026-04-22: Phase 3 identity refactor: aligned bulk entry ownership checks so self-owner bulk delete/change-project actions prefer `time_entries.applicant_id` and only fall back to `user_id` for non-backfilled rows; admin/team-lead bulk scopes still use Chronos user ids for now. See `notes/identity-refactor-phases.md`.
 - 2026-04-22: Phase 3 identity refactor: moved discussion and reply actor display to applicant-first resolution via `chronosActorDisplay`, so discussion starter/resolver/reply author names prefer applicant identity and only fall back to `users` for non-backfilled rows. See `notes/identity-refactor-phases.md`.
@@ -275,11 +288,15 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 
 ## Known State
 
-- Production deployed at https://athensgreecemarathon.com
-- Database schema migrated (per-user tags, time_entry_tags join table, and optional `time_entries.project_id` for empty-start timers)
+- Production deployed at https://athensgreecemarathon.com (AWS App Runner `flolabs-chronos`, `us-east-1`)
+- App Runner instance: 2 vCPU / 4 GB RAM; auto-scaling: `flolabs-apps` config (`MinSize=1, MaxConcurrency=25, MaxSize=3`)
+- pg connection pool: `max=10, idleTimeout=20s, connectionTimeout=5s`
+- Latest deployed commit: `d4a4e40` (2026-05-11)
+- Database schema migrated: per-user tags, time_entry_tags, optional project_id, entry_discussions, discussion_replies, applicant_duplicate_reviews, app_config, flolabs_id/applicant_id dual columns, discussions applicant FK columns
+- Production role distribution: ~6 admin, ~7 team_lead, ~4 hr, ~1132 member
+- Users directory inclusion: `applicantProgramStatus === "joined"` AND (`notionTeamMemberId` set OR role is `admin`/`hr`)
 - Build passes: `pnpm exec tsc --noEmit` and `pnpm build` both green
-- Current verification for the mobile-nav / Users-page / MasterClass-title update is green: `pnpm exec tsc --noEmit`, targeted `pnpm exec eslint ...`, and `pnpm build`
-- Repo-wide `pnpm exec eslint .` still reports unrelated pre-existing issues in auth/control, tooltip, report-filter, timer-dashboard, and Discord-provisioning files outside this task
+- Repo-wide `pnpm exec eslint .` still reports pre-existing issues in auth/control, tooltip, report-filter, timer-dashboard, and Discord-provisioning files
 - Admin account: `pm@flolabsinnovations.com`
 
 ---

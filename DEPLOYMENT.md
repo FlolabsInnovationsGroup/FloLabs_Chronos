@@ -9,14 +9,19 @@ This file describes the **current proven deployment method** for Chronos as of 2
 **Proven working method:** GitHub Actions -> AWS OIDC -> ECR -> App Runner -> live verification on AWS.
 
 Latest proven successful run:
-- GitHub Actions run: `24829114875`
-- Commit: `78e793e66f8e7e325a998f479ae00335e769cd94`
+- Commit: `d4a4e40` (2026-05-11) — ci(deploy): pin flolabs-apps auto-scaling config in App Runner update
 - Workflow: `.github/workflows/deploy-aws-apprunner.yml`
 
 This run completed successfully and the live AWS surface verified:
-- App Runner serving image tag `git-78e793e66f8e`
-- `/api/health` returned matching commit/image metadata
-- live forgot-password endpoint returned `200 {"ok":true}`
+- App Runner serving the expected git-SHA image
+- `/api/health` returns matching commit/image metadata
+- Custom domain `https://athensgreecemarathon.com` and `https://www.athensgreecemarathon.com` both serve traffic with valid TLS
+
+**App Runner instance config (as of 2026-05-11):**
+- 2 vCPU / 4 GB RAM
+- Auto-scaling: `flolabs-apps` shared config (`MinSize=1, MaxConcurrency=25, MaxSize=3`)
+- Health check: `HTTP /api/health` every 10 s
+- Same `flolabs-apps` auto-scaling config is shared with Hephaestus International App Runner service
 
 ## The deployment rule
 

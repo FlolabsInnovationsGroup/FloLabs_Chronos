@@ -44,15 +44,12 @@ Chronos is a **Next.js 16 App Router** app whose **production** deployment is:
 
 ## Refactor Priority
 
-When working on the identity refactor:
-- Phase 2 is already complete.
-- Continue directly in Phase 3 unless `GAME_MASTER.md` says otherwise.
+The identity refactor (Phases 1–3) is **complete**. `applicants` is the canonical identity layer; `users` is the compatibility layer for password hashes and legacy FK targets. Session fields: `session.user.id` = applicant id, `session.user.chronosUserId` = `users.id`.
+
+When working on any remaining identity cleanup:
 - Prefer small, coherent, high-leverage slices.
-- Prioritize production-relevant paths first:
-  1. timer flows
-  2. entries/reports
-  3. shared/admin/team views
-  4. background sync and compatibility cleanup
+- New code should prefer applicant-first resolution with `users` fallback for non-backfilled rows.
+- The legacy `applicant_id` column naming on several tables is deprecated; `flolabs_id` is the canonical alias.
 
 ## Code Change Rules
 

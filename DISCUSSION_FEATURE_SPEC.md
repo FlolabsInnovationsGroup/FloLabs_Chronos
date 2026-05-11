@@ -1,5 +1,7 @@
 # Entry Discussions Feature — Implementation Spec
 
+**STATUS: IMPLEMENTED ✅** — This feature is complete and deployed. The spec below is preserved as a historical reference.
+
 Read CLAUDE.md, ARCHITECTURE.md, and GAME_MASTER.md first for full context.
 
 ---

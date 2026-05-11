@@ -18,7 +18,13 @@ This repository treats the live website as the only reliable functional test sur
 
 ## Production URL
 
-The confirmed AWS App Runner URL is:
+The canonical production URL is:
+
+```text
+https://athensgreecemarathon.com
+```
+
+The AWS App Runner direct URL is also available for testing:
 
 ```text
 https://hcmsmnfq5q.us-east-1.awsapprunner.com

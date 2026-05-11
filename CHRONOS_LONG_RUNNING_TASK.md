@@ -1,5 +1,7 @@
 # Chronos long-running fix task
 
+**STATUS: RESOLVED ✅ (2026-04-29)** — Both bugs were fixed and validated in production on commit `c1309fa`. This file is a historical log.
+
 Owner: Oliver / main OpenClaw assistant
 Started: 2026-04-28 Europe/Paris
 Repository: `/mnt/c/Users/olire/Documents/workspace_python/FloLabs_Chronos`

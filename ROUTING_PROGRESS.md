@@ -1,5 +1,13 @@
 # Chronos URL routing progress
 
+**STATUS: RESOLVED ✅ (2026-05-01)**
+
+Final outcome: Both `https://athensgreecemarathon.com` and `https://www.athensgreecemarathon.com` pass strict TLS verification and return HTTP 200 with Chronos commit metadata. App Runner custom domain is `active`, all ACM validation records are `SUCCESS`. DNS via Dynadot ANAME (apex) and CNAME (www) to `hcmsmnfq5q.us-east-1.awsapprunner.com`.
+
+This file is a historical log of the routing workstream. No further action required.
+
+---
+
 Owner: Oliver / main OpenClaw assistant
 Started: 2026-04-30 Europe/Paris
 Scope: Route Chronos URLs via Dynadot/AWS App Runner until intended URLs resolve and serve correctly.

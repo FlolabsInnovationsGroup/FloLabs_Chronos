@@ -61,9 +61,23 @@ Team leads cannot:
 - manage global team structure
 - access the Control page unless they are also admins
 
+## Human Resources (HR)
+HR users have the same directory and member-management permissions as admins for people and role management, but cannot manage projects, teams, or invitations.
+
+HR users can:
+- do everything a member and team lead can do
+- see all users (full directory scope)
+- edit user roles, teams, program status, Notion link, and alternate emails
+- access all reports
+
+HR users cannot:
+- create or edit projects
+- create or manage invitations
+- access the Control page unless they also have admin role
+
 ## Admin
 Admins can:
-- do everything a member and team lead can do
+- do everything a member, team lead, and HR user can do
 - create, edit, archive, restore, and delete projects
 - create invitations
 - disable or delete invitation links
@@ -362,9 +376,8 @@ When the person accepts the invite and registers:
 
 ## On user rename
 When an admin renames a user in Chronos:
-- Chronos updates the corresponding Team Member page name in Notion
-- it first tries the stored `notionTeamMemberId`
-- if that is missing, it falls back to looking up the Team Member page by email
+- Chronos updates the corresponding Team Member page name in Notion only when `notionTeamMemberId` is stored on the user record
+- if `notionTeamMemberId` is not set, no Notion update is made (there is no email or name fallback)
 
 ---
 

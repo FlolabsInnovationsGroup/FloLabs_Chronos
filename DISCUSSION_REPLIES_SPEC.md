@@ -1,5 +1,7 @@
 # Discussion Replies — Implementation Spec
 
+**STATUS: IMPLEMENTED ✅** — This feature is complete and deployed. The spec below is preserved as a historical reference.
+
 Read CLAUDE.md first. This builds on top of the existing entry discussions feature.
 
 ---

@@ -412,8 +412,6 @@ export default function TeamPage() {
     { label: "Teams", key: "team" },
     { label: "Live", key: "live" },
     { label: "Weekly", key: "weekly" },
-    { label: "Status", key: null },
-    { label: "Program", key: null },
     { label: "Joined", key: "joined" },
     ...(role === "admin" || role === "hr" || role === "team_lead" || role === "member" ? [{ label: "Actions", key: null }] : []),
   ];
@@ -442,7 +440,7 @@ export default function TeamPage() {
             style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
           >
             {role === "admin" || role === "hr"
-              ? "Admins and Human Resources can manage teams and member roles. The table lists applicants on pipeline stage Joined; Program marks Graduated or Terminated (terminated members drop off this list)."
+              ? "Admins and Human Resources can manage teams and member roles. The table lists active members on pipeline stage Joined. Members who graduate or terminate are removed from this directory."
               : role === "team_lead"
                 ? "You can see every member in the teams you belong to and edit their weekly time commitment."
                 : "You see only your account. You can update your weekly time target."}
@@ -774,28 +772,6 @@ export default function TeamPage() {
                             </span>
                           </td>
                           <td className={compactBodyCellClass}>
-                            <Badge color={user.isActive ? "primary" : "secondary"}>
-                              {user.isActive ? "active" : "inactive"}
-                            </Badge>
-                          </td>
-                          <td className={compactBodyCellClass}>
-                            <Badge
-                              color={
-                                user.applicantProgramStatus === "graduated"
-                                  ? "secondary"
-                                  : user.applicantProgramStatus === "terminated"
-                                    ? "secondary"
-                                    : "primary"
-                              }
-                            >
-                              {user.applicantProgramStatus === "graduated"
-                                ? "Graduated"
-                                : user.applicantProgramStatus === "terminated"
-                                  ? "Terminated"
-                                  : "Joined"}
-                            </Badge>
-                          </td>
-                          <td className={compactBodyCellClass}>
                             <span
                               className="text-sm text-on-surface-variant"
                               style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
@@ -932,7 +908,7 @@ export default function TeamPage() {
                 className="text-xs text-on-surface-variant -mt-2"
                 style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
               >
-                Updates the linked applicant record in Chronos. Terminated removes them from this directory; Graduated keeps them visible.
+                Updates the linked applicant record in Chronos. Terminated or Graduated removes them from this directory.
               </p>
               <Input
                 label="Associated emails"

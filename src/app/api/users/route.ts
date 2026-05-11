@@ -221,7 +221,7 @@ export async function GET() {
     }
   }
 
-    const users = rows.map((user) => {
+    const allUsers = rows.map((user) => {
       const activeTimer = activeTimers[user.id];
       const profile = applicantProfileByUserId.get(user.id);
 
@@ -266,6 +266,14 @@ export async function GET() {
             })()
           : null,
       };
+    });
+
+    // Only surface active (Joined) members. Users without an applicant record are
+    // allowed through only if they hold an elevated role (admin/HR accounts).
+    const users = allUsers.filter((user) => {
+      const status = user.applicantProgramStatus;
+      if (status === null) return isAdminLikeRole(user.role);
+      return status === "joined";
     });
 
     console.info("[api/users] response", {

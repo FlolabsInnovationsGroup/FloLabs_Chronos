@@ -16,8 +16,8 @@ Read this section first for **where code runs**, **what stores state**, and **ho
 |--------|------------------|
 | **App server** | **Next.js 16** (App Router) in a **Docker** image on **AWS App Runner** (`us-east-1`). One container service handles SSR, route handlers (`src/app/api/**`), and Server Components. |
 | **Images & deploy** | Images live in **Amazon ECR** under immutable tags `git-<12-char-sha>`. **GitHub Actions** (`.github/workflows/deploy-aws-apprunner.yml`) builds on every push to `main` or manual `workflow_dispatch`, updates App Runner, and verifies **`GET /api/health`** reports the same **`commitSha`** as the deploy. |
-| **Transactional data** | **AWS RDS PostgreSQL** — source of truth for Chronos (`users`, `applicants`, `time_entries`, teams, tags, …). Access via **Drizzle ORM** (`src/lib/db`, `drizzle.config.ts`). |
-| **Timers / realtime** | **Redis** (AWS ElastiCache Serverless in production; env `KV_URL` / `FL_KV_REDIS_URL`) — active timers, pub/sub, SSE fan-out (`src/lib/redis.ts`, `/api/sse/**`). |
+| **Transactional data** | **AWS RDS PostgreSQL 17** (`db.t4g.small`, 2 vCPU / 2 GB RAM, 20 GB gp3) — source of truth for Chronos and shared with Hephaestus International. Access via **Drizzle ORM** + `pg` pool (`max=10` per container). |
+| **Timers / realtime** | **Redis** (AWS ElastiCache Serverless 7.1 in production; env `KV_URL` / `FL_KV_REDIS_URL`) — active timers, pub/sub, SSE fan-out (`src/lib/redis.ts`, `/api/sse/**`). |
 | **Auth** | **NextAuth.js v5** credentials provider (`src/lib/auth.ts`). Session identity is **applicant-centric** (`session.user.id` → `applicants.id`); Chronos ownership FK is **`session.user.chronosUserId`** → `users.id`. Password hashes on `users`. |
 | **HTTP edge** | **AWS URL:** `https://hcmsmnfq5q.us-east-1.awsapprunner.com` — **Production domain:** `https://athensgreecemarathon.com` (App Runner custom domain). Neither is encoded in application logic. |
 | **Secrets split** | **AWS SSM Parameter Store** (`/flolabs-chronos/*`): `DATABASE_URL`, `REDIS_URL`, `CRON_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` (optional fallback `INVITE_FROM_EMAIL`), optional reset-password test params. **GitHub Actions secrets** (per workflow): `AUTH_SECRET`, Notion API/DB IDs, etc. Nothing in-repo contains production secrets. |
@@ -45,28 +45,26 @@ The **Hetzner + Plesk** subsection below describes a **possible** self-hosted la
 
 A Hetzner + Plesk self-hosted layout was explored as a future direction. **It is not the current production deployment.** AWS App Runner (see **System architecture (for agents)** above) is the canonical production runtime. If a Hetzner migration is revisited, update this section before treating it as operational guidance.
 
-### Current Users Directory Architecture (2026-04)
+### Current Users Directory Architecture (2026-05)
 
 - `GET /api/users` powers the Users page (`/team`).
 - Source of truth for inclusion is applicant lifecycle data plus Chronos account scope.
-- Directory inclusion targets applicants that are in program scope:
-  - `stage = joined`, or
-  - `status in (joined, active, terminated)`.
-- Applicant -> Chronos account linkage is resolved in this order:
-  1. `applicants.chronosUserId`
-  2. primary user email
-  3. `user_email_aliases`
-  4. applicant `hubspotRawData.emails`
-- If a joined/active applicant is missing `chronosUserId`, `/api/users` performs bounded auto-link/provision work (batch-limited) to avoid request timeouts.
+- Directory inclusion rule (applied after role-scoped access):
+  - `applicantProgramStatus === "joined"` **AND** (`notionTeamMemberId` is set OR `role` is `admin`/`hr`)
+  - Effectively: **active team members** (Joined + Notion Team Member page linked) plus elevated accounts (admin/HR) that may operate without a Notion link.
+  - Users with `graduated` or `terminated` program status are excluded from the directory regardless of isActive.
+  - The old `active` applicant status has been fully migrated to other statuses and is no longer a valid value.
+- Applicant → Chronos account linkage is resolved via `applicants.chronosUserId` (the canonical FK).
 - Visibility is role-scoped:
-  - admin / HR: global scoped users
+  - admin / HR: global scope (all users passing the inclusion rule)
   - team lead: team scope
-  - member: self
+  - member: self only
 - Session-role drift is handled by server-side DB role checks and role normalization (`admin`, `hr`, `team_lead`, `member`; compatible with legacy strings like `Human Resources`).
 - Users response overlays applicant profile fields on top of `users` fields (name/email/role/team/isActive/notion links) and includes:
   - `alternateEmails` (aliases + applicant/hubspot known emails)
   - live timer state
-  - `requiresNotionProfileLink` warning marker.
+  - `requiresNotionProfileLink` warning marker (shown to admin/HR only).
+- The Users table no longer shows the `Status` (isActive badge) or `Program` columns — all visible rows are implicitly active and joined. Changing a member's program status to Graduated or Terminated removes them from the directory immediately.
 
 The current product model is:
 - Projects are global, but only admins can create, modify, archive, restore, or delete them.
@@ -88,6 +86,8 @@ The current product model is:
 
 ### Roles
 
+Four roles exist: `admin`, `hr`, `team_lead`, `member`. The legacy string `Human Resources` is normalized to `hr` at auth time.
+
 #### Admin
 - Can create, edit, archive, restore, and delete projects.
 - Can view all teams, users, invitations, time entries, tags, and reports.
@@ -96,6 +96,11 @@ The current product model is:
 - Can manage user records and delete users only when historical integrity permits it.
 - Can see all tags, including creator names.
 - Can use all reporting surfaces without scope restriction.
+
+#### Human Resources (hr)
+- Same directory and member-management permissions as Admin (can edit roles, teams, program status, Notion link, alternate emails).
+- Cannot manage projects, global team structure, or invitations.
+- Appears in the Users directory regardless of Notion link status (elevated bypass).
 
 #### Team Lead
 - Visibility scope is the union of all teams they belong to.
@@ -673,18 +678,18 @@ Use centralized helpers in `src/lib/permissions.ts`.
 
 ### Route Rules
 
-| Surface | Admin | Team Lead | Member |
-|---|---|---|---|
-| Projects list | Yes | Yes | Yes |
-| Create/edit/archive/delete projects | Yes | No | No |
-| Tags page | All tags | Own tags | Own tags |
-| Create/delete own tags | Yes | Yes | Yes |
-| Team page (Users tab) | All users + full edit | All users in shared teams; may edit weekly target hours for those users | Only own row; may edit own weekly target hours |
-| Create invites | Yes | No | No |
-| Disable/delete invites | Yes | No | No |
-| Reports | All users | Same scoped data as query (all teammates’ entries); may edit/delete/bulk-manage those entries | Own only |
-| User management | Yes | No | No |
-| Task search API | Authenticated users | Authenticated users | Authenticated users |
+| Surface | Admin | HR | Team Lead | Member |
+|---|---|---|---|---|
+| Projects list | Yes | Yes | Yes | Yes |
+| Create/edit/archive/delete projects | Yes | No | No | No |
+| Tags page | All tags | All tags | Own tags | Own tags |
+| Create/delete own tags | Yes | Yes | Yes | Yes |
+| Team page (Users tab) | All users + full edit | All users + full edit (except project/invite mgmt) | All users in shared teams; may edit weekly target hours | Only own row; may edit own weekly target hours |
+| Create invites | Yes | No | No | No |
+| Disable/delete invites | Yes | No | No | No |
+| Reports | All users | All users | Scoped to accessible teams; may edit/delete/bulk-manage those entries | Own only |
+| User management | Yes | Yes (role/team/program/notion/emails) | No | No |
+| Task search API | Authenticated | Authenticated | Authenticated | Authenticated |
 
 ### Security Note
 `proxy.ts` is only a UX guard. It is not authoritative authorization.
@@ -928,9 +933,9 @@ Future merge work should introduce a canonical person or identity layer above ac
 
 **Production (canonical):**
 
-- **AWS App Runner** runs the Next.js container (see **System architecture (for agents)** above).
-- **AWS RDS PostgreSQL** stores durable app data.
-- **AWS ElastiCache Serverless Redis** stores active timers and cache/pub-sub state.
+- **AWS App Runner** (`flolabs-chronos`, us-east-1) runs the Next.js container. Instance config: **2 vCPU / 4 GB RAM**. Auto-scaling: `flolabs-apps` config (`MinSize=1, MaxConcurrency=25, MaxSize=3`). Health check: **HTTP `/api/health`** every 10 s. The same `flolabs-apps` auto-scaling config is shared with the **Hephaestus International** App Runner service.
+- **AWS RDS PostgreSQL 17** (`db.t4g.small`, 2 vCPU / 2 GB RAM, 20 GB gp3) stores durable app data. Both Chronos and Hephaestus International connect to the same RDS instance. pg connection pool per container: `max=10, idleTimeout=20s, connectionTimeout=5s`.
+- **AWS ElastiCache Serverless Redis 7** stores active timers and SSE pub/sub state.
 - **Notion** is used for operational sync / mirror databases.
 - **Discord webhooks** handle branded notification delivery.
 - **Resend** sends password-reset email when configured.

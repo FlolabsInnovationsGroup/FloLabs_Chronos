@@ -43,8 +43,8 @@ function createDb() {
 
   pool = new Pool({
     ...buildPgConfig(connectionString),
-    max: 20,
-    idleTimeoutMillis: 30_000,
+    max: 10,
+    idleTimeoutMillis: 20_000,
     connectionTimeoutMillis: 5_000,
   });
   // pg.Pool emits 'error' on idle clients when the backend drops a connection.

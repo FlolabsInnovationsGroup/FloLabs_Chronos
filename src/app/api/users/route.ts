@@ -268,12 +268,14 @@ export async function GET() {
       };
     });
 
-    // Only surface active (Joined) members. Users without an applicant record are
-    // allowed through only if they hold an elevated role (admin/HR accounts).
+    // Only surface active (Joined) members who have a linked Notion Team Member page,
+    // plus admin/HR accounts (which may operate without a Notion link).
+    // Users without an applicant record are allowed only if they hold an elevated role.
     const users = allUsers.filter((user) => {
       const status = user.applicantProgramStatus;
-      if (status === null) return isAdminLikeRole(user.role);
-      return status === "joined";
+      if (status !== "joined" && status !== null) return false;
+      if (isAdminLikeRole(user.role)) return true;
+      return status === "joined" && Boolean(user.notionTeamMemberId);
     });
 
     console.info("[api/users] response", {

@@ -8,6 +8,9 @@ import { getNotionConfig } from "@/lib/app-config";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+/** Max users processed per invocation. Rotate with ?offset=N for larger teams. */
+const DEFAULT_LIMIT = 50;
+
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -15,7 +18,11 @@ export async function GET(req: Request) {
   }
   if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
 
-  // Fetch all active users with a linked Notion Team Member page
+  const url = new URL(req.url);
+  const limit = Math.min(Math.max(1, parseInt(url.searchParams.get("limit") ?? String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT), 200);
+  const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
+
+  // Fetch active users with a linked Notion Team Member page (paginated)
   const linkedUsers = await db
     .select({
       id: users.id,
@@ -26,7 +33,9 @@ export async function GET(req: Request) {
       notionTeamMemberId: users.notionTeamMemberId,
     })
     .from(users)
-    .where(and(eq(users.isActive, true), isNotNull(users.notionTeamMemberId)));
+    .where(and(eq(users.isActive, true), isNotNull(users.notionTeamMemberId)))
+    .limit(limit)
+    .offset(offset);
 
   if (linkedUsers.length === 0) {
     return NextResponse.json({ synced: 0, errors: [] });

@@ -52,6 +52,7 @@ export const users = pgTable(
     notionTeamMemberId: text("notion_team_member_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   },
   (t) => [index("idx_users_team").on(t.teamId)]
 );

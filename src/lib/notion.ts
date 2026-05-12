@@ -2499,9 +2499,20 @@ export async function pushTeamMemberProfileToNotion(params: {
   role: "admin" | "team_lead" | "member" | "hr";
   weeklyTargetHours: number;
   notionTeamPageIds: string[];
+  /** Pre-resolved config — pass when calling in a loop to avoid per-iteration DB/Notion fetches. */
+  _resolvedConfig?: { notionApiKey: string; notionTeamMembersDbId: string };
 }): Promise<void> {
-  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
-  if (!notionApiKey || !notionTeamMembersDbId) return;
+  let notionApiKey: string;
+  let notionTeamMembersDbId: string;
+  if (params._resolvedConfig) {
+    notionApiKey = params._resolvedConfig.notionApiKey;
+    notionTeamMembersDbId = params._resolvedConfig.notionTeamMembersDbId;
+  } else {
+    const config = await getNotionConfig();
+    if (!config.notionApiKey || !config.notionTeamMembersDbId) return;
+    notionApiKey = config.notionApiKey;
+    notionTeamMembersDbId = config.notionTeamMembersDbId;
+  }
 
   const schema = await getDatabaseSchema(notionTeamMembersDbId, NOTION_VERSION, notionApiKey);
   const properties: Record<string, unknown> = {};

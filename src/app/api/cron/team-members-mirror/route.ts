@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { applicants, teams, users, teamMemberships } from "@/lib/db/schema";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { pushTeamMemberProfileToNotion } from "@/lib/notion";
+import { getNotionConfig } from "@/lib/app-config";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -30,6 +31,13 @@ export async function GET(req: Request) {
   if (linkedUsers.length === 0) {
     return NextResponse.json({ synced: 0, errors: [] });
   }
+
+  // Resolve Notion config once — avoids N DB queries inside the per-user loop.
+  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
+  if (!notionApiKey || !notionTeamMembersDbId) {
+    return NextResponse.json({ error: "Notion not configured" }, { status: 503 });
+  }
+  const resolvedConfig = { notionApiKey, notionTeamMembersDbId };
 
   const userIds = linkedUsers.map((u) => u.id);
 
@@ -89,6 +97,7 @@ export async function GET(req: Request) {
         role: user.role as "admin" | "team_lead" | "member" | "hr",
         weeklyTargetHours: user.weeklyTargetHours ?? 40,
         notionTeamPageIds,
+        _resolvedConfig: resolvedConfig,
       });
       synced++;
     } catch (err) {

@@ -79,30 +79,37 @@ export async function GET(req: Request) {
   let synced = 0;
   const errors: string[] = [];
 
-  for (const user of linkedUsers) {
-    const applicant = applicantMap.get(user.id);
-    const notionTeamMemberId =
-      applicant?.notionTeamMemberId?.trim() || user.notionTeamMemberId?.trim() || null;
-    if (!notionTeamMemberId) continue;
+  // Process in parallel batches of 5 to stay within Notion's rate limit.
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < linkedUsers.length; i += BATCH_SIZE) {
+    const batch = linkedUsers.slice(i, i + BATCH_SIZE);
+    await Promise.all(
+      batch.map(async (user) => {
+        const applicant = applicantMap.get(user.id);
+        const notionTeamMemberId =
+          applicant?.notionTeamMemberId?.trim() || user.notionTeamMemberId?.trim() || null;
+        if (!notionTeamMemberId) return;
 
-    const finalName = applicant?.name?.trim() || user.name;
-    const finalEmail = applicant?.email?.trim() || user.email;
-    const notionTeamPageIds = teamPageIdsMap.get(user.id) ?? [];
+        const finalName = applicant?.name?.trim() || user.name;
+        const finalEmail = applicant?.email?.trim() || user.email;
+        const notionTeamPageIds = teamPageIdsMap.get(user.id) ?? [];
 
-    try {
-      await pushTeamMemberProfileToNotion({
-        notionTeamMemberPageId: notionTeamMemberId,
-        name: finalName,
-        email: finalEmail,
-        role: user.role as "admin" | "team_lead" | "member" | "hr",
-        weeklyTargetHours: user.weeklyTargetHours ?? 40,
-        notionTeamPageIds,
-        _resolvedConfig: resolvedConfig,
-      });
-      synced++;
-    } catch (err) {
-      errors.push(`${user.id}: ${err instanceof Error ? err.message : String(err)}`);
-    }
+        try {
+          await pushTeamMemberProfileToNotion({
+            notionTeamMemberPageId: notionTeamMemberId,
+            name: finalName,
+            email: finalEmail,
+            role: user.role as "admin" | "team_lead" | "member" | "hr",
+            weeklyTargetHours: user.weeklyTargetHours ?? 40,
+            notionTeamPageIds,
+            _resolvedConfig: resolvedConfig,
+          });
+          synced++;
+        } catch (err) {
+          errors.push(`${user.id}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      })
+    );
   }
 
   return NextResponse.json({ synced, errors: errors.length > 0 ? errors : undefined });

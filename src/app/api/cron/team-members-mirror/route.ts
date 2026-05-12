@@ -1,0 +1,100 @@
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { applicants, teams, users, teamMemberships } from "@/lib/db/schema";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { pushTeamMemberProfileToNotion } from "@/lib/notion";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+export async function GET(req: Request) {
+  const authHeader = req.headers.get("authorization");
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!db) return NextResponse.json({ error: "DB not available" }, { status: 503 });
+
+  // Fetch all active users with a linked Notion Team Member page
+  const linkedUsers = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      role: users.role,
+      weeklyTargetHours: users.weeklyTargetHours,
+      notionTeamMemberId: users.notionTeamMemberId,
+    })
+    .from(users)
+    .where(and(eq(users.isActive, true), isNotNull(users.notionTeamMemberId)));
+
+  if (linkedUsers.length === 0) {
+    return NextResponse.json({ synced: 0, errors: [] });
+  }
+
+  const userIds = linkedUsers.map((u) => u.id);
+
+  // Fetch applicant overrides for display name / email / notionTeamMemberId
+  const applicantRows = await db
+    .select({
+      chronosUserId: applicants.chronosUserId,
+      name: applicants.name,
+      email: applicants.email,
+      notionTeamMemberId: applicants.notionTeamMemberId,
+    })
+    .from(applicants)
+    .where(inArray(applicants.chronosUserId, userIds));
+
+  const applicantMap = new Map(
+    applicantRows
+      .filter((r): r is typeof r & { chronosUserId: string } => !!r.chronosUserId)
+      .map((r) => [r.chronosUserId, r])
+  );
+
+  // Fetch team memberships → Notion page IDs
+  const membershipRows = await db
+    .select({
+      userId: teamMemberships.userId,
+      notionPageId: teams.notionPageId,
+    })
+    .from(teamMemberships)
+    .innerJoin(teams, eq(teamMemberships.teamId, teams.id))
+    .where(inArray(teamMemberships.userId, userIds));
+
+  const teamPageIdsMap = new Map<string, string[]>();
+  for (const row of membershipRows) {
+    if (!row.notionPageId) continue;
+    const existing = teamPageIdsMap.get(row.userId) ?? [];
+    existing.push(row.notionPageId);
+    teamPageIdsMap.set(row.userId, existing);
+  }
+
+  let synced = 0;
+  const errors: string[] = [];
+
+  for (const user of linkedUsers) {
+    const applicant = applicantMap.get(user.id);
+    const notionTeamMemberId =
+      applicant?.notionTeamMemberId?.trim() || user.notionTeamMemberId?.trim() || null;
+    if (!notionTeamMemberId) continue;
+
+    const finalName = applicant?.name?.trim() || user.name;
+    const finalEmail = applicant?.email?.trim() || user.email;
+    const notionTeamPageIds = teamPageIdsMap.get(user.id) ?? [];
+
+    try {
+      await pushTeamMemberProfileToNotion({
+        notionTeamMemberPageId: notionTeamMemberId,
+        name: finalName,
+        email: finalEmail,
+        role: user.role as "admin" | "team_lead" | "member" | "hr",
+        weeklyTargetHours: user.weeklyTargetHours ?? 40,
+        notionTeamPageIds,
+      });
+      synced++;
+    } catch (err) {
+      errors.push(`${user.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return NextResponse.json({ synced, errors: errors.length > 0 ? errors : undefined });
+}

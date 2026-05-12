@@ -2487,6 +2487,78 @@ export async function ensureTeamMemberPage(params: CreateTeamMemberPageParams): 
   return result;
 }
 
+/**
+ * Full mirror push: overwrites the Notion Team Member page with all current Chronos
+ * profile data (name, email, role, time commitment, team relations).
+ * This is the canonical "push" used by the HR dashboard save and the mirror cron.
+ */
+export async function pushTeamMemberProfileToNotion(params: {
+  notionTeamMemberPageId: string;
+  name: string;
+  email: string;
+  role: "admin" | "team_lead" | "member" | "hr";
+  weeklyTargetHours: number;
+  notionTeamPageIds: string[];
+}): Promise<void> {
+  const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
+  if (!notionApiKey || !notionTeamMembersDbId) return;
+
+  const schema = await getDatabaseSchema(notionTeamMembersDbId, NOTION_VERSION, notionApiKey);
+  const properties: Record<string, unknown> = {};
+
+  properties.Name = buildTitleValue(params.name.trim());
+
+  if (schema.properties?.Email?.type === "email") {
+    properties.Email = buildEmailValue(params.email);
+  }
+
+  if (params.notionTeamPageIds.length > 0 && schema.properties?.Team?.type === "relation") {
+    properties.Team = buildRelationValue(params.notionTeamPageIds);
+  }
+
+  const timeCommitmentType = schema.properties?.["Time Commitment"]?.type;
+  if (timeCommitmentType === "number") {
+    properties["Time Commitment"] = { number: params.weeklyTargetHours };
+  } else if (timeCommitmentType === "rich_text") {
+    properties["Time Commitment"] = buildRichTextValue(String(params.weeklyTargetHours));
+  }
+
+  const rolePropName = findTeamMembersRolePropertyName(schema.properties);
+  if (rolePropName) {
+    const raw = schema.properties[rolePropName] as NotionDatabaseProperty & {
+      select?: { options?: Array<{ name: string }> };
+      status?: { options?: Array<{ name: string }> };
+    };
+    const optionNames =
+      raw.type === "select"
+        ? (raw.select?.options ?? []).map((o) => o.name).filter(Boolean)
+        : raw.type === "status"
+          ? (raw.status?.options ?? []).map((o) => o.name).filter(Boolean)
+          : [];
+    if (optionNames.length > 0) {
+      const tryNames =
+        params.role === "admin"
+          ? ["Admin", "admin", "Administrator"]
+          : params.role === "team_lead"
+            ? ["Team Lead", "Team lead", "team_lead", "Lead"]
+            : params.role === "hr"
+              ? ["Human Resources", "HR", "hr", "Human resources"]
+              : ["Member", "member"];
+      const matched =
+        tryNames.find((c) => optionNames.includes(c)) ??
+        optionNames.find((n) => n.replace(/\s+/g, "_").toLowerCase() === params.role);
+      if (matched) {
+        properties[rolePropName] =
+          raw.type === "select"
+            ? { select: { name: matched } }
+            : { status: { name: matched } };
+      }
+    }
+  }
+
+  await patchPageProperties({ pageId: params.notionTeamMemberPageId, notionApiKey, properties });
+}
+
 export async function updateEntryStatus(notionPageId: string, status: string): Promise<void> {
   if (!process.env.NOTION_API_KEY) return;
   await fetch(`${NOTION_API_BASE}/pages/${notionPageId}`, {

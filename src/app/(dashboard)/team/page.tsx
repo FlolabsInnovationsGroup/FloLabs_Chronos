@@ -101,6 +101,7 @@ export default function TeamPage() {
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<TeamUser | null>(null);
   const [deleteUserNotionExitStatus, setDeleteUserNotionExitStatus] = useState<"terminated" | "graduated" | "">("");
   const [saving, setSaving] = useState(false);
+  const [syncingNotionUserId, setSyncingNotionUserId] = useState<string | null>(null);
 
   const [editName, setEditName] = useState("");
   const [editTeamMemberNotion, setEditTeamMemberNotion] = useState<{ id: string; title: string } | null>(null);
@@ -375,6 +376,19 @@ export default function TeamPage() {
       setError(err instanceof Error ? err.message : "Failed to update user.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSyncToNotion(userId: string) {
+    setSyncingNotionUserId(userId);
+    try {
+      await readJson(
+        await fetch(`/api/users/${userId}/notion-sync`, { method: "POST" })
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to sync to Notion.");
+    } finally {
+      setSyncingNotionUserId(null);
     }
   }
 
@@ -803,6 +817,23 @@ export default function TeamPage() {
                                         </span>
                                       </button>
                                     </Tooltip>
+                                    {(role === "admin" || role === "hr") && user.notionTeamMemberId && (
+                                      <Tooltip label="Push to Notion">
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleSyncToNotion(user.id)}
+                                          disabled={syncingNotionUserId === user.id}
+                                          className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low disabled:opacity-40"
+                                        >
+                                          <span
+                                            className={`material-symbols-outlined ${syncingNotionUserId === user.id ? "animate-spin" : ""}`}
+                                            style={{ fontSize: "16px" }}
+                                          >
+                                            {syncingNotionUserId === user.id ? "progress_activity" : "cloud_sync"}
+                                          </span>
+                                        </button>
+                                      </Tooltip>
+                                    )}
                                     {(role === "admin" || role === "hr") && user.id !== session?.user.id && (
                                       <Tooltip label="Delete member">
                                         <button

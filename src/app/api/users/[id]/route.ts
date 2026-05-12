@@ -16,11 +16,8 @@ import {
 import { broadcastDataChange } from "@/lib/realtime";
 import {
   setTeamMemberExitStatusInNotion,
-  updateTeamMemberName,
-  updateTeamMemberRoleInNotion,
-  updateTeamMemberTimeCommitment,
   verifyNotionTeamMemberPageRow,
-  ensureTeamMemberPage,
+  pushTeamMemberProfileToNotion,
 } from "@/lib/notion";
 
 const deleteUserBodySchema = z.object({
@@ -241,20 +238,6 @@ export async function PATCH(
 
   const notionTeamMemberId = user.notionTeamMemberId?.trim() || null;
 
-  if (parsed.data.name !== undefined && parsed.data.name.trim() !== existingUser.name) {
-    if (notionTeamMemberId) {
-      await updateTeamMemberName(notionTeamMemberId, parsed.data.name.trim()).catch(() => {});
-    }
-  }
-
-  if (parsed.data.weeklyTargetHours !== undefined && notionTeamMemberId) {
-    await updateTeamMemberTimeCommitment(notionTeamMemberId, parsed.data.weeklyTargetHours);
-  }
-
-  if (parsed.data.role !== undefined && parsed.data.role !== existingUser.role && notionTeamMemberId) {
-    await updateTeamMemberRoleInNotion(notionTeamMemberId, parsed.data.role).catch(() => {});
-  }
-
   // Only replace team memberships when explicitly provided AND the new role is not admin
   // (or when the caller explicitly provides teams for an admin). Sending [] for an admin
   // role change must NOT wipe memberships — preserve them so they survive a demotion back.
@@ -268,28 +251,27 @@ export async function PATCH(
     }
   }
 
-  if (requestedTeamIds !== undefined && notionTeamMemberId) {
+  // Full mirror push: overwrite the Notion Team Member page with all current Chronos data.
+  if (notionTeamMemberId && (userIsAdmin || userIsHr)) {
     try {
-      const notionTeams =
-        requestedTeamIds.length > 0
-          ? await db
-              .select({ notionPageId: teams.notionPageId })
-              .from(teams)
-              .where(inArray(teams.id, requestedTeamIds))
-          : [];
-      const notionTeamPageIds = notionTeams
+      const userTeamRows = await db
+        .select({ notionPageId: teams.notionPageId })
+        .from(teams)
+        .where(inArray(teams.id, finalTeamIds.length > 0 ? finalTeamIds : [""]))
+        .then((rows) => (finalTeamIds.length > 0 ? rows : []));
+      const notionTeamPageIds = userTeamRows
         .map((row) => row.notionPageId)
         .filter((v): v is string => Boolean(v));
-      if (notionTeamPageIds.length > 0) {
-        await ensureTeamMemberPage({
-          email: user.email,
-          name: user.name,
-          notionTeamMemberPageId: notionTeamMemberId,
-          notionTeamPageIds,
-        });
-      }
+      await pushTeamMemberProfileToNotion({
+        notionTeamMemberPageId: notionTeamMemberId,
+        name: user.name,
+        email: user.email,
+        role: user.role as "admin" | "team_lead" | "member" | "hr",
+        weeklyTargetHours: user.weeklyTargetHours ?? 40,
+        notionTeamPageIds,
+      });
     } catch {
-      // Non-blocking: user/team update should still succeed if Notion sync fails.
+      // Non-blocking: DB update succeeds even if Notion mirror fails.
     }
   }
   const [linkedApplicantProfile] = await db

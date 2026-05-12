@@ -75,7 +75,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const valid = await bcrypt.compare(password, user.password);
           if (!valid) return null;
 
-          await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+          db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id)).catch((err: unknown) => {
+            console.warn("[auth] last_login_at update skipped (column may not exist yet):", (err as Error).message);
+          });
 
           return {
             id: applicant.id,

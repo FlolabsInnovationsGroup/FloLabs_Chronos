@@ -926,7 +926,7 @@ export default function TeamPage() {
                 </span>
               </label>
               <Select
-                label="Applicant program (Joined pipeline)"
+                label="Applicant status"
                 options={APPLICANT_PROGRAM_STATUS_OPTIONS}
                 value={editApplicantProgramStatus}
                 onChange={(v) => {

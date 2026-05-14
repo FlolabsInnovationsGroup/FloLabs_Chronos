@@ -15,6 +15,7 @@ Project context for coding agents working on this repository.
 - `ARCHITECTURE.md` is the **target contract**. If the code disagrees with it, fix the code.
 - `GAME_MASTER.md` tracks **what's done and what's next**. Update it after completing work.
 - `CLAUDE.md` (this file) defines **how to work** in this repo. Follow these guardrails.
+- **Deploy and verify on every task.** After any code change: commit, `git push`, wait for App Runner to reach RUNNING with the new commitSha, then run the relevant Playwright E2E suite against the live URL (`https://athensgreecemarathon.com`) and confirm the changed behaviour works in the browser. A task is not done until this passes. If no E2E test covers the changed path, write one first.
 - **Default: push after work.** When you finish a coherent change (code, docs, or both), commit with a clear message and **`git push`** to `origin` so the remote stays current. Skip pushing only if the user explicitly asks you not to, or if there is nothing to commit.
 - **Absolute testing/deploy rule:** never, under any circumstance, test Chronos behavior on the local machine or create/use a local test environment as a substitute for production validation. Do not rely on host-local Docker, browser checks, local app runs, or local smoke tests for confidence. Test and validate only from AWS/deployed surfaces (App Runner, Lambda, EventBridge, CloudWatch, public deployment URLs, and other AWS-reachable paths), no matter the inconvenience or implications.
 

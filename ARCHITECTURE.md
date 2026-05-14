@@ -929,6 +929,25 @@ Phase 2 behavior:
 
 Future merge work should introduce a canonical person or identity layer above account emails.
 
+### Hephaestus merge sync contract (implemented)
+
+When an HR user merges duplicate leads in Hephaestus (`POST /api/admin/leads/merge`), the merge operation propagates to the shared Chronos tables **in the same transaction**, so changes are immediately visible in Chronos:
+
+| Table | Canonical row | Secondary rows |
+|---|---|---|
+| `website_applicants` | Merged profile written (email, names, phone, linkedin, city, country, role, education, source) | Left as-is (historical record) |
+| `applicants` | Same merged profile synced (`email`, `name`, `phone`, `country`, `city`, `linkedin_url`, `education`, `role_applied_for`, `source`) | `status = 'closed'` — hidden from Chronos views |
+| `users` | `email` updated if primary email changed | `is_active = false` — Chronos login disabled (guard: rows with `role = 'admin'` or `role = 'hr'` are skipped) |
+| `time_entries` | `user_id`, `flolabs_id`, `applicant_id` re-pointed to canonical | — |
+| `user_email_aliases` | All kept emails registered | — |
+| `applicant_duplicate_reviews` | Audit record written with `status = 'merged'` | — |
+
+**What Chronos observes after a merge:**
+- Canonical applicant/user shows the combined profile and remains active.
+- Secondary `applicants` rows have `status = 'closed'` — the same flag used for `rejected` applicants; Chronos hides them from active views.
+- Secondary `users` rows have `is_active = false` — those accounts cannot log in to Chronos.
+- All time entries are attributed to the canonical user; historical data is preserved.
+
 ## Deployment
 
 **Production (canonical):**

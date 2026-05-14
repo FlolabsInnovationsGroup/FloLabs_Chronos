@@ -121,13 +121,11 @@ export async function POST(req: Request) {
     }
   }
 
-  if (!user || !user.isActive) {
-    console.info("[auth/forgot-password] reset skipped", {
+  if (!user) {
+    console.info("[auth/forgot-password] reset skipped — no user found", {
       requestedEmail: email,
       applicantId: applicant?.id ?? null,
       applicantMatchedEmail: applicant?.email ?? null,
-      resolvedUserId: user?.id ?? null,
-      resolvedUserIsActive: user?.isActive ?? null,
     });
     return NextResponse.json({ ok: true });
   }

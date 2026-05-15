@@ -89,10 +89,14 @@ test.describe("Production — all test_users.json accounts (browser)", () => {
     test.setTimeout(360_000);
     for (const user of users) {
       for (const email of extractEmails(user)) {
-        await signInProduction(page, email, user.password);
-        await expect(page.getByPlaceholder("Search Notion tasks…")).toBeVisible({ timeout: 90_000 });
-        await page.context().clearCookies();
-        await page.goto("/login", { waitUntil: "domcontentloaded" });
+        const ctx = await page.context().browser()!.newContext();
+        const p = await ctx.newPage();
+        try {
+          await signInProduction(p, email, user.password);
+          await expect(p.getByPlaceholder("Search Notion tasks…")).toBeVisible({ timeout: 90_000 });
+        } finally {
+          await ctx.close();
+        }
       }
     }
   });

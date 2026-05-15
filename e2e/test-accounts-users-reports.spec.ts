@@ -72,32 +72,37 @@ test.describe("Production — test_accounts (Users + Reports)", () => {
       const creds = which === "hr" ? hrLike! : adminLike!;
       const [primaryEmail] = extractEmails(creds);
       if (!primaryEmail) throw new Error(`No email configured for ${which} test account.`);
-      await signIn(page, primaryEmail, creds.password);
 
-      const usersResponse = page.waitForResponse(
-        (r) => {
-          try {
-            const u = new URL(r.url());
-            return u.pathname.endsWith("/api/users") && r.request().method() === "GET";
-          } catch {
-            return false;
-          }
-        },
-        { timeout: 60_000 }
-      );
+      const ctx = await page.context().browser()!.newContext();
+      const p = await ctx.newPage();
+      try {
+        await signIn(p, primaryEmail, creds.password);
 
-      await page.goto("/team", { waitUntil: "domcontentloaded" });
-      const res = await usersResponse;
-      expect(res.status()).toBe(200);
-      const body = (await res.json()) as { users?: { id: string }[] };
-      expect(Array.isArray(body.users)).toBeTruthy();
-      const ids = (body.users ?? []).map((u) => u.id).filter(Boolean);
-      return [...ids].sort();
+        const usersResponse = p.waitForResponse(
+          (r) => {
+            try {
+              const u = new URL(r.url());
+              return u.pathname.endsWith("/api/users") && r.request().method() === "GET";
+            } catch {
+              return false;
+            }
+          },
+          { timeout: 60_000 }
+        );
+
+        await p.goto("/team", { waitUntil: "domcontentloaded" });
+        const res = await usersResponse;
+        expect(res.status()).toBe(200);
+        const body = (await res.json()) as { users?: { id: string }[] };
+        expect(Array.isArray(body.users)).toBeTruthy();
+        const ids = (body.users ?? []).map((u) => u.id).filter(Boolean);
+        return [...ids].sort();
+      } finally {
+        await ctx.close();
+      }
     }
 
     const hrIds = await sortedUserIdsFromTeamPage("hr");
-    await page.context().clearCookies();
-    await page.goto("/login", { waitUntil: "domcontentloaded" });
     const adminIds = await sortedUserIdsFromTeamPage("admin");
     expect(adminIds).toEqual(hrIds);
   });
@@ -116,7 +121,7 @@ test.describe("Production — test_accounts (Users + Reports)", () => {
     await page.goto("/reports", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText(/\d+ entries/).first()).toBeVisible();
-    await expect(page.getByText("Total Hours")).toBeVisible();
+    await expect(page.getByText("Total Hours").first()).toBeVisible();
 
     await page.goto("/team", { waitUntil: "domcontentloaded" });
     await page.waitForURL(/\/timer/, { timeout: 30_000 });
@@ -130,8 +135,13 @@ test.describe("Production — test_accounts (Users + Reports)", () => {
     for (const user of users) {
       const emails = extractEmails(user);
       for (const email of emails) {
-        await signIn(page, email, user.password);
-        await page.context().clearCookies();
+        const ctx = await page.context().browser()!.newContext();
+        const p = await ctx.newPage();
+        try {
+          await signIn(p, email, user.password);
+        } finally {
+          await ctx.close();
+        }
       }
     }
   });

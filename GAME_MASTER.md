@@ -291,7 +291,8 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 - Production deployed at https://athensgreecemarathon.com (AWS App Runner `flolabs-chronos`, `us-east-1`)
 - App Runner instance: 2 vCPU / 4 GB RAM; auto-scaling: `flolabs-apps` config (`MinSize=1, MaxConcurrency=25, MaxSize=3`)
 - pg connection pool: `max=10, idleTimeout=20s, connectionTimeout=5s`
-- Latest deployed commit: `0cc016c` (2026-05-15) — shared flolabs_users unification + test fixes
+- Latest deployed commit: `e78182c` (2026-05-15) — full E2E suite green (16 pass, 2 skip)
+- **E2E status**: All 16 Playwright tests pass. Fixes applied: strict locators (.first()), removed unregistered emails from test_users.json, fresh browser contexts for multi-account tests (clearCookies() does not reliably clear NextAuth JWT sessions).
 - **Identity**: Chronos now uses `pgTable("flolabs_users", ...)` — shares the single `flolabs_users` table with Hephaestus. No separate `applicants` table; all identity goes through `flolabs_users`.
 - **instrumentation.ts**: Runs idempotent ALTER TABLE ADD COLUMN on `flolabs_users` and related tables. Does NOT run `ALTER COLUMN SET DEFAULT` (blocks concurrent reads with ACCESS EXCLUSIVE lock).
 - Database schema migrated: per-user tags, time_entry_tags, optional project_id, entry_discussions, discussion_replies, applicant_duplicate_reviews, app_config, flolabs_id/applicant_id dual columns, discussions applicant FK columns

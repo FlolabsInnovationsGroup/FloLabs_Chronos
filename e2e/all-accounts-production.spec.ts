@@ -78,7 +78,7 @@ test.describe("Production — all test_users.json accounts (browser)", () => {
       if (rk === "member") {
         await page.goto("/reports", { waitUntil: "domcontentloaded" });
         await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible({ timeout: 60_000 });
-        await expect(page.getByText(/\d+ entries/)).toBeVisible();
+        await expect(page.getByText(/\d+ entries/).first()).toBeVisible();
         await page.goto("/team", { waitUntil: "domcontentloaded" });
         await page.waitForURL(/\/timer/, { timeout: 30_000 });
       }

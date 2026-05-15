@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { SettingsForm } from "./SettingsForm";
 import { db } from "@/lib/db";
-import { applicants, userEmailAliases } from "@/lib/db/schema";
+import { userEmailAliases, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
@@ -23,12 +23,12 @@ export default async function SettingsPage() {
           .where(eq(userEmailAliases.userId, chronosUserId)),
         db
           .select({
-            name: applicants.name,
-            email: applicants.email,
-            profilePictureUrl: applicants.profilePictureUrl,
+            name: users.name,
+            email: users.email,
+            profilePictureUrl: users.profilePictureUrl,
           })
-          .from(applicants)
-          .where(eq(applicants.chronosUserId, chronosUserId))
+          .from(users)
+          .where(eq(users.id, chronosUserId))
           .limit(1)
           .then((rows) => rows[0] ?? null),
       ])

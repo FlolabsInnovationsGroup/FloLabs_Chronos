@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { getAccessibleUsers } from "@/lib/permissions";
 import { getActiveTimersForUserIds } from "@/lib/redis";
 import { db } from "@/lib/db";
-import { applicants, projects, timeEntries, userEmailAliases, users as usersTable } from "@/lib/db/schema";
+import { projects, timeEntries, userEmailAliases, users as usersTable } from "@/lib/db/schema";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { ActiveTimer, ApplicantProgramStatus } from "@/types";
 import { isAdminLikeRole } from "@/lib/role-utils";
@@ -110,31 +110,31 @@ export async function GET() {
     db && rows.length > 0
       ? db
           .select({
-            chronosUserId: applicants.chronosUserId,
-            status: applicants.status,
-            role: applicants.role,
-            teamId: applicants.teamId,
-            isActive: applicants.isActive,
-            weeklyTargetHours: applicants.weeklyTargetHours,
-            profilePictureUrl: applicants.profilePictureUrl,
-            notionTeamMemberId: applicants.notionTeamMemberId,
-            name: applicants.name,
-            email: applicants.email,
-            hubspotRawData: applicants.hubspotRawData,
+            chronosUserId: usersTable.id,
+            status: usersTable.status,
+            role: usersTable.role,
+            teamId: usersTable.teamId,
+            isActive: usersTable.isActive,
+            weeklyTargetHours: usersTable.weeklyTargetHours,
+            profilePictureUrl: usersTable.profilePictureUrl,
+            notionTeamMemberId: usersTable.notionTeamMemberId,
+            name: usersTable.name,
+            email: usersTable.email,
+            hubspotRawData: usersTable.hubspotRawData,
           })
-          .from(applicants)
-          .where(inArray(applicants.chronosUserId, userIds))
+          .from(usersTable)
+          .where(inArray(usersTable.id, userIds))
           .catch((e) => { console.error("[api/users] applicant profile overlay query failed", e); return []; })
       : Promise.resolve([]),
     db && session.user.role === "admin" && rows.length > 0
       ? db
           .select({
-            chronosUserId: applicants.chronosUserId,
+            chronosUserId: usersTable.id,
             count: sql<number>`count(*)::int`,
           })
-          .from(applicants)
-          .where(inArray(applicants.chronosUserId, userIds))
-          .groupBy(applicants.chronosUserId)
+          .from(usersTable)
+          .where(inArray(usersTable.id, userIds))
+          .groupBy(usersTable.id)
           .catch((e) => { console.error("[api/users] applicants count query failed", e); return []; })
       : Promise.resolve([]),
     db && rows.length > 0

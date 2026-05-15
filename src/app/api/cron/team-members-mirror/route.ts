@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { applicants, teams, users, teamMemberships } from "@/lib/db/schema";
+import { teams, users, teamMemberships } from "@/lib/db/schema";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { pushTeamMemberProfileToNotion } from "@/lib/notion";
 import { getNotionConfig } from "@/lib/app-config";
@@ -50,24 +50,6 @@ export async function GET(req: Request) {
 
   const userIds = linkedUsers.map((u) => u.id);
 
-  // Fetch applicant overrides for display name / email / notionTeamMemberId
-  const applicantRows = await db
-    .select({
-      chronosUserId: applicants.chronosUserId,
-      name: applicants.name,
-      email: applicants.email,
-      notionTeamMemberId: applicants.notionTeamMemberId,
-    })
-    .from(applicants)
-    .where(inArray(applicants.chronosUserId, userIds));
-
-  const applicantMap = new Map(
-    applicantRows
-      .filter((r): r is typeof r & { chronosUserId: string } => !!r.chronosUserId)
-      .map((r) => [r.chronosUserId, r])
-  );
-
-  // Fetch team memberships → Notion page IDs
   const membershipRows = await db
     .select({
       userId: teamMemberships.userId,
@@ -94,13 +76,11 @@ export async function GET(req: Request) {
     const batch = linkedUsers.slice(i, i + BATCH_SIZE);
     await Promise.all(
       batch.map(async (user) => {
-        const applicant = applicantMap.get(user.id);
-        const notionTeamMemberId =
-          applicant?.notionTeamMemberId?.trim() || user.notionTeamMemberId?.trim() || null;
+        const notionTeamMemberId = user.notionTeamMemberId?.trim() || null;
         if (!notionTeamMemberId) return;
 
-        const finalName = applicant?.name?.trim() || user.name;
-        const finalEmail = applicant?.email?.trim() || user.email;
+        const finalName = user.name;
+        const finalEmail = user.email;
         const notionTeamPageIds = teamPageIdsMap.get(user.id) ?? [];
 
         try {

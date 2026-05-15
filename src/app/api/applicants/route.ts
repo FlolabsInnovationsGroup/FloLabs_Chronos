@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { applicants, users } from '@/lib/db/schema';
+import { users } from '@/lib/db/schema';
 import { db } from '@/lib/db';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { teamMemberships, teams } from '@/lib/db/schema';
@@ -163,41 +163,40 @@ export async function GET(request: Request) {
 
   const rows = await db
     .select({
-      id: applicants.id,
-      externalApplicantId: applicants.externalApplicantId,
-      email: applicants.email,
-      name: applicants.name,
-      phone: applicants.phone,
-      country: applicants.country,
-      stateRegion: applicants.stateRegion,
-      city: applicants.city,
-      dateOfBirth: applicants.dateOfBirth,
-      gender: applicants.gender,
-      linkedinUrl: applicants.linkedinUrl,
-      education: applicants.education,
-      fieldOfStudy: applicants.fieldOfStudy,
-      currentJobTitle: applicants.currentJobTitle,
-      companyName: applicants.companyName,
-      roleAppliedFor: applicants.roleAppliedFor,
-      stage: applicants.stage,
-      status: applicants.status,
-      joinedAt: applicants.joinedAt,
-      lastWebsiteVisit: applicants.lastWebsiteVisit,
-      source: applicants.source,
-      hubspotRecordId: applicants.hubspotRecordId,
-      hubspotStatus: applicants.hubspotStatus,
-      hubspotOwner: applicants.hubspotOwner,
-      hubspotLifecycleStage: applicants.hubspotLifecycleStage,
-      hubspotLeadStatus: applicants.hubspotLeadStatus,
-      hubspotLastModifiedAt: applicants.hubspotLastModifiedAt,
-      hubspotRawData: applicants.hubspotRawData,
-      syncedToTeamMembers: applicants.syncedToTeamMembers,
-      chronosUserId: applicants.chronosUserId,
+      id: users.id,
+      externalApplicantId: users.externalApplicantId,
+      email: users.email,
+      name: users.name,
+      phone: users.phoneNumber,
+      country: users.country,
+      stateRegion: users.stateRegion,
+      city: users.city,
+      dateOfBirth: users.dateOfBirth,
+      gender: users.gender,
+      linkedinUrl: users.linkedinUrl,
+      education: users.education,
+      fieldOfStudy: users.fieldOfStudy,
+      currentJobTitle: users.currentJobTitle,
+      companyName: users.companyName,
+      roleAppliedFor: users.roleAppliedFor,
+      stage: users.stage,
+      status: users.status,
+      joinedAt: users.joinedAt,
+      lastWebsiteVisit: users.lastWebsiteVisit,
+      source: users.source,
+      hubspotRecordId: users.hubspotRecordId,
+      hubspotStatus: users.hubspotStatus,
+      hubspotOwner: users.hubspotOwner,
+      hubspotLifecycleStage: users.hubspotLifecycleStage,
+      hubspotLeadStatus: users.hubspotLeadStatus,
+      hubspotLastModifiedAt: users.hubspotLastModifiedAt,
+      hubspotRawData: users.hubspotRawData,
+      syncedToTeamMembers: users.syncedToTeamMembers,
+      chronosUserId: users.id,
       chronosUserName: users.name,
     })
-    .from(applicants)
-    .leftJoin(users, eq(applicants.chronosUserId, users.id))
-    .orderBy(desc(applicants.joinedAt));
+    .from(users)
+    .orderBy(desc(users.joinedAt));
 
   const normalized = rows.map((row) => {
     const raw = row.hubspotRawData;
@@ -235,11 +234,11 @@ export async function POST(request: Request) {
 
   const [existingApplicant] = await db
     .select({
-      roleAppliedFor: applicants.roleAppliedFor,
-      hubspotRawData: applicants.hubspotRawData,
+      roleAppliedFor: users.roleAppliedFor,
+      hubspotRawData: users.hubspotRawData,
     })
-    .from(applicants)
-    .where(eq(applicants.email, normalizedEmail))
+    .from(users)
+    .where(eq(users.email, normalizedEmail))
     .limit(1);
   const mergedRoleHistory = mergeRoleHistory({
     incomingRole: String(body.roleAppliedFor ?? ''),
@@ -254,13 +253,24 @@ export async function POST(request: Request) {
     ...derivedPatch,
   };
 
+  const split = name.split(/\s+/).filter(Boolean);
+  const firstName = toOptionalString(body.firstName) ?? split[0] ?? name;
+  const lastName =
+    toOptionalString(body.lastName) ?? ((split.length > 1 ? split.slice(1).join(' ') : '') || firstName);
+
+  const randomPwd = await bcrypt.hash(randomBytes(24).toString('hex'), 12);
+  const visit = body.lastWebsiteVisit ? new Date(body.lastWebsiteVisit) : null;
+
   const inserted = await db
-    .insert(applicants)
+    .insert(users)
     .values({
       externalApplicantId: body.externalApplicantId ?? null,
       email: normalizedEmail,
       name,
-      phone: body.phone ?? null,
+      firstName,
+      lastName,
+      password: randomPwd,
+      phoneNumber: body.phone ?? null,
       country: body.country ?? null,
       stateRegion: body.stateRegion ?? null,
       city: body.city ?? null,
@@ -275,7 +285,8 @@ export async function POST(request: Request) {
       stage: normalizedStage,
       status: normalizedStatus,
       joinedAt: body.joinedAt ? new Date(body.joinedAt) : new Date(),
-      lastWebsiteVisit: body.lastWebsiteVisit ? new Date(body.lastWebsiteVisit) : null,
+      lastWebsiteVisit: visit,
+      lastVisitedAt: visit ?? undefined,
       source: body.source ?? null,
       hubspotRecordId: body.hubspotRecordId ?? null,
       hubspotStatus: body.hubspotStatus ?? null,
@@ -291,14 +302,15 @@ export async function POST(request: Request) {
       weeklyTargetHours: body.weeklyTargetHours ?? 40,
       profilePictureUrl: body.profilePictureUrl ?? null,
       notionTeamMemberId: body.notionTeamMemberId ?? null,
-      chronosUserId: body.chronosUserId ?? null,
     })
     .onConflictDoUpdate({
-      target: applicants.email,
+      target: users.email,
       set: {
         externalApplicantId: body.externalApplicantId ?? null,
         name,
-        phone: body.phone ?? null,
+        firstName,
+        lastName,
+        phoneNumber: body.phone ?? null,
         country: body.country ?? null,
         stateRegion: body.stateRegion ?? null,
         city: body.city ?? null,
@@ -313,7 +325,8 @@ export async function POST(request: Request) {
         stage: normalizedStage,
         status: normalizedStatus,
         joinedAt: body.joinedAt ? new Date(body.joinedAt) : new Date(),
-        lastWebsiteVisit: body.lastWebsiteVisit ? new Date(body.lastWebsiteVisit) : null,
+        lastWebsiteVisit: visit,
+        lastVisitedAt: visit ?? undefined,
         source: body.source ?? null,
         hubspotRecordId: body.hubspotRecordId ?? null,
         hubspotStatus: body.hubspotStatus ?? null,
@@ -329,7 +342,7 @@ export async function POST(request: Request) {
         weeklyTargetHours: body.weeklyTargetHours ?? 40,
         profilePictureUrl: body.profilePictureUrl ?? null,
         notionTeamMemberId: body.notionTeamMemberId ?? null,
-        chronosUserId: body.chronosUserId ?? null,
+        updatedAt: new Date(),
       },
     })
     .returning();
@@ -342,12 +355,8 @@ export async function POST(request: Request) {
 
   if (shouldProvisionChronosUser) {
     try {
-      const normalizedEmail = String(body.email).toLowerCase();
-      const [existingUser] = await db
-        .select()
-        .from(users)
-        .where(sql`lower(${users.email}) = ${normalizedEmail}`)
-        .limit(1);
+      const ensuredUser = applicant;
+
       const requestedTeamIds = Array.isArray(body.teamIds)
         ? body.teamIds.filter((value: unknown): value is string => typeof value === 'string' && value.length > 0)
         : (typeof body.teamId === 'string' && body.teamId.length > 0 ? [body.teamId] : []);
@@ -371,23 +380,6 @@ export async function POST(request: Request) {
         })
         : null;
 
-      const ensuredUser = existingUser
-        ? existingUser
-        : (await db
-          .insert(users)
-          .values({
-            email: normalizedEmail,
-            name,
-            password: await bcrypt.hash(randomBytes(24).toString('hex'), 12),
-            role: body.role ?? 'member',
-            teamId: teamIds[0] ?? null,
-            isActive: Boolean(body.isActive ?? shouldEnableChronosAccess),
-            weeklyTargetHours: body.weeklyTargetHours ?? 40,
-            profilePictureUrl: body.profilePictureUrl ?? null,
-            notionTeamMemberId: teamMemberPage?.pageId ?? null,
-          })
-          .returning())[0];
-
       if (teamMemberPage?.pageId && ensuredUser.notionTeamMemberId !== teamMemberPage.pageId) {
         await db
           .update(users)
@@ -397,36 +389,33 @@ export async function POST(request: Request) {
 
       if (teamIds.length > 0) {
         await db.insert(teamMemberships).values(teamIds.map((teamId: string) => ({ userId: ensuredUser.id, teamId }))).onConflictDoNothing();
-        await db.update(users).set({ teamId: teamIds[0], updatedAt: new Date() }).where(eq(users.id, ensuredUser.id));
+        await db
+          .update(users)
+          .set({
+            role: body.role ?? ensuredUser.role ?? 'member',
+            teamId: teamIds[0],
+            isActive: Boolean(body.isActive ?? shouldEnableChronosAccess),
+            weeklyTargetHours: body.weeklyTargetHours ?? ensuredUser.weeklyTargetHours ?? 40,
+            profilePictureUrl: body.profilePictureUrl ?? ensuredUser.profilePictureUrl ?? null,
+            notionTeamMemberId: teamMemberPage?.pageId ?? ensuredUser.notionTeamMemberId ?? null,
+            syncedToTeamMembers: Boolean(body.syncedToTeamMembers),
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, ensuredUser.id));
+      } else {
+        await db
+          .update(users)
+          .set({
+            role: body.role ?? ensuredUser.role ?? 'member',
+            isActive: Boolean(body.isActive ?? shouldEnableChronosAccess),
+            weeklyTargetHours: body.weeklyTargetHours ?? ensuredUser.weeklyTargetHours ?? 40,
+            profilePictureUrl: body.profilePictureUrl ?? ensuredUser.profilePictureUrl ?? null,
+            notionTeamMemberId: teamMemberPage?.pageId ?? ensuredUser.notionTeamMemberId ?? null,
+            syncedToTeamMembers: Boolean(body.syncedToTeamMembers),
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, ensuredUser.id));
       }
-
-      await db
-        .update(applicants)
-        .set({
-          chronosUserId: ensuredUser.id,
-          syncedToTeamMembers: Boolean(body.syncedToTeamMembers),
-          role: (body.role ?? ensuredUser.role ?? "member"),
-          teamId: teamIds[0] ?? ensuredUser.teamId ?? null,
-          isActive: Boolean(body.isActive ?? shouldEnableChronosAccess),
-          weeklyTargetHours: body.weeklyTargetHours ?? ensuredUser.weeklyTargetHours ?? 40,
-          profilePictureUrl: body.profilePictureUrl ?? ensuredUser.profilePictureUrl ?? null,
-          notionTeamMemberId: teamMemberPage?.pageId ?? ensuredUser.notionTeamMemberId ?? null,
-          updatedAt: new Date(),
-        })
-        .where(eq(applicants.id, applicant.id));
-
-      await db
-        .update(users)
-        .set({
-          role: body.role ?? ensuredUser.role ?? 'member',
-          teamId: teamIds[0] ?? ensuredUser.teamId ?? null,
-          isActive: Boolean(body.isActive ?? shouldEnableChronosAccess),
-          weeklyTargetHours: body.weeklyTargetHours ?? ensuredUser.weeklyTargetHours ?? 40,
-          profilePictureUrl: body.profilePictureUrl ?? ensuredUser.profilePictureUrl ?? null,
-          notionTeamMemberId: teamMemberPage?.pageId ?? ensuredUser.notionTeamMemberId ?? null,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, ensuredUser.id));
 
       await addPrimaryEmailAlias(ensuredUser.id, ensuredUser.email).catch(() => null);
       await ensureDiscordResourcesForUser({ userId: ensuredUser.id, name: ensuredUser.name }).catch(() => null);

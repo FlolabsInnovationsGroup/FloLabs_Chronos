@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { applicants, users } from "@/lib/db/schema";
+import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -28,43 +28,30 @@ export async function PATCH(req: Request) {
 
   const applicantId = session.user.id;
   const chronosUserId = session.user.chronosUserId ?? null;
+  const userRowId = chronosUserId ?? applicantId;
 
   // Name update
   const nameParsed = nameSchema.safeParse(body);
   if (nameParsed.success && !("currentPassword" in body)) {
-    const [applicant] = await db
-      .update(applicants)
+    const [updated] = await db
+      .update(users)
       .set({ name: nameParsed.data.name, updatedAt: new Date() })
-      .where(eq(applicants.id, applicantId))
+      .where(eq(users.id, userRowId))
       .returning();
 
-    if (chronosUserId) {
-      await db
-        .update(users)
-        .set({ name: nameParsed.data.name, updatedAt: new Date() })
-        .where(eq(users.id, chronosUserId));
-    }
-
-    return NextResponse.json({ user: applicant });
+    return NextResponse.json({ user: updated });
   }
 
   // Profile picture update/remove
   const pictureParsed = profilePictureSchema.safeParse(body);
   if (pictureParsed.success && !("currentPassword" in body) && !("name" in body)) {
-    const [applicant] = await db
-      .update(applicants)
+    const [updated] = await db
+      .update(users)
       .set({ profilePictureUrl: pictureParsed.data.profilePictureUrl, updatedAt: new Date() })
-      .where(eq(applicants.id, applicantId))
+      .where(eq(users.id, userRowId))
       .returning();
 
-    if (chronosUserId) {
-      await db
-        .update(users)
-        .set({ profilePictureUrl: pictureParsed.data.profilePictureUrl, updatedAt: new Date() })
-        .where(eq(users.id, chronosUserId));
-    }
-
-    return NextResponse.json({ user: applicant });
+    return NextResponse.json({ user: updated });
   }
 
   // Password update

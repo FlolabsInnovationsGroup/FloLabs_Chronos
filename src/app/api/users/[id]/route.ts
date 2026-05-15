@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { applicants, teams, timeEntries, users, tags, userEmailAliases } from "@/lib/db/schema";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { teams, timeEntries, users, tags, userEmailAliases } from "@/lib/db/schema";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import {
   canManageTeams,
@@ -36,7 +36,7 @@ const updateSchema = z.object({
   notifyOnStart: z.boolean().optional(),
   notifyOnStop: z.boolean().optional(),
   dailySummary: z.boolean().optional(),
-  /** Updates linked `applicants.status` rows for this Chronos user (admin / HR only). */
+  /** Updates `flolabs_users.status` (program pipeline) for this account (admin / HR only). */
   applicantProgramStatus: z.enum(["joined", "graduated", "terminated"]).optional(),
   alternateEmails: z.array(z.string().email()).optional(),
 });
@@ -177,6 +177,10 @@ export async function PATCH(
     }
   }
 
+  if (parsed.data.applicantProgramStatus !== undefined) {
+    updateData.status = parsed.data.applicantProgramStatus;
+  }
+
   const [user] = await db
     .update(users)
     .set(updateData)
@@ -207,33 +211,6 @@ export async function PATCH(
         )
         .onConflictDoNothing();
     }
-  }
-
-  const applicantUpdateData: Record<string, unknown> = {
-    ...(parsed.data.role !== undefined ? { role: parsed.data.role } : {}),
-    ...(parsed.data.teamId !== undefined
-      ? { teamId: parsed.data.teamId }
-      : requestedTeamIds !== undefined
-        ? { teamId: requestedTeamIds[0] ?? null }
-        : {}),
-    ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
-    ...(parsed.data.weeklyTargetHours !== undefined ? { weeklyTargetHours: parsed.data.weeklyTargetHours } : {}),
-    ...(parsed.data.notionTeamMemberId !== undefined
-      ? { notionTeamMemberId: parsed.data.notionTeamMemberId }
-      : {}),
-    ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
-    ...(parsed.data.applicantProgramStatus !== undefined ? { status: parsed.data.applicantProgramStatus } : {}),
-    ...(parsed.data.alternateEmails !== undefined ? { email: user.email.toLowerCase() } : {}),
-  };
-
-  if (Object.keys(applicantUpdateData).length > 0) {
-    await db
-      .update(applicants)
-      .set({
-        ...applicantUpdateData,
-        updatedAt: new Date(),
-      })
-      .where(eq(applicants.chronosUserId, id));
   }
 
   const notionTeamMemberId = user.notionTeamMemberId?.trim() || null;
@@ -274,36 +251,12 @@ export async function PATCH(
       // Non-blocking: DB update succeeds even if Notion mirror fails.
     }
   }
-  const [linkedApplicantProfile] = await db
-    .select({
-      name: applicants.name,
-      email: applicants.email,
-      role: applicants.role,
-      teamId: applicants.teamId,
-      isActive: applicants.isActive,
-      weeklyTargetHours: applicants.weeklyTargetHours,
-      notionTeamMemberId: applicants.notionTeamMemberId,
-      applicantProgramStatus: applicants.status,
-      profilePictureUrl: applicants.profilePictureUrl,
-    })
-    .from(applicants)
-    .where(eq(applicants.chronosUserId, id))
-    .limit(1);
-
   const userTeams = await getUserTeams(id);
   broadcastDataChange("team");
   return NextResponse.json({
     user: {
       ...user,
-      name: linkedApplicantProfile?.name?.trim() || user.name,
-      email: linkedApplicantProfile?.email?.trim() || user.email,
-      role: linkedApplicantProfile?.role ?? user.role,
-      teamId: linkedApplicantProfile?.teamId ?? user.teamId,
-      isActive: linkedApplicantProfile?.isActive ?? user.isActive,
-      weeklyTargetHours: linkedApplicantProfile?.weeklyTargetHours ?? user.weeklyTargetHours,
-      notionTeamMemberId: linkedApplicantProfile?.notionTeamMemberId ?? user.notionTeamMemberId,
-      profilePictureUrl: linkedApplicantProfile?.profilePictureUrl ?? user.profilePictureUrl,
-      applicantProgramStatus: linkedApplicantProfile?.applicantProgramStatus ?? null,
+      applicantProgramStatus: user.status as "joined" | "graduated" | "terminated" | null,
       teams: userTeams,
       team: userTeams[0] ?? null,
     },
@@ -348,14 +301,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const [applicantRow] = await db
-    .select({ notionTeamMemberId: applicants.notionTeamMemberId })
-    .from(applicants)
-    .where(eq(applicants.chronosUserId, id))
-    .limit(1);
-
-  const notionTeamMemberId =
-    applicantRow?.notionTeamMemberId?.trim() || existingUser.notionTeamMemberId?.trim() || null;
+  const notionTeamMemberId = existingUser.notionTeamMemberId?.trim() || null;
   if (notionTeamMemberId && !parsedBody.data.notionExitStatus) {
     return NextResponse.json(
       {
@@ -366,22 +312,15 @@ export async function DELETE(
     );
   }
 
-  const [linkedApplicant] = await db
-    .select({ id: applicants.id })
-    .from(applicants)
-    .where(eq(applicants.chronosUserId, id))
-    .limit(1);
-
   const [entry] = await db
     .select({ id: timeEntries.id })
     .from(timeEntries)
     .where(
-      linkedApplicant
-        ? or(
-            eq(timeEntries.applicantId, linkedApplicant.id),
-            and(isNull(timeEntries.applicantId), eq(timeEntries.userId, id))
-          )!
-        : eq(timeEntries.userId, id)
+      or(
+        eq(timeEntries.userId, id),
+        eq(timeEntries.flolabsId, id),
+        eq(timeEntries.applicantId, id)
+      )!
     )
     .limit(1);
 

@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import { applicants, passwordResetTokens, users } from "@/lib/db/schema";
+import { passwordResetTokens, users } from "@/lib/db/schema";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { sendEmail } from "@/lib/mail";
 import { normalizeEmail, resolvePublicAppOrigin } from "@/lib/invitations";
 import { findApplicantForCredentialEmail } from "@/lib/applicant-auth";
 import { addPrimaryEmailAlias, findUserByAnyEmail } from "@/lib/user-email-aliases";
-import bcrypt from "bcryptjs";
 
 const schema = z.object({ email: z.string().email() });
 
@@ -27,30 +26,26 @@ export async function POST(req: Request) {
     providedTestSecret === resetPasswordTestSecret &&
     email === resetPasswordTestEmail;
 
-  const applicantRow = await findApplicantForCredentialEmail(email);
-  let applicant = applicantRow
+  const pipelineRow = await findApplicantForCredentialEmail(email);
+  let applicant = pipelineRow
     ? {
-        id: applicantRow.id,
-        email: applicantRow.email,
-        name: applicantRow.name,
-        status: applicantRow.status,
-        stage: applicantRow.stage,
-        isActive: applicantRow.isActive,
-        chronosUserId: applicantRow.chronosUserId,
+        id: pipelineRow.id,
+        email: pipelineRow.email,
+        name: pipelineRow.name,
+        status: pipelineRow.status,
+        stage: pipelineRow.stage,
+        isActive: pipelineRow.isActive,
       }
     : null;
 
-  let matchedByRequestedEmail = false;
   let user =
-    applicant?.chronosUserId
-      ? (
-          await db
-            .select({ id: users.id, email: users.email, name: users.name, isActive: users.isActive })
-            .from(users)
-            .where(eq(users.id, applicant.chronosUserId))
-            .limit(1)
-        )[0]
-      : undefined;
+    pipelineRow &&
+    (await db
+      .select({ id: users.id, email: users.email, name: users.name, isActive: users.isActive })
+      .from(users)
+      .where(eq(users.id, pipelineRow.id))
+      .limit(1))[0];
+
   if (!user && applicant?.email) {
     const byApplicantEmail = await findUserByAnyEmail(applicant.email.toLowerCase());
     if (byApplicantEmail) {
@@ -60,64 +55,17 @@ export async function POST(req: Request) {
         name: byApplicantEmail.name,
         isActive: byApplicantEmail.isActive,
       };
-      if (!applicant.chronosUserId) {
-        await db
-          .update(applicants)
-          .set({ chronosUserId: byApplicantEmail.id, updatedAt: new Date() })
-          .where(eq(applicants.id, applicant.id));
-        applicant = { ...applicant, chronosUserId: byApplicantEmail.id };
-      }
     }
   }
   if (!user) {
     const byRequestedEmail = await findUserByAnyEmail(email);
     if (byRequestedEmail) {
-      matchedByRequestedEmail = true;
       user = {
         id: byRequestedEmail.id,
         email: byRequestedEmail.email,
         name: byRequestedEmail.name,
         isActive: byRequestedEmail.isActive,
       };
-      if (applicant && !applicant.chronosUserId) {
-        await db
-          .update(applicants)
-          .set({ chronosUserId: byRequestedEmail.id, updatedAt: new Date() })
-          .where(eq(applicants.id, applicant.id));
-        applicant = { ...applicant, chronosUserId: byRequestedEmail.id };
-      }
-    }
-  }
-
-  // If applicant exists but no linked Chronos user row was found yet, provision and link one now.
-  if (!user && applicant?.email) {
-    const generatedPasswordHash = await bcrypt.hash(crypto.randomBytes(24).toString("hex"), 12);
-    const [createdUser] = await db
-      .insert(users)
-      .values({
-        email: applicant.email.toLowerCase(),
-        name: applicant.name?.trim() || applicant.email.toLowerCase(),
-        password: generatedPasswordHash,
-        role: "member",
-        isActive: Boolean(applicant.isActive),
-      })
-      .onConflictDoNothing()
-      .returning({ id: users.id, email: users.email, name: users.name, isActive: users.isActive });
-
-    const resolvedUser = createdUser ?? (await findUserByAnyEmail(applicant.email.toLowerCase()));
-    if (resolvedUser) {
-      await db
-        .update(applicants)
-        .set({ chronosUserId: resolvedUser.id, updatedAt: new Date() })
-        .where(eq(applicants.id, applicant.id));
-      await addPrimaryEmailAlias(resolvedUser.id, applicant.email.toLowerCase());
-      user = {
-        id: resolvedUser.id,
-        email: resolvedUser.email,
-        name: resolvedUser.name,
-        isActive: resolvedUser.isActive,
-      };
-      applicant = { ...applicant, chronosUserId: resolvedUser.id };
     }
   }
 
@@ -130,9 +78,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // Always deliver to the exact address the user typed when we resolved a valid account.
-  // This avoids sending reset links to a different historical primary address when the
-  // account is linked through applicant data or aliases.
   const recipientEmail = email;
   const recipientName = applicant?.name?.trim() || user.name;
 
@@ -154,8 +99,6 @@ export async function POST(req: Request) {
         .set({ usedAt: new Date() })
         .where(eq(passwordResetTokens.id, existing.id));
     } else {
-      // UX reliability: keep anti-enumeration response shape, but resend the
-      // same active token email instead of silently no-oping during cooldown.
       tokenToSend = existing.token;
       tokenExpiresAt = existing.expiresAt;
       tokenRowId = existing.id;

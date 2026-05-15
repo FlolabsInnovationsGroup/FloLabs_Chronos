@@ -6,7 +6,7 @@ Internal time-tracking and team-management app for FloLabs.
 
 | Doc | Purpose |
 |-----|---------|
-| **`ARCHITECTURE.md`** | **Start here.** Product model, identity (`applicants` vs `users`), data rules, timers, Notion — plus **“System architecture (for agents)”** (AWS App Runner, RDS, Redis, deploy/secret layout). |
+| **`ARCHITECTURE.md`** | **Start here.** Product model, identity (`flolabs_users`), data rules, timers, Notion — plus **“System architecture (for agents)”** (AWS App Runner, RDS, Redis, deploy/secret layout). |
 | **`DEPLOYMENT.md`** | Proven path: GitHub Actions → ECR → App Runner; SSM parameters; post-deploy checks. |
 | **`AGENT.md`** | Agent workflow: AWS-only validation, read order, priorities. |
 | **`CLAUDE.md`** | Maintainer/agent guardrails, credentials context, theme rules. |
@@ -14,7 +14,7 @@ Internal time-tracking and team-management app for FloLabs.
 
 Production runtime is **AWS** (App Runner + RDS + ElastiCache). **Vercel/Neon are legacy** references only.
 
-Chronos now serves as the shared account identity backend for Hephaestus International (same `users` / `user_email_aliases` / `applicants` model and shared `DATABASE_URL` runtime source on AWS SSM).
+Chronos now shares a single **`flolabs_users`** identity table with Hephaestus International (same `DATABASE_URL` / SSM-backed runtime on AWS).
 
 ## Core functionality
 

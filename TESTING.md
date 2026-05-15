@@ -6,6 +6,7 @@ This repository treats the live website as the only reliable functional test sur
 
 - Test only against the deployed Chronos website, not a local Next.js server.
 - Use only accounts listed in `test_assets/test_users.json`.
+- **Shared Postgres (`flolabs_users`)** — identity merges and HubSpot CSV backfills are validated with SQL and Hephaestus Playwright (see `../hephaestus-international/QA_CHECKLIST.md` and `../hephaestus-international/TESTING.md`). Chronos script: `pnpm run db:merge:contacts:dry-run` / `pnpm run db:merge:contacts` (`scripts/merge-legacy-and-hubspot-csv-contacts.ts`).
 - A timer/session fix is accepted only after the live UI can:
   1. sign in as a listed test user,
   2. open `/timer`,

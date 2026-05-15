@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users, timeEntryTags, applicants } from "@/lib/db/schema";
+import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
 import {
   eq,
   and,
@@ -14,6 +14,7 @@ import {
   ilike,
   type SQL,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { getAccessibleUserIds } from "@/lib/permissions";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser, resolveChronosUserIdForSessionUser } from "@/lib/chronos-session";
 import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
@@ -77,7 +78,10 @@ export async function GET(req: Request) {
     conditions.push(inArray(timeEntries.id, entryIdsWithTag));
   }
 
-  // Search filter: match description, project name, applicant/user name/email, or tag name
+  const reportOwner = alias(users, "report_owner");
+  const reportApplicant = alias(users, "report_applicant");
+
+  // Search filter: match description, project name, owner/applicant name/email, or tag name
   if (search) {
     const pattern = `%${search}%`;
     const entryIdsMatchingTag = db
@@ -89,10 +93,10 @@ export async function GET(req: Request) {
     const searchCondition = or(
       ilike(timeEntries.description, pattern),
       ilike(projects.name, pattern),
-      ilike(users.name, pattern),
-      ilike(users.email, pattern),
-      ilike(applicants.name, pattern),
-      ilike(applicants.email, pattern),
+      ilike(reportOwner.name, pattern),
+      ilike(reportOwner.email, pattern),
+      ilike(reportApplicant.name, pattern),
+      ilike(reportApplicant.email, pattern),
       inArray(timeEntries.id, entryIdsMatchingTag),
     );
     if (searchCondition) conditions.push(searchCondition);
@@ -105,7 +109,8 @@ export async function GET(req: Request) {
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-    .leftJoin(applicants, eq(timeEntries.applicantId, applicants.id))
+    .leftJoin(reportOwner, eq(timeEntries.userId, reportOwner.id))
+    .leftJoin(reportApplicant, eq(timeEntries.applicantId, reportApplicant.id))
     .where(and(...conditions))
     .orderBy(desc(timeEntries.startedAt));
 

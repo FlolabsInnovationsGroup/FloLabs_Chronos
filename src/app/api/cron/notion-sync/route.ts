@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { applicants, timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
+import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
 import { isNull, isNotNull, and, or, eq, lt, inArray } from "drizzle-orm";
 import {
   syncEntryToNotionFull,
@@ -52,21 +52,14 @@ export async function GET(req: Request) {
         notionTeamMemberId: users.notionTeamMemberId,
       },
       applicant: {
-        name: applicants.name,
-        email: applicants.email,
-        notionTeamMemberId: applicants.notionTeamMemberId,
+        name: users.name,
+        email: users.email,
+        notionTeamMemberId: users.notionTeamMemberId,
       },
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
-    .leftJoin(
-      applicants,
-      or(
-        eq(timeEntries.applicantId, applicants.id),
-        and(isNull(timeEntries.applicantId), eq(applicants.chronosUserId, users.id))
-      )
-    )
     .where(
       and(
         isNotNull(timeEntries.stoppedAt),

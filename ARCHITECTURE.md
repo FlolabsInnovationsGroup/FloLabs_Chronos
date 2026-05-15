@@ -16,9 +16,9 @@ Read this section first for **where code runs**, **what stores state**, and **ho
 |--------|------------------|
 | **App server** | **Next.js 16** (App Router) in a **Docker** image on **AWS App Runner** (`us-east-1`). One container service handles SSR, route handlers (`src/app/api/**`), and Server Components. |
 | **Images & deploy** | Images live in **Amazon ECR** under immutable tags `git-<12-char-sha>`. **GitHub Actions** (`.github/workflows/deploy-aws-apprunner.yml`) builds on every push to `main` or manual `workflow_dispatch`, updates App Runner, and verifies **`GET /api/health`** reports the same **`commitSha`** as the deploy. |
-| **Transactional data** | **AWS RDS PostgreSQL 17** (`db.t4g.small`, 2 vCPU / 2 GB RAM, 20 GB gp3) — source of truth for Chronos and shared with Hephaestus International. Access via **Drizzle ORM** + `pg` pool (`max=10` per container). |
+| **Transactional data** | **AWS RDS PostgreSQL 17** (`db.t4g.small`, 2 vCPU / 2 GB RAM, 20 GB gp3) — shared with Hephaestus International. Canonical person rows live in **`flolabs_users`** (Drizzle export `users` in `src/lib/db/schema.ts`). Access via **Drizzle ORM** + `pg` pool (`max=10` per container). |
 | **Timers / realtime** | **Redis** (AWS ElastiCache Serverless 7.1 in production; env `KV_URL` / `FL_KV_REDIS_URL`) — active timers, pub/sub, SSE fan-out (`src/lib/redis.ts`, `/api/sse/**`). |
-| **Auth** | **NextAuth.js v5** credentials provider (`src/lib/auth.ts`). Session identity is **applicant-centric** (`session.user.id` → `applicants.id`); Chronos ownership FK is **`session.user.chronosUserId`** → `users.id`. Password hashes on `users`. |
+| **Auth** | **NextAuth.js v5** credentials provider (`src/lib/auth.ts`). Session identity uses **`flolabs_users.id`**: `session.user.id` and `session.user.chronosUserId` both reference the same row when populated. Password hashes on **`flolabs_users`**. |
 | **HTTP edge** | **AWS URL:** `https://hcmsmnfq5q.us-east-1.awsapprunner.com` — **Production domain:** `https://athensgreecemarathon.com` (App Runner custom domain). Neither is encoded in application logic. |
 | **Secrets split** | **AWS SSM Parameter Store** (`/flolabs-chronos/*`): `DATABASE_URL`, `REDIS_URL`, `CRON_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` (optional fallback `INVITE_FROM_EMAIL`), optional reset-password test params. **GitHub Actions secrets** (per workflow): `AUTH_SECRET`, Notion API/DB IDs, etc. Nothing in-repo contains production secrets. |
 | **Integrations** | **Notion API** (teams, team members, tasks, time-entry mirror), **Discord** webhooks (entry notifications), **Resend** (password-reset email via `src/lib/mail.ts`). |
@@ -48,22 +48,19 @@ A Hetzner + Plesk self-hosted layout was explored as a future direction. **It is
 ### Current Users Directory Architecture (2026-05)
 
 - `GET /api/users` powers the Users page (`/team`).
-- Source of truth for inclusion is applicant lifecycle data plus Chronos account scope.
+- Source of truth is **`flolabs_users`** (pipeline `status` / `stage`, Notion Team Member id, profile fields, credentials).
 - Directory inclusion rule (applied after role-scoped access):
   - `applicantProgramStatus === "joined"` **AND** (`notionTeamMemberId` is set OR `role` is `admin`/`hr`)
   - Effectively: **active team members** (Joined + Notion Team Member page linked) plus elevated accounts (admin/HR) that may operate without a Notion link.
   - Users with `graduated` or `terminated` program status are excluded from the directory regardless of isActive.
   - The old `active` applicant status has been fully migrated to other statuses and is no longer a valid value.
-- Applicant → Chronos account linkage is resolved via `applicants.chronosUserId` (the canonical FK).
+- **Hephaestus** updates the same **`flolabs_users`** row when HR edits a lead; Chronos sees changes immediately (no separate `applicants` / `website_applicants` sync lag).
 - Visibility is role-scoped:
   - admin / HR: global scope (all users passing the inclusion rule)
   - team lead: team scope
   - member: self only
 - Session-role drift is handled by server-side DB role checks and role normalization (`admin`, `hr`, `team_lead`, `member`; compatible with legacy strings like `Human Resources`).
-- Users response overlays applicant profile fields on top of `users` fields (name/email/role/team/isActive/notion links) and includes:
-  - `alternateEmails` (aliases + applicant/hubspot known emails)
-  - live timer state
-  - `requiresNotionProfileLink` warning marker (shown to admin/HR only).
+- Users response includes profile fields, `alternateEmails` (aliases + HubSpot-known emails), live timer state, and `requiresNotionProfileLink` (admin/HR only).
 - The Users table no longer shows the `Status` (isActive badge) or `Program` columns — all visible rows are implicitly active and joined. Changing a member's program status to Graduated or Terminated removes them from the directory immediately.
 
 The current product model is:
@@ -118,11 +115,11 @@ Four roles exist: `admin`, `hr`, `team_lead`, `member`. The legacy string `Human
 
 Chronos supports **multiple teams per user**.
 
-#### Canonical identity vs Chronos `users` (Phase 2)
+#### Canonical identity (`flolabs_users`)
 
-- **Applicants / leads** (`applicants`) are the canonical source for: NextAuth session identity (`session.user.id` is the applicant id), access gating from applicant stage/status, session profile fields (name, role, team pointer, profile image), forgot-password identity, and **Notion Team Member linkage** (`applicants.notion_team_member_id`).
-- **`users`** remains a compatibility layer for foreign keys that still target `users.id`: credentials (password hash), `user_email_aliases`, `team_memberships`, time entries, tags, entry discussions, timers in Redis, and related authored records.
-- **`session.user.chronosUserId`** holds the linked Chronos `users.id`. Server routes that touch ownership or membership must use `chronosUserId` (or helpers built on it), not `session.user.id`, when querying those tables.
+- **Single table** **`flolabs_users`** (exposed in Drizzle as `users`) holds: credentials, Chronos role/team membership pointers, HR pipeline fields (stage/status), Hephaestus profile columns, HubSpot metadata, and **Notion Team Member linkage** (`notion_team_member_id`).
+- **`session.user.chronosUserId`** remains in tokens for compatibility; it matches **`session.user.id`** for unified rows. Server code uses `chronos-session` helpers for ownership and time-entry scope.
+- Foreign keys on `time_entries`, `tags`, `entry_discussions`, `discussion_replies`, `team_memberships`, etc. reference **`flolabs_users.id`**. Legacy `applicant_id` / `flolabs_id` columns on some tables still point at the same person row for historical rows.
 
 Key rules:
 - `team_memberships` is the source of truth for Chronos' internal user ↔ team mapping.
@@ -137,7 +134,7 @@ Key rules:
 Chronos should be treated as **read-only for team memberships** from a product perspective.
 
 That means:
-- Notion Team Members data is the operational source of truth for **which teams** a **linked** person belongs to (the `Team` relation on their Team Member page), once **`applicants.notion_team_member_id`** is set. The teams cron mirrors the same page id onto `users.notion_team_member_id` so legacy joins keep working until ownership FKs migrate off `users`.
+- Notion Team Members data is the operational source of truth for **which teams** a **linked** person belongs to (the `Team` relation on their Team Member page), once **`flolabs_users.notion_team_member_id`** is set.
 - Chronos must **not** infer or match Team Member pages by user email or by name. Admins explicitly pick a Team Members row (search) or choose **create new** when inviting; that page id is stored on `invitations.notion_team_member_id` and copied to `users.notion_team_member_id` on registration. Admins can also set or clear the link when editing a member.
 - When Chronos creates a **new** Team Member page from an invitation, it must populate the invited teams into the `Team` relation at creation time.
 - Chronos now attempts to apply a Notion template during that Team Member create call: it uses `NOTION_TEAM_MEMBER_TEMPLATE_ID` when configured, otherwise it asks Notion to use the Team Members data source's default template.

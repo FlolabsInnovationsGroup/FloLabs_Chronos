@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users, timeEntryTags, applicants } from "@/lib/db/schema";
+import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
 import {
   eq,
   and,
@@ -14,6 +14,7 @@ import {
   or,
   type SQL,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { ReportFilters } from "@/components/reports/ReportFilters";
 import { ReportChart } from "@/components/reports/ReportChart";
 import { ReportTable } from "@/components/reports/ReportTable";
@@ -141,7 +142,9 @@ async function getEntries(
     conditions.push(inArray(timeEntries.id, entryIdsWithTag));
   }
 
-  // Search via description, project name, applicant/user name/email, or tag name
+  const reportApplicant = alias(users, "report_applicant");
+
+  // Search via description, project name, owner/applicant name/email, or tag name
   if (params.search) {
     const pattern = `%${params.search}%`;
     const entryIdsMatchingTag = db
@@ -155,8 +158,8 @@ async function getEntries(
       ilike(projects.name, pattern),
       ilike(users.name, pattern),
       ilike(users.email, pattern),
-      ilike(applicants.name, pattern),
-      ilike(applicants.email, pattern),
+      ilike(reportApplicant.name, pattern),
+      ilike(reportApplicant.email, pattern),
       inArray(timeEntries.id, entryIdsMatchingTag),
     );
     if (searchCondition) conditions.push(searchCondition);
@@ -174,7 +177,7 @@ async function getEntries(
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
-    .leftJoin(applicants, eq(timeEntries.applicantId, applicants.id))
+    .leftJoin(reportApplicant, eq(timeEntries.applicantId, reportApplicant.id))
     .where(and(...conditions))
     .orderBy(desc(timeEntries.startedAt));
 

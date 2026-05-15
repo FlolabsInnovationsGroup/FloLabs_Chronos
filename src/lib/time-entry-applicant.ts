@@ -1,12 +1,12 @@
 import type { Session } from "next-auth";
 import { eq, or } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { applicants, timeEntries } from "@/lib/db/schema";
+import { timeEntries, users } from "@/lib/db/schema";
 import { applicantIdForSessionLinkedUser, chronosUserIdFromSessionUser } from "@/lib/chronos-session";
 
 /**
- * Resolves `time_entries.flolabs_id` for a write: session applicant when the editor owns the row,
- * otherwise the applicant linked to the entry owner's Chronos user (e.g. admin / team lead edits).
+ * Resolves `time_entries.flolabs_id` for a write: session user id when the editor owns the row,
+ * otherwise the FloLabs user id for the entry owner (e.g. admin / team lead edits).
  */
 export async function resolveFlolabsIdForTimeEntryWrite(
   sessionUser: Session["user"],
@@ -19,11 +19,11 @@ export async function resolveFlolabsIdForTimeEntryWrite(
   }
   if (!db) return null;
   const [row] = await db
-    .select({ id: applicants.id })
-    .from(applicants)
-    .where(eq(applicants.chronosUserId, entryOwnerChronosUserId))
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, entryOwnerChronosUserId))
     .limit(1);
-  return row?.id ?? null;
+  return row?.id ?? entryOwnerChronosUserId;
 }
 
 /**

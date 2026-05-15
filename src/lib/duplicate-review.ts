@@ -1,6 +1,6 @@
 import { eq, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { applicantDuplicateReviews, applicants, users } from '@/lib/db/schema';
+import { applicantDuplicateReviews, users } from '@/lib/db/schema';
 import { addEmailAlias, ensureUserEmailAliasesSchema } from '@/lib/user-email-aliases';
 
 export type DuplicateReviewStatus = 'pending' | 'confirmed_duplicate' | 'different_people' | 'merged';
@@ -22,7 +22,7 @@ function scorePair(applicant: any, other: any) {
   const reasons: string[] = [];
   let strongSignals = 0;
 
-  if (normalizeValue(applicant.phone) && normalizeValue(applicant.phone) === normalizeValue(other.phone)) {
+  if (normalizeValue(applicant.phoneNumber) && normalizeValue(applicant.phoneNumber) === normalizeValue(other.phoneNumber)) {
     score += 6;
     strongSignals += 1;
     reasons.push('same phone number');
@@ -62,15 +62,15 @@ export async function ensureDuplicateReviewSchema() {
   await db.execute(`
     create table if not exists applicant_duplicate_reviews (
       id uuid primary key default gen_random_uuid(),
-      primary_applicant_id uuid not null references applicants(id) on delete cascade,
-      duplicate_applicant_id uuid not null references applicants(id) on delete cascade,
+      primary_applicant_id uuid not null references flolabs_users(id) on delete cascade,
+      duplicate_applicant_id uuid not null references flolabs_users(id) on delete cascade,
       status text not null default 'pending',
       confidence_score bigint not null default 0,
       reasons jsonb not null default '[]'::jsonb,
-      reviewed_by_id uuid references users(id) on delete set null,
+      reviewed_by_id uuid references flolabs_users(id) on delete set null,
       reviewed_at timestamptz,
       notes text,
-      canonical_applicant_id uuid references applicants(id) on delete set null,
+      canonical_applicant_id uuid references flolabs_users(id) on delete set null,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now(),
       constraint applicant_duplicate_reviews_pair_unique unique (primary_applicant_id, duplicate_applicant_id)
@@ -82,7 +82,7 @@ export async function syncDuplicateReviews() {
   if (!db) return [];
   await ensureDuplicateReviewSchema();
 
-  const rows = await db.select().from(applicants);
+  const rows = await db.select().from(users);
   const upserts: Array<{
     primaryApplicantId: string;
     duplicateApplicantId: string;
@@ -185,8 +185,8 @@ export async function updateDuplicateReview(input: {
 
   if (updated && input.status === 'merged') {
     await ensureUserEmailAliasesSchema();
-    const [primaryApplicant] = await db.select().from(applicants).where(eq(applicants.id, updated.primaryApplicantId)).limit(1);
-    const [duplicateApplicant] = await db.select().from(applicants).where(eq(applicants.id, updated.duplicateApplicantId)).limit(1);
+    const [primaryApplicant] = await db.select().from(users).where(eq(users.id, updated.primaryApplicantId)).limit(1);
+    const [duplicateApplicant] = await db.select().from(users).where(eq(users.id, updated.duplicateApplicantId)).limit(1);
 
     const canonicalApplicant = input.canonicalApplicantId === updated.duplicateApplicantId ? duplicateApplicant : primaryApplicant;
     const secondaryApplicant = canonicalApplicant?.id === primaryApplicant?.id ? duplicateApplicant : primaryApplicant;
@@ -196,7 +196,7 @@ export async function updateDuplicateReview(input: {
     ).name;
 
     if (canonicalApplicant?.id && longestName && normalizeValue(canonicalApplicant.name) !== normalizeValue(longestName)) {
-      await db.update(applicants).set({ name: longestName, updatedAt: new Date() }).where(eq(applicants.id, canonicalApplicant.id));
+      await db.update(users).set({ name: longestName, updatedAt: new Date() }).where(eq(users.id, canonicalApplicant.id));
     }
 
     const canonicalEmail = canonicalApplicant?.email ?? null;

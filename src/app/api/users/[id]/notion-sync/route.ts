@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { applicants, teams, users } from "@/lib/db/schema";
+import { teams, users } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { getUserTeams } from "@/lib/permissions";
 import { pushTeamMemberProfileToNotion } from "@/lib/notion";
@@ -39,18 +39,7 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const [applicantRow] = await db
-    .select({
-      name: applicants.name,
-      email: applicants.email,
-      notionTeamMemberId: applicants.notionTeamMemberId,
-    })
-    .from(applicants)
-    .where(eq(applicants.chronosUserId, id))
-    .limit(1);
-
-  const notionTeamMemberId =
-    applicantRow?.notionTeamMemberId?.trim() || userRow.notionTeamMemberId?.trim() || null;
+  const notionTeamMemberId = userRow.notionTeamMemberId?.trim() || null;
 
   if (!notionTeamMemberId) {
     return NextResponse.json({ error: "This user has no linked Notion Team Member page." }, { status: 400 });
@@ -70,8 +59,8 @@ export async function POST(
     .map((row) => row.notionPageId)
     .filter((v): v is string => Boolean(v));
 
-  const finalName = applicantRow?.name?.trim() || userRow.name;
-  const finalEmail = applicantRow?.email?.trim() || userRow.email;
+  const finalName = userRow.name;
+  const finalEmail = userRow.email;
 
   await pushTeamMemberProfileToNotion({
     notionTeamMemberPageId: notionTeamMemberId,

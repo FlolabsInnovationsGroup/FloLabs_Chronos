@@ -5,6 +5,10 @@ import { sql } from "drizzle-orm";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+/**
+ * Idempotent maintenance for the unified `flolabs_users` identity model.
+ * Legacy applicant↔user linking SQL was removed; see `scripts/migrate-to-flolabs-users.sql` for RDS cutover.
+ */
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -16,7 +20,7 @@ export async function GET(req: Request) {
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS user_email_aliases (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_id uuid NOT NULL REFERENCES flolabs_users(id) ON DELETE CASCADE,
         email text NOT NULL UNIQUE,
         is_primary boolean NOT NULL DEFAULT false,
         created_at timestamptz NOT NULL DEFAULT now(),
@@ -27,7 +31,7 @@ export async function GET(req: Request) {
     const aliasBackfill = await db.execute(sql`
       INSERT INTO user_email_aliases (user_id, email, is_primary, created_at, updated_at)
       SELECT u.id, lower(u.email), true, now(), now()
-      FROM users u
+      FROM flolabs_users u
       WHERE u.email IS NOT NULL
         AND btrim(u.email) <> ''
         AND NOT EXISTS (
@@ -37,148 +41,10 @@ export async function GET(req: Request) {
         )
     `);
 
-    // Link applicants to existing users by primary applicant email.
-    const applicantLinkByEmail = await db.execute(sql`
-      UPDATE applicants a
-      SET chronos_user_id = u.id, updated_at = now()
-      FROM users u
-      WHERE a.chronos_user_id IS NULL
-        AND lower(a.email) = lower(u.email)
-    `);
-
-    // Link applicants to existing users by aliases (including historical emails).
-    const applicantLinkByAlias = await db.execute(sql`
-      UPDATE applicants a
-      SET chronos_user_id = ua.user_id, updated_at = now()
-      FROM user_email_aliases ua
-      WHERE a.chronos_user_id IS NULL
-        AND lower(a.email) = lower(ua.email)
-    `);
-
-    // Link applicants to users when HubSpot payload contains a known user/alias email.
-    const applicantLinkByHubspot = await db.execute(sql`
-      UPDATE applicants a
-      SET chronos_user_id = ua.user_id, updated_at = now()
-      FROM user_email_aliases ua
-      WHERE a.chronos_user_id IS NULL
-        AND EXISTS (
-          SELECT 1
-          FROM jsonb_array_elements_text(COALESCE(a.hubspot_raw_data->'emails', '[]'::jsonb)) AS e(email)
-          WHERE lower(e.email) = lower(ua.email)
-        )
-    `);
-
-    // Ensure every Chronos user has a resolvable applicant row.
-    const applicantProvisionedFromUsers = await db.execute(sql`
-      INSERT INTO applicants (
-        email,
-        name,
-        role,
-        team_id,
-        is_active,
-        weekly_target_hours,
-        stage,
-        status,
-        synced_to_team_members,
-        chronos_user_id,
-        created_at,
-        updated_at
-      )
-      SELECT
-        lower(u.email) AS email,
-        COALESCE(NULLIF(btrim(u.name), ''), lower(u.email)) AS name,
-        COALESCE(NULLIF(btrim(u.role), ''), 'member') AS role,
-        u.team_id,
-        COALESCE(u.is_active, false) AS is_active,
-        COALESCE(u.weekly_target_hours, 40) AS weekly_target_hours,
-        CASE WHEN COALESCE(u.is_active, false) THEN 'joined' ELSE 'application_submitted' END AS stage,
-        CASE WHEN COALESCE(u.is_active, false) THEN 'active' ELSE 'active' END AS status,
-        false AS synced_to_team_members,
-        u.id AS chronos_user_id,
-        now(),
-        now()
-      FROM users u
-      WHERE u.email IS NOT NULL
-        AND btrim(u.email) <> ''
-        AND NOT EXISTS (
-          SELECT 1 FROM applicants a WHERE a.chronos_user_id = u.id
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM applicants a2 WHERE lower(a2.email) = lower(u.email)
-        )
-    `);
-
-    // If we had an applicant row by email but no link yet, ensure it's linked now.
-    const applicantRelinkPostProvision = await db.execute(sql`
-      UPDATE applicants a
-      SET chronos_user_id = u.id, updated_at = now()
-      FROM users u
-      WHERE a.chronos_user_id IS NULL
-        AND lower(a.email) = lower(u.email)
-    `);
-
-    // Canonical access policy: every FloLabs account linked to Chronos is joined + active.
-    const normalizeJoinedAccess = await db.execute(sql`
-      UPDATE applicants
-      SET
-        status = 'joined',
-        stage = 'joined',
-        is_active = true,
-        updated_at = now()
-      WHERE chronos_user_id IS NOT NULL
-        AND (
-          lower(coalesce(status, '')) <> 'joined'
-          OR lower(coalesce(stage, '')) <> 'joined'
-          OR coalesce(is_active, false) = false
-        )
-    `);
-
-    // Mirror active status from applicants to users for linked accounts.
-    const normalizeLinkedUsersActive = await db.execute(sql`
-      UPDATE users u
-      SET is_active = true, updated_at = now()
-      FROM applicants a
-      WHERE a.chronos_user_id = u.id
-        AND (u.is_active IS DISTINCT FROM true)
-    `);
-
-    // Keep Team Member page ids and team ids mirrored both directions.
-    const syncApplicantTeamMemberFromUsers = await db.execute(sql`
-      UPDATE applicants a
-      SET notion_team_member_id = u.notion_team_member_id, updated_at = now()
-      FROM users u
-      WHERE a.chronos_user_id = u.id
-        AND a.notion_team_member_id IS NULL
-        AND u.notion_team_member_id IS NOT NULL
-    `);
-    const syncUsersTeamMemberFromApplicants = await db.execute(sql`
-      UPDATE users u
-      SET notion_team_member_id = a.notion_team_member_id, updated_at = now()
-      FROM applicants a
-      WHERE a.chronos_user_id = u.id
-        AND u.notion_team_member_id IS NULL
-        AND a.notion_team_member_id IS NOT NULL
-    `);
-    const syncApplicantTeamFromUsers = await db.execute(sql`
-      UPDATE applicants a
-      SET team_id = u.team_id, updated_at = now()
-      FROM users u
-      WHERE a.chronos_user_id = u.id
-        AND a.team_id IS NULL
-        AND u.team_id IS NOT NULL
-    `);
-    const syncUsersTeamFromApplicants = await db.execute(sql`
-      UPDATE users u
-      SET team_id = a.team_id, updated_at = now()
-      FROM applicants a
-      WHERE a.chronos_user_id = u.id
-        AND u.team_id IS NULL
-        AND a.team_id IS NOT NULL
-    `);
     const backfillTeamMemberships = await db.execute(sql`
       INSERT INTO team_memberships (user_id, team_id, created_at)
       SELECT u.id, u.team_id, now()
-      FROM users u
+      FROM flolabs_users u
       WHERE u.team_id IS NOT NULL
         AND NOT EXISTS (
           SELECT 1
@@ -188,37 +54,36 @@ export async function GET(req: Request) {
         )
     `);
 
-    // Legacy compatibility (applicant_id) and canonical FloLabs ownership columns.
     await db.execute(
-      sql`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+      sql`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS applicant_id UUID REFERENCES flolabs_users(id) ON DELETE SET NULL`
     );
     await db.execute(
-      sql`ALTER TABLE tags ADD COLUMN IF NOT EXISTS applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+      sql`ALTER TABLE tags ADD COLUMN IF NOT EXISTS applicant_id UUID REFERENCES flolabs_users(id) ON DELETE SET NULL`
     );
     await db.execute(
-      sql`ALTER TABLE entry_discussions ADD COLUMN IF NOT EXISTS started_by_applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+      sql`ALTER TABLE entry_discussions ADD COLUMN IF NOT EXISTS started_by_applicant_id UUID REFERENCES flolabs_users(id) ON DELETE SET NULL`
     );
     await db.execute(
-      sql`ALTER TABLE entry_discussions ADD COLUMN IF NOT EXISTS resolved_by_applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+      sql`ALTER TABLE entry_discussions ADD COLUMN IF NOT EXISTS resolved_by_applicant_id UUID REFERENCES flolabs_users(id) ON DELETE SET NULL`
     );
     await db.execute(
-      sql`ALTER TABLE discussion_replies ADD COLUMN IF NOT EXISTS author_applicant_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+      sql`ALTER TABLE discussion_replies ADD COLUMN IF NOT EXISTS author_applicant_id UUID REFERENCES flolabs_users(id) ON DELETE SET NULL`
     );
 
     await db.execute(
-      sql`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS flolabs_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+      sql`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS flolabs_id UUID REFERENCES flolabs_users(id) ON DELETE SET NULL`
     );
     await db.execute(
-      sql`ALTER TABLE tags ADD COLUMN IF NOT EXISTS flolabs_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+      sql`ALTER TABLE tags ADD COLUMN IF NOT EXISTS flolabs_id UUID REFERENCES flolabs_users(id) ON DELETE SET NULL`
     );
     await db.execute(
-      sql`ALTER TABLE entry_discussions ADD COLUMN IF NOT EXISTS started_by_flolabs_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+      sql`ALTER TABLE entry_discussions ADD COLUMN IF NOT EXISTS started_by_flolabs_id UUID REFERENCES flolabs_users(id) ON DELETE SET NULL`
     );
     await db.execute(
-      sql`ALTER TABLE entry_discussions ADD COLUMN IF NOT EXISTS resolved_by_flolabs_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+      sql`ALTER TABLE entry_discussions ADD COLUMN IF NOT EXISTS resolved_by_flolabs_id UUID REFERENCES flolabs_users(id) ON DELETE SET NULL`
     );
     await db.execute(
-      sql`ALTER TABLE discussion_replies ADD COLUMN IF NOT EXISTS author_flolabs_id UUID REFERENCES applicants(id) ON DELETE SET NULL`
+      sql`ALTER TABLE discussion_replies ADD COLUMN IF NOT EXISTS author_flolabs_id UUID REFERENCES flolabs_users(id) ON DELETE SET NULL`
     );
 
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_entries_applicant ON time_entries(applicant_id)`);
@@ -232,158 +97,55 @@ export async function GET(req: Request) {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_discussions_resolved_by_flolabs ON entry_discussions(resolved_by_flolabs_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_replies_author_flolabs ON discussion_replies(author_flolabs_id)`);
 
-    const backfill = await db.execute(sql`
-      UPDATE time_entries te
-      SET applicant_id = m.applicant_id
-      FROM (
-        SELECT user_id, applicant_id
-        FROM (
-          SELECT
-            a.chronos_user_id AS user_id,
-            a.id AS applicant_id,
-            row_number() OVER (PARTITION BY a.chronos_user_id ORDER BY a.created_at ASC, a.id ASC) AS rn
-          FROM applicants a
-          WHERE a.chronos_user_id IS NOT NULL
-        ) ranked
-        WHERE ranked.rn = 1
-      ) m
-      WHERE te.user_id = m.user_id
-        AND (te.applicant_id IS NULL OR te.applicant_id <> m.applicant_id)
-    `);
-    const tagsBackfillApplicant = await db.execute(sql`
-      UPDATE tags t
-      SET applicant_id = a.id
-      FROM applicants a
-      WHERE t.applicant_id IS NULL
-        AND t.user_id = a.chronos_user_id
-    `);
-    const discussionsBackfillStartedApplicant = await db.execute(sql`
-      UPDATE entry_discussions d
-      SET started_by_applicant_id = a.id
-      FROM applicants a
-      WHERE d.started_by_applicant_id IS NULL
-        AND d.started_by_id = a.chronos_user_id
-    `);
-    const discussionsBackfillResolvedApplicant = await db.execute(sql`
-      UPDATE entry_discussions d
-      SET resolved_by_applicant_id = a.id
-      FROM applicants a
-      WHERE d.resolved_by_applicant_id IS NULL
-        AND d.resolved_by_id = a.chronos_user_id
-    `);
-    const repliesBackfillApplicant = await db.execute(sql`
-      UPDATE discussion_replies r
-      SET author_applicant_id = a.id
-      FROM applicants a
-      WHERE r.author_applicant_id IS NULL
-        AND r.author_id = a.chronos_user_id
-    `);
-
-    const entriesBackfillFlolabsLegacy = await db.execute(sql`
-      UPDATE time_entries
-      SET flolabs_id = applicant_id
-      WHERE flolabs_id IS NULL
-        AND applicant_id IS NOT NULL
-    `);
-    const tagsBackfillFlolabsLegacy = await db.execute(sql`
-      UPDATE tags
-      SET flolabs_id = applicant_id
-      WHERE flolabs_id IS NULL
-        AND applicant_id IS NOT NULL
-    `);
-    const discussionsStartedBackfillFlolabsLegacy = await db.execute(sql`
-      UPDATE entry_discussions
-      SET started_by_flolabs_id = started_by_applicant_id
-      WHERE started_by_flolabs_id IS NULL
-        AND started_by_applicant_id IS NOT NULL
-    `);
-    const discussionsResolvedBackfillFlolabsLegacy = await db.execute(sql`
-      UPDATE entry_discussions
-      SET resolved_by_flolabs_id = resolved_by_applicant_id
-      WHERE resolved_by_flolabs_id IS NULL
-        AND resolved_by_applicant_id IS NOT NULL
-    `);
-    const repliesBackfillFlolabsLegacy = await db.execute(sql`
-      UPDATE discussion_replies
-      SET author_flolabs_id = author_applicant_id
-      WHERE author_flolabs_id IS NULL
-        AND author_applicant_id IS NOT NULL
-    `);
-
-    const entriesBackfillFlolabsByUser = await db.execute(sql`
-      UPDATE time_entries te
-      SET flolabs_id = a.id
-      FROM applicants a
-      WHERE te.flolabs_id IS NULL
-        AND te.user_id = a.chronos_user_id
-    `);
-    const entriesRepointToBestApplicant = await db.execute(sql`
-      WITH preferred_applicant AS (
-        SELECT user_id, applicant_id
-        FROM (
-          SELECT
-            te.user_id,
-            a.id AS applicant_id,
-            row_number() OVER (
-              PARTITION BY te.user_id
-              ORDER BY
-                CASE WHEN a.notion_team_member_id IS NOT NULL THEN 0 ELSE 1 END,
-                a.created_at ASC,
-                a.id ASC
-            ) AS rn
-          FROM time_entries te
-          JOIN applicants a ON a.chronos_user_id = te.user_id
-        ) ranked
-        WHERE rn = 1
-      )
+    const entriesAlign = await db.execute(sql`
       UPDATE time_entries te
       SET
-        applicant_id = p.applicant_id,
-        flolabs_id = p.applicant_id
-      FROM preferred_applicant p
-      WHERE te.user_id = p.user_id
-        AND (
-          te.applicant_id IS DISTINCT FROM p.applicant_id
-          OR te.flolabs_id IS DISTINCT FROM p.applicant_id
-        )
+        applicant_id = COALESCE(te.applicant_id, te.user_id),
+        flolabs_id = COALESCE(te.flolabs_id, te.applicant_id, te.user_id)
+      WHERE te.user_id IS NOT NULL
+        AND (te.applicant_id IS DISTINCT FROM te.user_id OR te.flolabs_id IS NULL)
     `);
-    const tagsBackfillFlolabsByUser = await db.execute(sql`
+
+    const tagsAlign = await db.execute(sql`
       UPDATE tags t
-      SET flolabs_id = a.id
-      FROM applicants a
-      WHERE t.flolabs_id IS NULL
-        AND t.user_id = a.chronos_user_id
+      SET applicant_id = COALESCE(t.applicant_id, t.user_id),
+          flolabs_id = COALESCE(t.flolabs_id, t.applicant_id, t.user_id)
+      WHERE t.user_id IS NOT NULL
+        AND (t.applicant_id IS DISTINCT FROM t.user_id OR t.flolabs_id IS NULL)
     `);
-    const discussionsStartedBackfillFlolabsByUser = await db.execute(sql`
+
+    const discussionsStartedAlign = await db.execute(sql`
       UPDATE entry_discussions d
-      SET started_by_flolabs_id = a.id
-      FROM applicants a
-      WHERE d.started_by_flolabs_id IS NULL
-        AND d.started_by_id = a.chronos_user_id
+      SET started_by_applicant_id = COALESCE(d.started_by_applicant_id, d.started_by_id),
+          started_by_flolabs_id = COALESCE(d.started_by_flolabs_id, d.started_by_applicant_id, d.started_by_id)
+      WHERE d.started_by_id IS NOT NULL
+        AND (d.started_by_applicant_id IS DISTINCT FROM d.started_by_id OR d.started_by_flolabs_id IS NULL)
     `);
-    const discussionsResolvedBackfillFlolabsByUser = await db.execute(sql`
+
+    const discussionsResolvedAlign = await db.execute(sql`
       UPDATE entry_discussions d
-      SET resolved_by_flolabs_id = a.id
-      FROM applicants a
-      WHERE d.resolved_by_flolabs_id IS NULL
-        AND d.resolved_by_id = a.chronos_user_id
+      SET resolved_by_applicant_id = COALESCE(d.resolved_by_applicant_id, d.resolved_by_id),
+          resolved_by_flolabs_id = COALESCE(d.resolved_by_flolabs_id, d.resolved_by_applicant_id, d.resolved_by_id)
+      WHERE d.resolved_by_id IS NOT NULL
+        AND (d.resolved_by_applicant_id IS DISTINCT FROM d.resolved_by_id OR d.resolved_by_flolabs_id IS NULL)
     `);
-    const repliesBackfillFlolabsByUser = await db.execute(sql`
+
+    const repliesAlign = await db.execute(sql`
       UPDATE discussion_replies r
-      SET author_flolabs_id = a.id
-      FROM applicants a
-      WHERE r.author_flolabs_id IS NULL
-        AND r.author_id = a.chronos_user_id
+      SET author_applicant_id = COALESCE(r.author_applicant_id, r.author_id),
+          author_flolabs_id = COALESCE(r.author_flolabs_id, r.author_applicant_id, r.author_id)
+      WHERE r.author_id IS NOT NULL
+        AND (r.author_applicant_id IS DISTINCT FROM r.author_id OR r.author_flolabs_id IS NULL)
     `);
 
     const normalizeActiveStatus = await db.execute(sql`
-      UPDATE applicants
-      SET status = 'joined'
+      UPDATE flolabs_users
+      SET status = 'joined', updated_at = now()
       WHERE lower(coalesce(status, '')) = 'active'
     `);
     const normalizeActiveStage = await db.execute(sql`
-      UPDATE applicants
-      SET stage = 'joined'
+      UPDATE flolabs_users
+      SET stage = 'joined', updated_at = now()
       WHERE lower(coalesce(stage, '')) = 'active'
     `);
 
@@ -394,26 +156,9 @@ export async function GET(req: Request) {
           te.user_id,
           te.applicant_id,
           te.flolabs_id,
-          u.id AS user_exists,
-          u.notion_team_member_id AS user_notion_team_member_id,
-          a.id AS applicant_exists,
-          a.chronos_user_id AS applicant_chronos_user_id,
-          a.notion_team_member_id AS applicant_notion_team_member_id
+          u.id AS user_exists
         FROM time_entries te
-        LEFT JOIN users u ON u.id = te.user_id
-        LEFT JOIN applicants a ON a.id = te.applicant_id
-      ),
-      account_health AS (
-        SELECT
-          a.id,
-          a.chronos_user_id,
-          a.status,
-          a.stage,
-          a.is_active,
-          a.notion_team_member_id,
-          u.notion_team_member_id AS user_notion_team_member_id
-        FROM applicants a
-        LEFT JOIN users u ON u.id = a.chronos_user_id
+        LEFT JOIN flolabs_users u ON u.id = te.user_id
       )
       SELECT
         count(*)::int AS total_entries,
@@ -421,168 +166,26 @@ export async function GET(req: Request) {
         count(*) FILTER (WHERE user_exists IS NOT NULL)::int AS entries_with_existing_user_fk,
         count(*) FILTER (WHERE applicant_id IS NOT NULL)::int AS entries_with_applicant_id,
         count(*) FILTER (WHERE flolabs_id IS NOT NULL)::int AS entries_with_flolabs_id,
-        count(*) FILTER (WHERE applicant_exists IS NOT NULL)::int AS entries_with_existing_applicant_fk,
-        count(*) FILTER (
-          WHERE applicant_id IS NOT NULL
-            AND applicant_exists IS NOT NULL
-            AND applicant_chronos_user_id = user_id
-        )::int AS entries_where_applicant_links_same_user,
-        count(*) FILTER (WHERE applicant_id IS NOT NULL AND applicant_exists IS NULL)::int AS orphan_applicant_fk,
-        count(*) FILTER (WHERE user_id IS NOT NULL AND user_exists IS NULL)::int AS orphan_user_fk,
-        count(*) FILTER (
-          WHERE coalesce(applicant_notion_team_member_id, user_notion_team_member_id) IS NULL
-        )::int AS entries_missing_team_member_link,
-        count(*) FILTER (
-          WHERE applicant_id IS NOT NULL
-            AND applicant_exists IS NOT NULL
-            AND applicant_chronos_user_id IS NOT NULL
-            AND applicant_chronos_user_id <> user_id
-        )::int AS applicant_user_mismatch,
-        (
-          SELECT count(*)::int FROM account_health ah
-          WHERE ah.chronos_user_id IS NOT NULL
-            AND (
-              lower(coalesce(ah.status, '')) <> 'joined'
-              OR lower(coalesce(ah.stage, '')) <> 'joined'
-              OR coalesce(ah.is_active, false) = false
-            )
-        ) AS linked_accounts_not_joined_or_inactive,
-        (
-          SELECT count(*)::int FROM account_health ah
-          WHERE ah.chronos_user_id IS NOT NULL
-            AND coalesce(ah.notion_team_member_id, ah.user_notion_team_member_id) IS NULL
-        ) AS linked_accounts_missing_team_member_page
+        count(*) FILTER (WHERE applicant_id IS NOT NULL AND applicant_id = user_id)::int AS entries_where_applicant_links_same_user
       FROM t
     `);
 
     const summary = (counts as unknown as { rows?: Array<Record<string, unknown>> }).rows?.[0] ?? null;
 
+    const rowCount = (r: unknown) =>
+      (r as { rowCount?: number }).rowCount ?? (r as { rowsAffected?: number }).rowsAffected ?? null;
+
     return NextResponse.json({
       ok: true,
-      aliasBackfillRowCount:
-        (aliasBackfill as unknown as { rowCount?: number }).rowCount ??
-        (aliasBackfill as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      applicantLinkByEmailRowCount:
-        (applicantLinkByEmail as unknown as { rowCount?: number }).rowCount ??
-        (applicantLinkByEmail as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      applicantLinkByAliasRowCount:
-        (applicantLinkByAlias as unknown as { rowCount?: number }).rowCount ??
-        (applicantLinkByAlias as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      applicantLinkByHubspotRowCount:
-        (applicantLinkByHubspot as unknown as { rowCount?: number }).rowCount ??
-        (applicantLinkByHubspot as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      applicantProvisionedFromUsersRowCount:
-        (applicantProvisionedFromUsers as unknown as { rowCount?: number }).rowCount ??
-        (applicantProvisionedFromUsers as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      applicantRelinkPostProvisionRowCount:
-        (applicantRelinkPostProvision as unknown as { rowCount?: number }).rowCount ??
-        (applicantRelinkPostProvision as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      normalizeJoinedAccessRowCount:
-        (normalizeJoinedAccess as unknown as { rowCount?: number }).rowCount ??
-        (normalizeJoinedAccess as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      normalizeLinkedUsersActiveRowCount:
-        (normalizeLinkedUsersActive as unknown as { rowCount?: number }).rowCount ??
-        (normalizeLinkedUsersActive as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      syncApplicantTeamMemberFromUsersRowCount:
-        (syncApplicantTeamMemberFromUsers as unknown as { rowCount?: number }).rowCount ??
-        (syncApplicantTeamMemberFromUsers as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      syncUsersTeamMemberFromApplicantsRowCount:
-        (syncUsersTeamMemberFromApplicants as unknown as { rowCount?: number }).rowCount ??
-        (syncUsersTeamMemberFromApplicants as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      syncApplicantTeamFromUsersRowCount:
-        (syncApplicantTeamFromUsers as unknown as { rowCount?: number }).rowCount ??
-        (syncApplicantTeamFromUsers as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      syncUsersTeamFromApplicantsRowCount:
-        (syncUsersTeamFromApplicants as unknown as { rowCount?: number }).rowCount ??
-        (syncUsersTeamFromApplicants as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      backfillTeamMembershipsRowCount:
-        (backfillTeamMemberships as unknown as { rowCount?: number }).rowCount ??
-        (backfillTeamMemberships as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      backfillRowCount:
-        (backfill as unknown as { rowCount?: number }).rowCount ??
-        (backfill as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      tagsBackfillApplicantRowCount:
-        (tagsBackfillApplicant as unknown as { rowCount?: number }).rowCount ??
-        (tagsBackfillApplicant as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      discussionsBackfillStartedApplicantRowCount:
-        (discussionsBackfillStartedApplicant as unknown as { rowCount?: number }).rowCount ??
-        (discussionsBackfillStartedApplicant as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      discussionsBackfillResolvedApplicantRowCount:
-        (discussionsBackfillResolvedApplicant as unknown as { rowCount?: number }).rowCount ??
-        (discussionsBackfillResolvedApplicant as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      repliesBackfillApplicantRowCount:
-        (repliesBackfillApplicant as unknown as { rowCount?: number }).rowCount ??
-        (repliesBackfillApplicant as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      entriesBackfillFlolabsLegacyRowCount:
-        (entriesBackfillFlolabsLegacy as unknown as { rowCount?: number }).rowCount ??
-        (entriesBackfillFlolabsLegacy as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      tagsBackfillFlolabsLegacyRowCount:
-        (tagsBackfillFlolabsLegacy as unknown as { rowCount?: number }).rowCount ??
-        (tagsBackfillFlolabsLegacy as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      discussionsStartedBackfillFlolabsLegacyRowCount:
-        (discussionsStartedBackfillFlolabsLegacy as unknown as { rowCount?: number }).rowCount ??
-        (discussionsStartedBackfillFlolabsLegacy as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      discussionsResolvedBackfillFlolabsLegacyRowCount:
-        (discussionsResolvedBackfillFlolabsLegacy as unknown as { rowCount?: number }).rowCount ??
-        (discussionsResolvedBackfillFlolabsLegacy as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      repliesBackfillFlolabsLegacyRowCount:
-        (repliesBackfillFlolabsLegacy as unknown as { rowCount?: number }).rowCount ??
-        (repliesBackfillFlolabsLegacy as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      entriesBackfillFlolabsByUserRowCount:
-        (entriesBackfillFlolabsByUser as unknown as { rowCount?: number }).rowCount ??
-        (entriesBackfillFlolabsByUser as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      entriesRepointToBestApplicantRowCount:
-        (entriesRepointToBestApplicant as unknown as { rowCount?: number }).rowCount ??
-        (entriesRepointToBestApplicant as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      tagsBackfillFlolabsByUserRowCount:
-        (tagsBackfillFlolabsByUser as unknown as { rowCount?: number }).rowCount ??
-        (tagsBackfillFlolabsByUser as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      discussionsStartedBackfillFlolabsByUserRowCount:
-        (discussionsStartedBackfillFlolabsByUser as unknown as { rowCount?: number }).rowCount ??
-        (discussionsStartedBackfillFlolabsByUser as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      discussionsResolvedBackfillFlolabsByUserRowCount:
-        (discussionsResolvedBackfillFlolabsByUser as unknown as { rowCount?: number }).rowCount ??
-        (discussionsResolvedBackfillFlolabsByUser as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      repliesBackfillFlolabsByUserRowCount:
-        (repliesBackfillFlolabsByUser as unknown as { rowCount?: number }).rowCount ??
-        (repliesBackfillFlolabsByUser as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      normalizeActiveStatusRowCount:
-        (normalizeActiveStatus as unknown as { rowCount?: number }).rowCount ??
-        (normalizeActiveStatus as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
-      normalizeActiveStageRowCount:
-        (normalizeActiveStage as unknown as { rowCount?: number }).rowCount ??
-        (normalizeActiveStage as unknown as { rowsAffected?: number }).rowsAffected ??
-        null,
+      aliasBackfillRowCount: rowCount(aliasBackfill),
+      backfillTeamMembershipsRowCount: rowCount(backfillTeamMemberships),
+      entriesAlignRowCount: rowCount(entriesAlign),
+      tagsAlignRowCount: rowCount(tagsAlign),
+      discussionsStartedAlignRowCount: rowCount(discussionsStartedAlign),
+      discussionsResolvedAlignRowCount: rowCount(discussionsResolvedAlign),
+      repliesAlignRowCount: rowCount(repliesAlign),
+      normalizeActiveStatusRowCount: rowCount(normalizeActiveStatus),
+      normalizeActiveStageRowCount: rowCount(normalizeActiveStage),
       summary,
     });
   } catch (error) {

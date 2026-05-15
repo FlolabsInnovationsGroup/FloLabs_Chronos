@@ -8,7 +8,7 @@ export async function ensureUserEmailAliasesSchema() {
   await db.execute(`
     create table if not exists user_email_aliases (
       id uuid primary key default gen_random_uuid(),
-      user_id uuid not null references users(id) on delete cascade,
+      user_id uuid not null references flolabs_users(id) on delete cascade,
       email text not null unique,
       is_primary boolean not null default false,
       created_at timestamptz not null default now(),

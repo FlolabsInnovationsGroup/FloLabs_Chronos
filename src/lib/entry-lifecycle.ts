@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
-import { applicants, projects, tags, timeEntries, timeEntryTags, users } from "@/lib/db/schema";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { projects, tags, timeEntries, timeEntryTags, users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { markEntryDeleted, syncEntryToNotionFull, updateEntryStatus } from "@/lib/notion";
 import {
   notifyEntryAdded,
@@ -11,6 +12,8 @@ import {
 async function loadEntry(entryId: string) {
   if (!db) return null;
 
+  const entryApplicant = alias(users, "entry_applicant");
+
   const rows = await db
     .select({
       entry: timeEntries,
@@ -20,19 +23,13 @@ async function loadEntry(entryId: string) {
         email: users.email,
         notionTeamMemberId: users.notionTeamMemberId,
       },
-      applicantName: applicants.name,
-      applicantNotionTeamMemberId: applicants.notionTeamMemberId,
+      applicantName: entryApplicant.name,
+      applicantNotionTeamMemberId: entryApplicant.notionTeamMemberId,
     })
     .from(timeEntries)
     .leftJoin(projects, eq(timeEntries.projectId, projects.id))
     .leftJoin(users, eq(timeEntries.userId, users.id))
-    .leftJoin(
-      applicants,
-      or(
-        eq(timeEntries.applicantId, applicants.id),
-        and(isNull(timeEntries.applicantId), eq(applicants.chronosUserId, users.id))
-      )
-    )
+    .leftJoin(entryApplicant, eq(timeEntries.applicantId, entryApplicant.id))
     .where(eq(timeEntries.id, entryId))
     .limit(1);
 

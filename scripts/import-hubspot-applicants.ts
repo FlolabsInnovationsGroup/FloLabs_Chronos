@@ -1,9 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
+import { randomBytes } from 'crypto';
+import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
-import { applicants, users } from '@/lib/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { users } from '@/lib/db/schema';
+import { sql } from 'drizzle-orm';
 
 async function main() {
   if (!db) throw new Error('Database is not configured');
@@ -17,6 +19,8 @@ async function main() {
     crlfDelay: Infinity,
   });
 
+  const placeholderPwd = await bcrypt.hash(randomBytes(24).toString('hex'), 12);
+
   let lineNumber = 0;
   let count = 0;
   for await (const line of rl) {
@@ -28,16 +32,15 @@ async function main() {
     const name = String(row.name ?? '').trim();
     if (!email || !name) continue;
 
-    const existingUser = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
-
     await db
-      .insert(applicants)
+      .insert(users)
       .values({
         externalApplicantId: row.externalApplicantId ?? null,
         hubspotRecordId: row.hubspotRecordId ?? null,
         email,
         name,
-        phone: row.phone ?? null,
+        password: placeholderPwd,
+        phoneNumber: row.phone ?? null,
         country: row.country ?? null,
         stateRegion: row.stateRegion ?? null,
         city: row.city ?? null,
@@ -61,16 +64,15 @@ async function main() {
         hubspotLastModifiedAt: row.hubspotLastModifiedAt ? new Date(row.hubspotLastModifiedAt) : null,
         hubspotRawData: row.hubspotRawData ?? null,
         syncedToTeamMembers: Boolean(row.syncedToTeamMembers),
-        chronosUserId: existingUser[0]?.id ?? null,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
-        target: applicants.email,
+        target: users.email,
         set: {
           externalApplicantId: row.externalApplicantId ?? null,
           hubspotRecordId: row.hubspotRecordId ?? null,
           name,
-          phone: row.phone ?? null,
+          phoneNumber: row.phone ?? null,
           country: row.country ?? null,
           stateRegion: row.stateRegion ?? null,
           city: row.city ?? null,
@@ -84,7 +86,7 @@ async function main() {
           roleAppliedFor: row.roleAppliedFor ?? null,
           stage: row.stage ?? 'new',
           status: row.status ?? 'active',
-          joinedAt: row.joinedAt ? new Date(row.joinedAt) : sql`${applicants.joinedAt}`,
+          joinedAt: row.joinedAt ? new Date(row.joinedAt) : sql`${users.joinedAt}`,
           lastWebsiteVisit: row.lastWebsiteVisit ? new Date(row.lastWebsiteVisit) : null,
           source: row.source ?? null,
           hubspotStatus: row.hubspotStatus ?? null,
@@ -93,7 +95,7 @@ async function main() {
           hubspotLeadStatus: row.hubspotLeadStatus ?? null,
           hubspotLastModifiedAt: row.hubspotLastModifiedAt ? new Date(row.hubspotLastModifiedAt) : null,
           hubspotRawData: row.hubspotRawData ?? null,
-          chronosUserId: existingUser[0]?.id ?? null,
+          syncedToTeamMembers: Boolean(row.syncedToTeamMembers),
           updatedAt: new Date(),
         },
       });

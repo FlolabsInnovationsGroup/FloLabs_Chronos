@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { applicants, timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
+import { timeEntries, projects, tags, users, timeEntryTags } from "@/lib/db/schema";
 import { eq, and, gte, isNotNull, inArray } from "drizzle-orm";
 import { sendDiscordEmbed, buildDailySummaryEmbed } from "@/lib/discord";
 import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
@@ -39,20 +39,6 @@ export async function GET(req: Request) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const applicantByChronosUserId = new Map<string, { id: string; name: string; email: string }>();
-  const linkedApplicants = await db
-    .select({ id: applicants.id, chronosUserId: applicants.chronosUserId, name: applicants.name, email: applicants.email })
-    .from(applicants)
-    .where(inArray(applicants.chronosUserId, eligibleUsers.map((user) => user.id)));
-  for (const applicant of linkedApplicants) {
-    if (!applicant.chronosUserId) continue;
-    applicantByChronosUserId.set(applicant.chronosUserId, {
-      id: applicant.id,
-      name: applicant.name,
-      email: applicant.email,
-    });
-  }
-
   let sent = 0;
   const errors: string[] = [];
 
@@ -60,8 +46,6 @@ export async function GET(req: Request) {
     if (!user.discordWebhookUrl) continue;
 
     try {
-      const linkedApplicant = applicantByChronosUserId.get(user.id);
-
       const rows = await db
         .select({
           entry: timeEntries,
@@ -73,7 +57,7 @@ export async function GET(req: Request) {
         .leftJoin(users, eq(timeEntries.userId, users.id))
         .where(
           and(
-            whereTimeEntriesForLinkedUser(user.id, linkedApplicant?.id ?? null),
+            whereTimeEntriesForLinkedUser(user.id, user.id),
             isNotNull(timeEntries.stoppedAt),
             gte(timeEntries.startedAt, today)
           )
@@ -106,7 +90,7 @@ export async function GET(req: Request) {
         user: ownerDisplayMap.get(`${entry.userId}:${entry.applicantId ?? ""}`) ?? entryUser ?? { id: user.id, name: user.name, email: user.email },
       })) as TimeEntry[];
 
-      const summaryName = linkedApplicant?.name?.trim() || user.name;
+      const summaryName = user.name?.trim() || user.email;
       const embed = buildDailySummaryEmbed(summaryName, userEntries);
       await sendDiscordEmbed(user.discordWebhookUrl, embed);
       sent++;

@@ -9,6 +9,7 @@ import {
   uniqueIndex,
   primaryKey,
   jsonb,
+  doublePrecision,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -31,8 +32,12 @@ export const teams = pgTable(
   ]
 );
 
+/**
+ * Single FloLabs identity + HR pipeline row (physical table `flolabs_users`).
+ * Replaces the former split between `users` and `applicants` / Hephaestus `website_applicants`.
+ */
 export const users = pgTable(
-  "users",
+  "flolabs_users",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     email: text("email").unique().notNull(),
@@ -41,20 +46,65 @@ export const users = pgTable(
     role: text("role").notNull().default("member"),
     teamId: uuid("team_id").references(() => teams.id),
     isActive: boolean("is_active").notNull().default(true),
-    // Discord integration
     discordWebhookUrl: text("discord_webhook_url"),
     notifyOnStart: boolean("notify_on_start").default(false),
     notifyOnStop: boolean("notify_on_stop").default(false),
     dailySummary: boolean("daily_summary").default(false),
     weeklyTargetHours: bigint("weekly_target_hours", { mode: "number" }).default(40),
     profilePictureUrl: text("profile_picture_url"),
-    // Link to the Notion Team Members DB page — used to resolve memberships and time entry relations
     notionTeamMemberId: text("notion_team_member_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    // Hephaestus (former website_applicants)
+    hrBinaryRole: boolean("hr_binary_role").default(false),
+    firstName: text("first_name"),
+    lastName: text("last_name"),
+    phoneNumber: text("phone_number"),
+    country: text("country"),
+    stateRegion: text("state_region"),
+    city: text("city"),
+    latitude: doublePrecision("latitude"),
+    longitude: doublePrecision("longitude"),
+    linkedinUrl: text("linkedin_url"),
+    education: text("education"),
+    source: text("source"),
+    referralName: text("referral_name"),
+    cvFileName: text("cv_file_name"),
+    cvUrl: text("cv_url"),
+    roleAppliedFor: text("role_applied_for"),
+    stage: text("stage").notNull().default("application_submitted"),
+    status: text("status").notNull().default("joined"),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow(),
+    lastVisitedAt: timestamp("last_visited_at", { withTimezone: true }),
+    notes: text("notes"),
+    safeSendersConfirmed: boolean("safe_senders_confirmed").default(false),
+    communicationConsent: boolean("communication_consent").default(false),
+    lowEffortRollbackAfter: timestamp("low_effort_rollback_after", { withTimezone: true }),
+    lowEffortReturnStage: text("low_effort_return_stage"),
+    notionTeamMemberPageUrl: text("notion_team_member_page_url"),
+    // HubSpot / extended applicant profile (former `applicants`-only fields)
+    externalApplicantId: text("external_applicant_id"),
+    dateOfBirth: text("date_of_birth"),
+    gender: text("gender"),
+    fieldOfStudy: text("field_of_study"),
+    currentJobTitle: text("current_job_title"),
+    companyName: text("company_name"),
+    lastWebsiteVisit: timestamp("last_website_visit", { withTimezone: true }),
+    hubspotRecordId: text("hubspot_record_id"),
+    hubspotStatus: text("hubspot_status"),
+    hubspotOwner: text("hubspot_owner"),
+    hubspotLifecycleStage: text("hubspot_lifecycle_stage"),
+    hubspotLeadStatus: text("hubspot_lead_status"),
+    hubspotLastModifiedAt: timestamp("hubspot_last_modified_at", { withTimezone: true }),
+    hubspotRawData: jsonb("hubspot_raw_data"),
+    syncedToTeamMembers: boolean("synced_to_team_members").notNull().default(false),
   },
-  (t) => [index("idx_users_team").on(t.teamId)]
+  (t) => [
+    index("idx_users_team").on(t.teamId),
+    index("idx_flolabs_users_stage").on(t.stage),
+    index("idx_flolabs_users_status").on(t.status),
+  ]
 );
 
 export const teamMemberships = pgTable(
@@ -170,10 +220,10 @@ export const tags = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    /** Canonical FloLabs owner pointer (replaces legacy applicant_id naming). */
-    flolabsId: uuid("flolabs_id").references(() => applicants.id, { onDelete: "set null" }),
+    /** Canonical FloLabs owner pointer (same row as `user_id` when linked). */
+    flolabsId: uuid("flolabs_id").references(() => users.id, { onDelete: "set null" }),
     /** @deprecated Legacy name kept temporarily for migration compatibility. */
-    applicantId: uuid("applicant_id").references(() => applicants.id, { onDelete: "set null" }),
+    applicantId: uuid("applicant_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
@@ -191,10 +241,10 @@ export const timeEntries = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id),
-    /** Canonical FloLabs owner pointer (replaces legacy applicant_id naming). */
-    flolabsId: uuid("flolabs_id").references(() => applicants.id, { onDelete: "set null" }),
+    /** Canonical FloLabs owner pointer (same row as `user_id` when linked). */
+    flolabsId: uuid("flolabs_id").references(() => users.id, { onDelete: "set null" }),
     /** @deprecated Legacy name kept temporarily for migration compatibility. */
-    applicantId: uuid("applicant_id").references(() => applicants.id, { onDelete: "set null" }),
+    applicantId: uuid("applicant_id").references(() => users.id, { onDelete: "set null" }),
     projectId: uuid("project_id").references(() => projects.id),
     description: text("description").notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
@@ -245,16 +295,16 @@ export const entryDiscussions = pgTable(
     entryId: uuid('entry_id').notNull().references(() => timeEntries.id, { onDelete: 'cascade' }),
     startedById: uuid('started_by_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     /** Canonical FloLabs starter pointer. */
-    startedByFlolabsId: uuid('started_by_flolabs_id').references(() => applicants.id, { onDelete: 'set null' }),
+    startedByFlolabsId: uuid('started_by_flolabs_id').references(() => users.id, { onDelete: 'set null' }),
     /** @deprecated Legacy name kept temporarily for migration compatibility. */
-    startedByApplicantId: uuid('started_by_applicant_id').references(() => applicants.id, { onDelete: 'set null' }),
+    startedByApplicantId: uuid('started_by_applicant_id').references(() => users.id, { onDelete: 'set null' }),
     message: text('message').notNull(),
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),
     resolvedById: uuid('resolved_by_id').references(() => users.id, { onDelete: 'set null' }),
     /** Canonical FloLabs resolver pointer. */
-    resolvedByFlolabsId: uuid('resolved_by_flolabs_id').references(() => applicants.id, { onDelete: 'set null' }),
+    resolvedByFlolabsId: uuid('resolved_by_flolabs_id').references(() => users.id, { onDelete: 'set null' }),
     /** @deprecated Legacy name kept temporarily for migration compatibility. */
-    resolvedByApplicantId: uuid('resolved_by_applicant_id').references(() => applicants.id, { onDelete: 'set null' }),
+    resolvedByApplicantId: uuid('resolved_by_applicant_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   },
@@ -279,9 +329,9 @@ export const discussionReplies = pgTable(
     discussionId: uuid('discussion_id').notNull().references(() => entryDiscussions.id, { onDelete: 'cascade' }),
     authorId: uuid('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     /** Canonical FloLabs author pointer. */
-    authorFlolabsId: uuid('author_flolabs_id').references(() => applicants.id, { onDelete: 'set null' }),
+    authorFlolabsId: uuid('author_flolabs_id').references(() => users.id, { onDelete: 'set null' }),
     /** @deprecated Legacy name kept temporarily for migration compatibility. */
-    authorApplicantId: uuid('author_applicant_id').references(() => applicants.id, { onDelete: 'set null' }),
+    authorApplicantId: uuid('author_applicant_id').references(() => users.id, { onDelete: 'set null' }),
     message: text('message').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
@@ -297,69 +347,19 @@ export const discussionReplies = pgTable(
 export type DiscussionReplyRecord = typeof discussionReplies.$inferSelect;
 export type NewDiscussionReply = typeof discussionReplies.$inferInsert;
 
-export const applicants = pgTable(
-  "applicants",
-  {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    externalApplicantId: text("external_applicant_id"),
-    email: text("email").notNull().unique(),
-    name: text("name").notNull(),
-    phone: text("phone"),
-    country: text("country"),
-    stateRegion: text("state_region"),
-    city: text("city"),
-    dateOfBirth: text("date_of_birth"),
-    gender: text("gender"),
-    linkedinUrl: text("linkedin_url"),
-    education: text("education"),
-    fieldOfStudy: text("field_of_study"),
-    currentJobTitle: text("current_job_title"),
-    companyName: text("company_name"),
-    roleAppliedFor: text("role_applied_for"),
-    stage: text("stage").notNull().default("application_submitted"),
-    status: text("status").notNull().default("joined"),
-    joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow(),
-    lastWebsiteVisit: timestamp("last_website_visit", { withTimezone: true }),
-    source: text("source"),
-    hubspotRecordId: text("hubspot_record_id"),
-    hubspotStatus: text("hubspot_status"),
-    hubspotOwner: text("hubspot_owner"),
-    hubspotLifecycleStage: text("hubspot_lifecycle_stage"),
-    hubspotLeadStatus: text("hubspot_lead_status"),
-    hubspotLastModifiedAt: timestamp("hubspot_last_modified_at", { withTimezone: true }),
-    hubspotRawData: jsonb("hubspot_raw_data"),
-    syncedToTeamMembers: boolean("synced_to_team_members").notNull().default(false),
-    /** Canonical Chronos-facing profile + access fields; password stays on `users` until Phase 3. */
-    role: text("role").notNull().default("member"),
-    teamId: uuid("team_id").references(() => teams.id),
-    isActive: boolean("is_active").notNull().default(false),
-    weeklyTargetHours: bigint("weekly_target_hours", { mode: "number" }).default(40),
-    profilePictureUrl: text("profile_picture_url"),
-    notionTeamMemberId: text("notion_team_member_id"),
-    chronosUserId: uuid("chronos_user_id").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-  },
-  (t) => [
-    index("idx_applicants_stage").on(t.stage),
-    index("idx_applicants_status").on(t.status),
-    index("idx_applicants_chronos_user_id").on(t.chronosUserId),
-  ]
-);
-
 export const applicantDuplicateReviews = pgTable(
   "applicant_duplicate_reviews",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    primaryApplicantId: uuid("primary_applicant_id").notNull().references(() => applicants.id, { onDelete: "cascade" }),
-    duplicateApplicantId: uuid("duplicate_applicant_id").notNull().references(() => applicants.id, { onDelete: "cascade" }),
+    primaryApplicantId: uuid("primary_applicant_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    duplicateApplicantId: uuid("duplicate_applicant_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     status: text("status").notNull().default("pending"),
     confidenceScore: bigint("confidence_score", { mode: "number" }).notNull().default(0),
     reasons: jsonb("reasons").notNull().default(sql`'[]'::jsonb`),
     reviewedById: uuid("reviewed_by_id").references(() => users.id, { onDelete: "set null" }),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     notes: text("notes"),
-    canonicalApplicantId: uuid("canonical_applicant_id").references(() => applicants.id, { onDelete: "set null" }),
+    canonicalApplicantId: uuid("canonical_applicant_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },

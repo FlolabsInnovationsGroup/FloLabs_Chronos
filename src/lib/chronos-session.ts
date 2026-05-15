@@ -1,57 +1,30 @@
 import type { Session } from "next-auth";
-import { db } from "@/lib/db";
-import { applicants } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 
 /**
- * Chronos ownership / foreign keys use `users.id`.
- * After the identity refactor, `session.user.id` is the canonical applicant (leads) id.
+ * Chronos ownership / foreign keys use `flolabs_users.id` (exported as `users` in Drizzle).
+ * `session.user.chronosUserId` remains populated for backward-compatible JWTs; when absent,
+ * `session.user.id` is the same primary key.
  */
 export function chronosUserIdFromSessionUser(sessionUser: Session["user"]): string | null {
   const raw = sessionUser.chronosUserId;
-  return typeof raw === "string" && raw.length > 0 ? raw : null;
+  if (typeof raw === "string" && raw.length > 0) return raw;
+  const id = typeof sessionUser.id === "string" && sessionUser.id.length > 0 ? sessionUser.id : null;
+  return id;
 }
 
 export function requireChronosUserIdFromSessionUser(sessionUser: Session["user"]): string {
   const id = chronosUserIdFromSessionUser(sessionUser);
-  if (!id) throw new Error("Session is missing chronosUserId (Chronos user linkage)");
+  if (!id) throw new Error("Session is missing Chronos user id");
   return id;
 }
 
-/** When `chronosUserId` is set, `session.user.id` is the applicant id (Phase 2+ session shape). */
+/** @deprecated Same as session id after `flolabs_users` unification; kept for call-site clarity. */
 export function applicantIdForSessionLinkedUser(sessionUser: Session["user"]): string | null {
   if (!chronosUserIdFromSessionUser(sessionUser)) return null;
   const id = sessionUser.id;
   return typeof id === "string" && id.length > 0 ? id : null;
 }
 
-/**
- * Resolve Chronos owner id even for stale sessions that still only carry applicant id.
- */
 export async function resolveChronosUserIdForSessionUser(sessionUser: Session["user"]): Promise<string | null> {
-  const direct = chronosUserIdFromSessionUser(sessionUser);
-  if (direct) return direct;
-  if (!db) return null;
-
-  const applicantId = applicantIdForSessionLinkedUser(sessionUser) ?? (typeof sessionUser.id === "string" ? sessionUser.id : null);
-  if (applicantId) {
-    const [rowById] = await db
-      .select({ chronosUserId: applicants.chronosUserId })
-      .from(applicants)
-      .where(eq(applicants.id, applicantId))
-      .limit(1);
-    if (rowById?.chronosUserId) return rowById.chronosUserId;
-  }
-
-  const email = String(sessionUser.email ?? "").trim().toLowerCase();
-  if (email) {
-    const [rowByEmail] = await db
-      .select({ chronosUserId: applicants.chronosUserId })
-      .from(applicants)
-      .where(eq(applicants.email, email))
-      .limit(1);
-    if (rowByEmail?.chronosUserId) return rowByEmail.chronosUserId;
-  }
-
-  return null;
+  return chronosUserIdFromSessionUser(sessionUser);
 }

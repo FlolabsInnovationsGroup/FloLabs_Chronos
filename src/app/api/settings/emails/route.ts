@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { applicants, userEmailAliases, users } from "@/lib/db/schema";
+import { userEmailAliases, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function GET() {
@@ -11,41 +11,33 @@ export async function GET() {
 
   const sessionApplicantId = session.user.id;
   const sessionChronosUserId = session.user.chronosUserId ?? null;
+  const aliasUserId = sessionChronosUserId ?? sessionApplicantId;
 
-  const [applicant] = await db
-    .select({ email: applicants.email, hubspotRawData: applicants.hubspotRawData })
-    .from(applicants)
-    .where(eq(applicants.id, sessionApplicantId))
+  const [person] = await db
+    .select({ email: users.email, hubspotRawData: users.hubspotRawData })
+    .from(users)
+    .where(eq(users.id, sessionApplicantId))
     .limit(1);
-  if (!applicant) return NextResponse.json({ emails: [] });
-
-  const [user] = sessionChronosUserId
-    ? await db
-        .select({ id: users.id, email: users.email })
-        .from(users)
-        .where(eq(users.id, sessionChronosUserId))
-        .limit(1)
-    : [];
+  if (!person) return NextResponse.json({ emails: [] });
 
   const aliasRows = await db
     .select({ email: userEmailAliases.email })
     .from(userEmailAliases)
-    .where(eq(userEmailAliases.userId, sessionChronosUserId ?? ""));
+    .where(eq(userEmailAliases.userId, aliasUserId));
 
-  let applicantEmails: string[] = [];
-  if (applicant?.hubspotRawData && typeof applicant.hubspotRawData === "object") {
-    const maybeEmails = (applicant.hubspotRawData as { emails?: unknown }).emails;
+  let hubspotEmails: string[] = [];
+  if (person.hubspotRawData && typeof person.hubspotRawData === "object") {
+    const maybeEmails = (person.hubspotRawData as { emails?: unknown }).emails;
     if (Array.isArray(maybeEmails)) {
-      applicantEmails = maybeEmails.map((v) => String(v).trim().toLowerCase()).filter(Boolean);
+      hubspotEmails = maybeEmails.map((v) => String(v).trim().toLowerCase()).filter(Boolean);
     }
   }
 
   const emails = Array.from(
     new Set([
-      applicant.email.toLowerCase(),
-      ...(user ? [user.email.toLowerCase()] : []),
+      person.email.toLowerCase(),
       ...aliasRows.map((row) => row.email.toLowerCase()),
-      ...applicantEmails,
+      ...hubspotEmails,
     ]),
   );
   return NextResponse.json({ emails });

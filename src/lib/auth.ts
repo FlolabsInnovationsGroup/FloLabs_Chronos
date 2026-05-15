@@ -62,14 +62,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const applicant = await findApplicantForCredentialEmail(email.toLowerCase());
           if (!applicant || !applicantAccessEnabled(applicant)) return null;
 
-          let user =
-            applicant.chronosUserId
-              ? (await db.select().from(users).where(eq(users.id, applicant.chronosUserId)).limit(1))[0]
-              : undefined;
-          if (!user) {
-            const byEmail = await findUserByAnyEmail(applicant.email.toLowerCase());
-            if (byEmail) user = byEmail;
-          }
+          const user =
+            (await db.select().from(users).where(eq(users.id, applicant.id)).limit(1))[0] ??
+            (await findUserByAnyEmail(applicant.email.toLowerCase()));
           if (!user?.isActive) return null;
 
           const valid = await bcrypt.compare(password, user.password);
@@ -80,14 +75,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           });
 
           return {
-            id: applicant.id,
-            email: applicant.email,
-            name: applicant.name,
-            profilePictureUrl: applicant.profilePictureUrl ?? user.profilePictureUrl ?? null,
-            role: normalizeRole(applicant.role ?? user.role),
-            teamId: applicant.teamId ?? user.teamId,
-            isActive: Boolean(applicant.isActive),
-            applicantStatus: normalizeApplicantStatus(applicant.status),
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            profilePictureUrl: user.profilePictureUrl ?? null,
+            role: normalizeRole(user.role),
+            teamId: user.teamId,
+            isActive: Boolean(user.isActive),
+            applicantStatus: normalizeApplicantStatus(user.status),
             chronosUserId: user.id,
           };
         } catch {
@@ -119,7 +114,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (applicantId && (trigger === "update" || Date.now() - lastRefresh > REFRESH_INTERVAL_MS)) {
         try {
           const { db } = await import("./db");
-          const { applicants, users } = await import("./db/schema");
+          const { users } = await import("./db/schema");
           const { eq } = await import("drizzle-orm");
 
           if (db) {
@@ -130,57 +125,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               isActive: boolean;
               profilePictureUrl: string | null;
               status: string | null;
-              chronosUserId: string | null;
+            };
+
+            const selectCols = {
+              id: users.id,
+              role: users.role,
+              teamId: users.teamId,
+              isActive: users.isActive,
+              profilePictureUrl: users.profilePictureUrl,
+              status: users.status,
             };
 
             let fresh: FreshRow | undefined;
-            const [byPk] = await db
-              .select({
-                id: applicants.id,
-                role: applicants.role,
-                teamId: applicants.teamId,
-                isActive: applicants.isActive,
-                profilePictureUrl: applicants.profilePictureUrl,
-                status: applicants.status,
-                chronosUserId: applicants.chronosUserId,
-              })
-              .from(applicants)
-              .where(eq(applicants.id, applicantId))
-              .limit(1);
+            const [byPk] = await db.select(selectCols).from(users).where(eq(users.id, applicantId)).limit(1);
             fresh = byPk;
 
             if (!fresh && chronosFromToken) {
-              const [byChronos] = await db
-                .select({
-                  id: applicants.id,
-                  role: applicants.role,
-                  teamId: applicants.teamId,
-                  isActive: applicants.isActive,
-                  profilePictureUrl: applicants.profilePictureUrl,
-                  status: applicants.status,
-                  chronosUserId: applicants.chronosUserId,
-                })
-                .from(applicants)
-                .where(eq(applicants.chronosUserId, chronosFromToken))
-                .limit(1);
+              const [byChronos] = await db.select(selectCols).from(users).where(eq(users.id, chronosFromToken)).limit(1);
               fresh = byChronos;
-            }
-
-            if (!fresh && !chronosFromToken) {
-              const [legacy] = await db
-                .select({
-                  id: applicants.id,
-                  role: applicants.role,
-                  teamId: applicants.teamId,
-                  isActive: applicants.isActive,
-                  profilePictureUrl: applicants.profilePictureUrl,
-                  status: applicants.status,
-                  chronosUserId: applicants.chronosUserId,
-                })
-                .from(applicants)
-                .where(eq(applicants.chronosUserId, applicantId))
-                .limit(1);
-              fresh = legacy;
             }
 
             if (fresh) {
@@ -190,33 +152,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               t.isActive = fresh.isActive;
               t.profilePictureUrl = fresh.profilePictureUrl ?? null;
               t.applicantStatus = normalizeApplicantStatus(fresh.status);
-              t.chronosUserId = fresh.chronosUserId ?? chronosFromToken ?? null;
+              t.chronosUserId = fresh.id;
               t.roleRefreshedAt = Date.now();
 
               if (!applicantAccessEnabled({ status: fresh.status, isActive: fresh.isActive })) {
                 return null as unknown as typeof token;
-              }
-            } else {
-              const legacyUserId = chronosFromToken ?? applicantId;
-              if (legacyUserId) {
-                const [legacy] = await db
-                  .select({
-                    role: users.role,
-                    teamId: users.teamId,
-                    isActive: users.isActive,
-                    profilePictureUrl: users.profilePictureUrl,
-                  })
-                  .from(users)
-                  .where(eq(users.id, legacyUserId))
-                  .limit(1);
-                if (legacy) {
-                  t.role = normalizeRole(legacy.role);
-                  t.teamId = legacy.teamId ?? null;
-                  t.isActive = legacy.isActive;
-                  t.profilePictureUrl = legacy.profilePictureUrl ?? null;
-                  t.chronosUserId = legacyUserId;
-                  t.roleRefreshedAt = Date.now();
-                }
               }
             }
           }

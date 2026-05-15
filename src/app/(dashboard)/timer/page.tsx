@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { timeEntries, projects, tags, users, timeEntryTags, entryDiscussions, applicants } from "@/lib/db/schema";
+import { timeEntries, projects, tags, users, timeEntryTags, entryDiscussions } from "@/lib/db/schema";
 import { eq, and, gte, lte, isNotNull, desc, inArray, isNull, asc } from "drizzle-orm";
 import { discussionReplies } from "@/lib/db/schema";
 import { getCalendarWeekRangeLocal } from "@/lib/utils";
@@ -273,27 +273,11 @@ async function getInitialDiscussions(
 
 async function getUserWeeklyTarget(userId: string, applicantId: string | null): Promise<number> {
   if (!db) return 40;
-
-  if (applicantId) {
-    const [applicantRow] = await db
-      .select({ weeklyTargetHours: applicants.weeklyTargetHours })
-      .from(applicants)
-      .where(eq(applicants.id, applicantId))
-      .limit(1);
-    if (typeof applicantRow?.weeklyTargetHours === "number") return applicantRow.weeklyTargetHours;
-  }
-
-  const [linkedApplicantRow] = await db
-    .select({ weeklyTargetHours: applicants.weeklyTargetHours })
-    .from(applicants)
-    .where(eq(applicants.chronosUserId, userId))
-    .limit(1);
-  if (typeof linkedApplicantRow?.weeklyTargetHours === "number") return linkedApplicantRow.weeklyTargetHours;
-
+  const id = applicantId ?? userId;
   const [row] = await db
     .select({ weeklyTargetHours: users.weeklyTargetHours })
     .from(users)
-    .where(eq(users.id, userId))
+    .where(eq(users.id, id))
     .limit(1);
   return row?.weeklyTargetHours ?? 40;
 }

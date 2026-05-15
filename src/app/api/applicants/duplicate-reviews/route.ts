@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { chronosUserIdFromSessionUser } from '@/lib/chronos-session';
 import { db } from '@/lib/db';
-import { applicants } from '@/lib/db/schema';
+import { users } from '@/lib/db/schema';
 import { inArray } from 'drizzle-orm';
 import { getDuplicateReviewsForApplicant, syncDuplicateReviews, updateDuplicateReview } from '@/lib/duplicate-review';
 
@@ -26,7 +26,7 @@ async function listReviews(status: string | null, applicantId?: string | null) {
 
   const applicantIds = Array.from(new Set(reviews.flatMap((review) => [review.primaryApplicantId ?? review.primary_applicant_id, review.duplicateApplicantId ?? review.duplicate_applicant_id]).filter(Boolean) as string[]));
   const applicantRows = applicantIds.length > 0
-    ? await db.select().from(applicants).where(inArray(applicants.id, applicantIds))
+    ? await db.select().from(users).where(inArray(users.id, applicantIds))
     : [];
   const applicantMap = new Map(applicantRows.map((row) => [row.id, row]));
 

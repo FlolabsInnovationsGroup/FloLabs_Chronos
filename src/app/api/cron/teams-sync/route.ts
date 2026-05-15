@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { applicants, teamMemberships, teams, users } from "@/lib/db/schema";
+import { teamMemberships, teams, users } from "@/lib/db/schema";
 import { and, eq, isNotNull, notInArray, sql } from "drizzle-orm";
 import { createTeamSlug } from "@/lib/invitations";
 import { getNotionConfig } from "@/lib/app-config";
@@ -174,9 +174,7 @@ export async function GET(req: Request) {
     // ── STEP 2b: Notion Team Members is the canonical FloLabs account source for
     // operational status/role. Chronos stores enabled accounts as joined, so an
     // Active Notion Team Member page must become joined + active locally and must
-    // mirror Role into both applicants and users. This keeps Admin/Team Lead
-    // visibility aligned with the current FloLabs directory instead of stale
-    // HubSpot/applicant defaults.
+    // mirror Role into `flolabs_users` (single identity row).
     for (const page of memberPages) {
       const notionStatus = page.properties["Status"]?.status?.name ?? null;
       if (notionStatus !== "Active") continue;
@@ -186,28 +184,12 @@ export async function GET(req: Request) {
       if (emails.length === 0) continue;
       const emailArray = textArraySql(emails);
 
-      const applicantResult = await db.execute(sql`
-        UPDATE applicants a
+      const combinedResult = await db.execute(sql`
+        UPDATE flolabs_users u
         SET
           notion_team_member_id = ${page.id},
           status = 'joined',
           stage = 'joined',
-          role = COALESCE(${normalizedRole}, a.role),
-          is_active = true,
-          updated_at = now()
-        WHERE a.notion_team_member_id = ${page.id}
-          OR lower(a.email) = ANY(${emailArray})
-          OR EXISTS (
-            SELECT 1
-            FROM jsonb_array_elements_text(COALESCE(a.hubspot_raw_data->'emails', '[]'::jsonb)) AS e(email)
-            WHERE lower(e.email) = ANY(${emailArray})
-          )
-      `);
-
-      const userResult = await db.execute(sql`
-        UPDATE users u
-        SET
-          notion_team_member_id = ${page.id},
           role = COALESCE(${normalizedRole}, u.role),
           is_active = true,
           updated_at = now()
@@ -215,50 +197,37 @@ export async function GET(req: Request) {
           OR lower(u.email) = ANY(${emailArray})
           OR EXISTS (
             SELECT 1
+            FROM jsonb_array_elements_text(COALESCE(u.hubspot_raw_data->'emails', '[]'::jsonb)) AS e(email)
+            WHERE lower(e.email) = ANY(${emailArray})
+          )
+          OR EXISTS (
+            SELECT 1
             FROM user_email_aliases ua
             WHERE ua.user_id = u.id
               AND lower(ua.email) = ANY(${emailArray})
           )
-          OR EXISTS (
-            SELECT 1
-            FROM applicants a
-            WHERE a.chronos_user_id = u.id
-              AND (
-                a.notion_team_member_id = ${page.id}
-                OR lower(a.email) = ANY(${emailArray})
-                OR EXISTS (
-                  SELECT 1
-                  FROM jsonb_array_elements_text(COALESCE(a.hubspot_raw_data->'emails', '[]'::jsonb)) AS e(email)
-                  WHERE lower(e.email) = ANY(${emailArray})
-                )
-              )
-          )
       `);
 
-      const applicantRows = (applicantResult as unknown as { rowCount?: number; rowsAffected?: number }).rowCount ??
-        (applicantResult as unknown as { rowsAffected?: number }).rowsAffected ??
+      const rows =
+        (combinedResult as unknown as { rowCount?: number; rowsAffected?: number }).rowCount ??
+        (combinedResult as unknown as { rowsAffected?: number }).rowsAffected ??
         0;
-      const userRows = (userResult as unknown as { rowCount?: number; rowsAffected?: number }).rowCount ??
-        (userResult as unknown as { rowsAffected?: number }).rowsAffected ??
-        0;
-      activeAccountsLinkedFromNotion += applicantRows;
-      if (normalizedRole) activeAccountRolesSyncedFromNotion += applicantRows + userRows;
+      activeAccountsLinkedFromNotion += rows;
+      if (normalizedRole) activeAccountRolesSyncedFromNotion += rows;
     }
 
-    // ── STEP 3: Sync `Team` relation from each applicant's linked Team Member page ─
-    // Canonical Notion Team Member id lives on `applicants.notion_team_member_id`; `users` is mirrored for FK compatibility.
+    // ── STEP 3: Sync `Team` relation from each linked Team Member page ─
     const applicantRows = await db
       .select({
-        id: applicants.id,
-        email: applicants.email,
-        chronosUserId: applicants.chronosUserId,
-        notionTeamMemberId: applicants.notionTeamMemberId,
+        id: users.id,
+        email: users.email,
+        notionTeamMemberId: users.notionTeamMemberId,
       })
-      .from(applicants)
-      .where(and(isNotNull(applicants.chronosUserId), isNotNull(applicants.notionTeamMemberId)));
+      .from(users)
+      .where(and(isNotNull(users.notionTeamMemberId)));
 
     for (const row of applicantRows) {
-      const userId = row.chronosUserId!;
+      const userId = row.id;
       const notionMemberId = row.notionTeamMemberId!;
 
       const page = memberPageById.get(notionMemberId);
@@ -280,11 +249,9 @@ export async function GET(req: Request) {
             .update(users)
             .set({ teamId: chronosTeamIds[0], notionTeamMemberId: notionMemberId, updatedAt: new Date() })
             .where(eq(users.id, userId));
-          await db.update(applicants).set({ teamId: chronosTeamIds[0], updatedAt: new Date() }).where(eq(applicants.id, row.id));
           membershipsSynced += chronosTeamIds.length;
         } else {
           await db.update(users).set({ teamId: null, updatedAt: new Date() }).where(eq(users.id, userId));
-          await db.update(applicants).set({ teamId: null, updatedAt: new Date() }).where(eq(applicants.id, row.id));
         }
 
         usersSyncedFromNotion++;
@@ -300,18 +267,18 @@ export async function GET(req: Request) {
     if (shouldRefreshNotionTeamMembers) {
       const joinedApplicants = await db
         .select({
-          id: applicants.id,
-          email: applicants.email,
-          name: applicants.name,
-          stage: applicants.stage,
-          status: applicants.status,
-          teamId: applicants.teamId,
-          notionTeamMemberId: applicants.notionTeamMemberId,
-          isActive: applicants.isActive,
-          syncedToTeamMembers: applicants.syncedToTeamMembers,
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          stage: users.stage,
+          status: users.status,
+          teamId: users.teamId,
+          notionTeamMemberId: users.notionTeamMemberId,
+          isActive: users.isActive,
+          syncedToTeamMembers: users.syncedToTeamMembers,
         })
-        .from(applicants)
-        .where(isNotNull(applicants.chronosUserId));
+        .from(users)
+        .where(isNotNull(users.notionTeamMemberId));
 
       for (const applicant of joinedApplicants) {
         const stage = applicant.stage?.toLowerCase() ?? "";
@@ -330,9 +297,9 @@ export async function GET(req: Request) {
             notionTeamMemberPageId: applicant.notionTeamMemberId,
           });
           await db
-            .update(applicants)
+            .update(users)
             .set({ syncedToTeamMembers: true, updatedAt: new Date() })
-            .where(eq(applicants.id, applicant.id));
+            .where(eq(users.id, applicant.id));
           applicantsSyncedToTeamMembers++;
         } catch (err) {
           errors.push(`Applicant ${applicant.email} Team Member sync: ${err instanceof Error ? err.message : String(err)}`);

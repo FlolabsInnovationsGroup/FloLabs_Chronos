@@ -101,7 +101,7 @@ async function runSessionLifecycle(page: Page, testInfo: TestInfo, email: string
   }
   expect(() => JSON.parse(startBody), `/api/timer/start must return valid JSON. Body: ${sanitizeBodyPreview(startBody)}`).not.toThrow();
 
-  await expect(page.getByText("Live")).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByText("Live", { exact: true })).toBeVisible({ timeout: 90_000 });
   await expect(page.getByRole("button", { name: /stop session/i })).toBeVisible({ timeout: 90_000 });
   await page.waitForTimeout(1_500);
 

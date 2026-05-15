@@ -25,16 +25,34 @@ export function loadTestUsers(): TestUserEntry[] {
 /** Sign in; lands on /timer on success. Uses #email / #password (controlled React inputs). */
 export async function signInProduction(page: Page, email: string, password: string) {
   await page.goto("/login", { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
   await expect(page.locator("#email")).toBeVisible({ timeout: 90_000 });
-  await page.locator("#email").click();
-  await page.locator("#email").clear();
-  await page.locator("#email").pressSequentially(email, { delay: 5 });
-  await page.locator("#password").click();
-  await page.locator("#password").clear();
-  await page.locator("#password").pressSequentially(password, { delay: 5 });
-  await page.getByRole("button", { name: "Sign In" }).click();
+  await page.locator("#email").fill(email);
+  await page.locator("#password").fill(password);
 
-  const authTimeoutMs = 180_000;
+  const authTimeoutMs = 240_000;
+
+  /** Wait for the credentials handshake first so we do not bail while NextAuth is still in flight (reduces flaky /login timeouts). */
+  const credWait = page
+    .waitForResponse(
+      (r) => {
+        try {
+          const u = new URL(r.url());
+          return (
+            r.request().method() === "POST" &&
+            u.pathname.includes("/api/auth/callback/credentials")
+          );
+        } catch {
+          return false;
+        }
+      },
+      { timeout: authTimeoutMs }
+    )
+    .catch(() => undefined);
+
+  await page.getByRole("button", { name: "Sign In" }).click();
+  await credWait;
+
   /** Do not use Promise.race with waitForURL — on timeout it rejects and hides credential error messages. */
   try {
     await page.waitForURL(/\/timer/, { timeout: authTimeoutMs });

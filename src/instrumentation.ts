@@ -15,7 +15,8 @@ export async function register() {
       // __drizzle_migrations table), so we run each ALTER directly with
       // IF NOT EXISTS guards.
       await client.query(`ALTER TABLE "flolabs_users" ADD COLUMN IF NOT EXISTS "last_login_at" timestamp with time zone`);
-      await client.query(`ALTER TABLE "flolabs_users" ALTER COLUMN "status" SET DEFAULT 'joined'`);
+      // NOTE: do NOT run ALTER COLUMN SET DEFAULT here — it acquires ACCESS EXCLUSIVE lock
+      // and blocks all concurrent queries on flolabs_users (shared with Hephaestus).
       await client.query(`ALTER TABLE "discussion_replies" ADD COLUMN IF NOT EXISTS "author_flolabs_id" uuid`);
       await client.query(`ALTER TABLE "discussion_replies" ADD COLUMN IF NOT EXISTS "author_applicant_id" uuid`);
       await client.query(`ALTER TABLE "entry_discussions" ADD COLUMN IF NOT EXISTS "started_by_flolabs_id" uuid`);

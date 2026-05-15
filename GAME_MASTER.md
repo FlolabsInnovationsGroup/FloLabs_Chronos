@@ -1,8 +1,8 @@
 # GAME_MASTER.md — FloLabs Chronos Development Tracker
 
 ## Project Status
-**Date:** 2026-05-11
-**Phase:** V1.1 complete → V1.2 active development
+**Date:** 2026-05-15
+**Phase:** V1.2 active — shared `flolabs_users` DB unification shipped
 **Stack:** Next.js 16 + Drizzle + **AWS RDS Postgres** + **AWS ElastiCache Redis** + NextAuth v5; **production app on AWS App Runner** (see `ARCHITECTURE.md` → “System architecture (for agents)”)
 **Public App Runner URL:** https://hcmsmnfq5q.us-east-1.awsapprunner.com — use `/api/health` for deployed commit
 **Custom domain (when cut over):** https://athensgreecemarathon.com
@@ -291,7 +291,9 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 - Production deployed at https://athensgreecemarathon.com (AWS App Runner `flolabs-chronos`, `us-east-1`)
 - App Runner instance: 2 vCPU / 4 GB RAM; auto-scaling: `flolabs-apps` config (`MinSize=1, MaxConcurrency=25, MaxSize=3`)
 - pg connection pool: `max=10, idleTimeout=20s, connectionTimeout=5s`
-- Latest deployed commit: `d4a4e40` (2026-05-11)
+- Latest deployed commit: `0cc016c` (2026-05-15) — shared flolabs_users unification + test fixes
+- **Identity**: Chronos now uses `pgTable("flolabs_users", ...)` — shares the single `flolabs_users` table with Hephaestus. No separate `applicants` table; all identity goes through `flolabs_users`.
+- **instrumentation.ts**: Runs idempotent ALTER TABLE ADD COLUMN on `flolabs_users` and related tables. Does NOT run `ALTER COLUMN SET DEFAULT` (blocks concurrent reads with ACCESS EXCLUSIVE lock).
 - Database schema migrated: per-user tags, time_entry_tags, optional project_id, entry_discussions, discussion_replies, applicant_duplicate_reviews, app_config, flolabs_id/applicant_id dual columns, discussions applicant FK columns
 - Production role distribution: ~6 admin, ~7 team_lead, ~4 hr, ~1132 member
 - Users directory inclusion: `applicantProgramStatus === "joined"` AND (`notionTeamMemberId` set OR role is `admin`/`hr`)

@@ -115,7 +115,7 @@ test.describe("Production — test_accounts (Users + Reports)", () => {
 
     await page.goto("/reports", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText(/\d+ entries/)).toBeVisible();
+    await expect(page.getByText(/\d+ entries/).first()).toBeVisible();
     await expect(page.getByText("Total Hours")).toBeVisible();
 
     await page.goto("/team", { waitUntil: "domcontentloaded" });

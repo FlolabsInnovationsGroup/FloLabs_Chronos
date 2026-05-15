@@ -13,9 +13,10 @@ export async function GET(req: Request) {
   const q = url.searchParams.get("q") ?? "";
   const limitRaw = url.searchParams.get("limit");
   const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 40;
+  const capped = Math.min(Math.max(1, Number.isFinite(limit) ? limit : 40), 120);
 
   try {
-    const pages = await searchTeamMemberPages(q, Number.isFinite(limit) ? limit : 40);
+    const pages = await searchTeamMemberPages(q, capped);
     return NextResponse.json({ pages });
   } catch (err) {
     return NextResponse.json(

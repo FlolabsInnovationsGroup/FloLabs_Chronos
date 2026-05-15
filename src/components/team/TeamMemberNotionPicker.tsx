@@ -79,7 +79,7 @@ export function TeamMemberNotionPicker({
       setLoading(true);
       setErrorMessage("");
       try {
-        const res = await fetch(`/api/notion/team-members/search?q=${encodeURIComponent(query)}`, {
+        const res = await fetch(`/api/notion/team-members/search?q=${encodeURIComponent(query)}&limit=100`, {
           signal: ctrl.signal,
         });
         const data = await res.json();

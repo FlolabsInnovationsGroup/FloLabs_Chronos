@@ -1157,6 +1157,8 @@ interface TeamMemberDirectoryEntry {
   normalizedEmails: string[];
   teamRelationIds: string[];
   onboardingRelationIds: string[];
+  /** Lowercased plain text from all searchable properties + ID variants. */
+  searchText: string;
 }
 
 interface TeamMemberDirectory {
@@ -1173,7 +1175,7 @@ export class TeamMemberLookupConflictError extends Error {
   }
 }
 
-const TEAM_MEMBER_DIRECTORY_KEY = "notion:team-member-directory";
+const TEAM_MEMBER_DIRECTORY_KEY = "notion:team-member-directory:v2";
 const TEAM_INDEX_TTL = 7200;
 
 async function cacheGet(key: string): Promise<string | null> {
@@ -1210,6 +1212,75 @@ function getPageName(page: NotionPageResult): string {
   return getTitleFromProperty(titleProp) || "Untitled";
 }
 
+/** Collect plaintext from any property type we might want to match in Team Member picker search. */
+function notionPropertySearchPieces(prop: NotionPagePropertyValue | undefined): string[] {
+  if (!prop) return [];
+  const chunks: string[] = [];
+  switch (prop.type) {
+    case "title":
+      chunks.push(getTitleFromProperty(prop));
+      break;
+    case "rich_text":
+      chunks.push(getTitleFromProperty(prop));
+      break;
+    case "email":
+      chunks.push(prop.email ?? "");
+      break;
+    case "phone_number":
+      chunks.push(String((prop as { phone_number?: string | null }).phone_number ?? ""));
+      break;
+    case "url":
+      chunks.push(String((prop as { url?: string | null }).url ?? ""));
+      break;
+    case "number":
+      if (prop.number != null && Number.isFinite(prop.number)) chunks.push(String(prop.number));
+      break;
+    case "select":
+      chunks.push(prop.select?.name ?? "");
+      break;
+    case "multi_select":
+      for (const item of ((prop as { multi_select?: { name?: string }[] }).multi_select ?? [])) {
+        if (item?.name) chunks.push(item.name);
+      }
+      break;
+    case "status":
+      chunks.push(prop.status?.name ?? "");
+      break;
+    case "relation":
+      for (const r of prop.relation ?? []) {
+        chunks.push(r.id, r.id.replace(/-/g, ""));
+      }
+      break;
+    case "people":
+      for (const p of ((prop as { people?: { id?: string }[] }).people ?? [])) {
+        if (p?.id) chunks.push(p.id.replace(/-/g, ""), p.id);
+      }
+      break;
+    case "formula": {
+      const f = (prop as { formula?: { type?: string; string?: string; number?: number | null; boolean?: boolean | null } })
+        .formula;
+      if (!f) break;
+      if (f.type === "string") chunks.push(f.string ?? "");
+      else if (f.type === "number" && f.number != null && Number.isFinite(f.number)) chunks.push(String(f.number));
+      else if (f.type === "boolean" && f.boolean !== null && f.boolean !== undefined) chunks.push(String(f.boolean));
+      break;
+    }
+    default:
+      break;
+  }
+
+  return chunks.map((s) => s.trim()).filter(Boolean);
+}
+
+/** Lowercased blob: all property text + UUID variants → matches misc. Team Members DB columns and pasted IDs. */
+function teamMemberSearchTextFromPage(page: NotionPageResult): string {
+  const chunks: string[] = [];
+  const rawId = page.id ?? "";
+  chunks.push(rawId, rawId.replace(/-/g, ""));
+  for (const prop of Object.values(page.properties ?? {})) chunks.push(...notionPropertySearchPieces(prop));
+  return chunks.join("\n").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 function serializeTeamMemberDirectory(directory: TeamMemberDirectory) {
   return JSON.stringify(directory);
 }
@@ -1218,6 +1289,7 @@ function deserializeTeamMemberDirectory(raw: string): TeamMemberDirectory | null
   try {
     const parsed = JSON.parse(raw) as TeamMemberDirectory;
     if (!parsed || !Array.isArray(parsed.entries)) return null;
+    if (parsed.entries.length > 0 && typeof parsed.entries[0]?.searchText !== "string") return null;
     return parsed;
   } catch {
     return null;
@@ -1277,6 +1349,7 @@ async function buildTeamMemberDirectory(): Promise<TeamMemberDirectory> {
         normalizedEmails,
         teamRelationIds,
         onboardingRelationIds,
+        searchText: teamMemberSearchTextFromPage(page),
       });
     }
 
@@ -1392,7 +1465,40 @@ export async function verifyNotionTeamMemberPageRow(pageId: string): Promise<voi
   await verifyTeamMemberBelongsToTeamMembersDatabase(pageId, notionTeamMembersDbId, notionApiKey);
 }
 
-/** Search cached Team Member directory by title or email (substring, case-insensitive). */
+function teamMemberDirectoryEntryMatchesQuery(entry: TeamMemberDirectoryEntry, rawQ: string): boolean {
+  const q = rawQ.trim().toLowerCase().replace(/\s+/g, " ").trim();
+  if (!q) return true;
+
+  const blob =
+    entry.searchText ||
+    [
+      entry.name,
+      entry.email ?? "",
+      entry.personalEmail ?? "",
+      entry.id,
+      entry.id.replace(/-/g, ""),
+    ]
+      .join("\n")
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+
+  const idNorm = entry.id.replace(/-/g, "");
+  const qId = q.replace(/-/g, "");
+  if (qId.length >= 8 && qId.length <= idNorm.length && idNorm.includes(qId)) return true;
+
+  if (blob.includes(q)) return true;
+
+  const tokens = q.split(" ").filter((t) => t.length > 0);
+  if (tokens.some((t) => blob.includes(t))) return true;
+
+  const compactBlob = blob.replace(/[^a-z0-9]+/g, "");
+  const compactQ = q.replace(/[^a-z0-9]+/g, "");
+  if (compactQ.length >= 3 && compactBlob.includes(compactQ)) return true;
+
+  return false;
+}
+
+/** Search cached Team Member directory (all indexed properties + ID). Permissive token OR matching. */
 export async function searchTeamMemberPages(
   query: string,
   limit = 40
@@ -1401,17 +1507,12 @@ export async function searchTeamMemberPages(
   if (!notionApiKey || !notionTeamMembersDbId) return [];
 
   const directory = await getTeamMemberDirectory();
-  const q = query.trim().toLowerCase();
-  const cap = Math.min(Math.max(1, limit), 60);
+  const cap = Math.min(Math.max(1, limit), 120);
 
   let list = directory.entries;
-  if (q) {
-    list = list.filter((entry) => {
-      if (entry.name.toLowerCase().includes(q)) return true;
-      if (entry.email?.toLowerCase().includes(q)) return true;
-      if (entry.personalEmail?.toLowerCase().includes(q)) return true;
-      return false;
-    });
+  const qTrim = query.trim();
+  if (qTrim) {
+    list = list.filter((entry) => teamMemberDirectoryEntryMatchesQuery(entry, qTrim));
   }
 
   list = [...list].sort((a, b) => a.name.localeCompare(b.name));

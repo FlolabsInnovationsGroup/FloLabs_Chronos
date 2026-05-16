@@ -1182,6 +1182,8 @@ const TEAM_INDEX_TTL = 7200;
 declare global {
   // eslint-disable-next-line no-var
   var __chronosTeamMemberDirectoryMem: { builtAt: number; directory: TeamMemberDirectory } | undefined;
+  // eslint-disable-next-line no-var
+  var __chronosTeamMemberDirectoryFullBuild: Promise<TeamMemberDirectory> | undefined;
 }
 
 async function cacheGet(key: string): Promise<string | null> {
@@ -1319,13 +1321,14 @@ function deserializeTeamMemberDirectory(raw: string): TeamMemberDirectory | null
   }
 }
 
-async function buildTeamMemberDirectory(): Promise<TeamMemberDirectory> {
+async function buildTeamMemberDirectory(options?: { maxPages?: number }): Promise<TeamMemberDirectory> {
   const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
   const dbId = notionTeamMembersDbId;
   if (!notionApiKey || !dbId) return { entries: [] };
 
   const entries: TeamMemberDirectoryEntry[] = [];
   let cursor: string | undefined;
+  let pagesFetched = 0;
 
   do {
     const body: Record<string, unknown> = { page_size: 100 };
@@ -1376,14 +1379,30 @@ async function buildTeamMemberDirectory(): Promise<TeamMemberDirectory> {
       });
     }
 
+    pagesFetched += 1;
     cursor = data.has_more && data.next_cursor ? data.next_cursor : undefined;
+    if (options?.maxPages && pagesFetched >= options.maxPages) {
+      cursor = undefined;
+    }
   } while (cursor);
 
   const directory = { entries };
-  await cacheSet(TEAM_MEMBER_DIRECTORY_KEY, serializeTeamMemberDirectory(directory), TEAM_INDEX_TTL);
+  const isPartial = Boolean(options?.maxPages);
+  if (!isPartial) {
+    await cacheSet(TEAM_MEMBER_DIRECTORY_KEY, serializeTeamMemberDirectory(directory), TEAM_INDEX_TTL);
+  }
   globalThis.__chronosTeamMemberDirectoryMem = { builtAt: Date.now(), directory };
 
   return directory;
+}
+
+function scheduleFullTeamMemberDirectoryBuild(): void {
+  if (globalThis.__chronosTeamMemberDirectoryFullBuild) return;
+  globalThis.__chronosTeamMemberDirectoryFullBuild = buildTeamMemberDirectory()
+    .catch(() => globalThis.__chronosTeamMemberDirectoryMem?.directory ?? { entries: [] })
+    .finally(() => {
+      globalThis.__chronosTeamMemberDirectoryFullBuild = undefined;
+    });
 }
 
 async function getTeamMemberDirectory(): Promise<TeamMemberDirectory> {
@@ -1402,7 +1421,13 @@ async function getTeamMemberDirectory(): Promise<TeamMemberDirectory> {
     }
   }
 
-  return buildTeamMemberDirectory();
+  if (globalThis.__chronosTeamMemberDirectoryFullBuild && mem?.directory.entries.length) {
+    return mem.directory;
+  }
+
+  const partial = await buildTeamMemberDirectory({ maxPages: 2 });
+  scheduleFullTeamMemberDirectoryBuild();
+  return partial;
 }
 
 async function verifyTeamMemberBelongsToTeamMembersDatabase(
@@ -1515,9 +1540,10 @@ function teamMemberDirectoryEntryMatchesQuery(entry: TeamMemberDirectoryEntry, r
 }
 
 /** Build and persist the Team Member directory cache (cron / warm-up). */
-export async function warmTeamMemberDirectoryCache(): Promise<{ entryCount: number }> {
-  const directory = await buildTeamMemberDirectory();
-  return { entryCount: directory.entries.length };
+export async function warmTeamMemberDirectoryCache(): Promise<{ entryCount: number; partial: boolean }> {
+  const partial = await buildTeamMemberDirectory({ maxPages: 2 });
+  scheduleFullTeamMemberDirectoryBuild();
+  return { entryCount: partial.entries.length, partial: true };
 }
 
 /** Search cached Team Member directory (all indexed properties + ID). Permissive token OR matching. */

@@ -212,6 +212,18 @@ export default function TeamPage() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [userId, refresh]);
 
+  // Keep editingUser in sync with poll refreshes so saves always use the latest DB state,
+  // without resetting in-progress form edits (init effect below keys on id, not the object).
+  useEffect(() => {
+    setEditingUser((prev) => {
+      if (!prev) return prev;
+      const fresh = users.find((u) => u.id === prev.id);
+      return fresh ?? prev;
+    });
+  }, [users]);
+
+  // Init form state only when a different user is selected for editing.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!editingUser) return;
     setEditName(editingUser.name);
@@ -233,7 +245,9 @@ export default function TeamPage() {
         .filter(Boolean)
         .join(", "),
     );
-  }, [editingUser]);
+  // Only re-initialize when the selected user changes, not on every poll refresh.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingUser?.id]);
 
   const currentUser = useMemo(
     () => users.find((user) => user.id === userId) ?? null,

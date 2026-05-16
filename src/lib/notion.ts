@@ -1179,6 +1179,11 @@ export class TeamMemberLookupConflictError extends Error {
 const TEAM_MEMBER_DIRECTORY_KEY = "notion:team-member-directory:v3";
 const TEAM_INDEX_TTL = 7200;
 
+declare global {
+  // eslint-disable-next-line no-var
+  var __chronosTeamMemberDirectoryMem: { builtAt: number; directory: TeamMemberDirectory } | undefined;
+}
+
 async function cacheGet(key: string): Promise<string | null> {
   try {
     const { kvGet } = await import("@/lib/redis-cache");
@@ -1376,15 +1381,25 @@ async function buildTeamMemberDirectory(): Promise<TeamMemberDirectory> {
 
   const directory = { entries };
   await cacheSet(TEAM_MEMBER_DIRECTORY_KEY, serializeTeamMemberDirectory(directory), TEAM_INDEX_TTL);
+  globalThis.__chronosTeamMemberDirectoryMem = { builtAt: Date.now(), directory };
 
   return directory;
 }
 
 async function getTeamMemberDirectory(): Promise<TeamMemberDirectory> {
+  const now = Date.now();
+  const mem = globalThis.__chronosTeamMemberDirectoryMem;
+  if (mem && now - mem.builtAt < TEAM_INDEX_TTL * 1000) {
+    return mem.directory;
+  }
+
   const cached = await cacheGet(TEAM_MEMBER_DIRECTORY_KEY);
   if (cached) {
     const directory = deserializeTeamMemberDirectory(cached);
-    if (directory) return directory;
+    if (directory) {
+      globalThis.__chronosTeamMemberDirectoryMem = { builtAt: now, directory };
+      return directory;
+    }
   }
 
   return buildTeamMemberDirectory();
@@ -1497,6 +1512,12 @@ function teamMemberDirectoryEntryMatchesQuery(entry: TeamMemberDirectoryEntry, r
       .toLowerCase()
       .replace(/\s+/g, " ");
   return teamMemberMatchesSearchText(blob, rawQ);
+}
+
+/** Build and persist the Team Member directory cache (cron / warm-up). */
+export async function warmTeamMemberDirectoryCache(): Promise<{ entryCount: number }> {
+  const directory = await buildTeamMemberDirectory();
+  return { entryCount: directory.entries.length };
 }
 
 /** Search cached Team Member directory (all indexed properties + ID). Permissive token OR matching. */

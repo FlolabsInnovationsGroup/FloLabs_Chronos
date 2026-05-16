@@ -1,0 +1,19 @@
+{
+  "name": "flolabs-chronos-deploy",
+  "description": "Build Chronos Docker image, push to ECR, update App Runner (AWS-only deploy when GHA billing is blocked)",
+  "source": {
+    "type": "S3",
+    "location": "flolabs-hephaestus-codebuild/chronos-source.zip",
+    "buildspec": "buildspec.yml"
+  },
+  "artifacts": { "type": "NO_ARTIFACTS" },
+  "environment": {
+    "type": "LINUX_CONTAINER",
+    "image": "aws/codebuild/standard:7.0",
+    "computeType": "BUILD_GENERAL1_LARGE",
+    "privilegedMode": true,
+    "environmentVariables": []
+  },
+  "serviceRole": "arn:aws:iam::975049954782:role/hephaestus-international-codebuild",
+  "timeoutInMinutes": 90
+}

@@ -1189,7 +1189,12 @@ declare global {
 async function cacheGet(key: string): Promise<string | null> {
   try {
     const { kvGet } = await import("@/lib/redis-cache");
-    return kvGet(key);
+    return await Promise.race([
+      kvGet(key),
+      new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), 2_000);
+      }),
+    ]);
   } catch {
     return null;
   }

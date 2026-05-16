@@ -1297,6 +1297,16 @@ function notionPropertySearchPieces(prop: NotionPagePropertyValue | undefined): 
   return chunks.map((s) => s.trim()).filter(Boolean);
 }
 
+/** Fast index blob for cold-start partial directory builds (title + emails + id only). */
+function teamMemberSearchTextFromPageLight(page: NotionPageResult): string {
+  const name = getPageName(page);
+  const email = page.properties?.Email?.type === "email" ? page.properties.Email.email?.trim() ?? "" : "";
+  const personal =
+    page.properties?.["Personal Email"]?.type === "email" ? page.properties["Personal Email"].email?.trim() ?? "" : "";
+  const rawId = page.id ?? "";
+  return [name, email, personal, rawId, rawId.replace(/-/g, "")].join("\n").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 /** Lowercased blob: all property text + UUID variants → matches misc. Team Members DB columns and pasted IDs. */
 function teamMemberSearchTextFromPage(page: NotionPageResult): string {
   const chunks: string[] = [];
@@ -1348,6 +1358,8 @@ async function buildTeamMemberDirectory(options?: { maxPages?: number }): Promis
       next_cursor: string | null;
     };
 
+    const lightweight = Boolean(options?.maxPages);
+
     for (const page of data.results) {
       const name = getPageName(page);
       const email = page.properties?.Email?.type === "email"
@@ -1375,7 +1387,7 @@ async function buildTeamMemberDirectory(options?: { maxPages?: number }): Promis
         normalizedEmails,
         teamRelationIds,
         onboardingRelationIds,
-        searchText: teamMemberSearchTextFromPage(page),
+        searchText: lightweight ? teamMemberSearchTextFromPageLight(page) : teamMemberSearchTextFromPage(page),
       });
     }
 
@@ -1425,7 +1437,7 @@ async function getTeamMemberDirectory(): Promise<TeamMemberDirectory> {
     return mem.directory;
   }
 
-  const partial = await buildTeamMemberDirectory({ maxPages: 2 });
+  const partial = await buildTeamMemberDirectory({ maxPages: 1 });
   scheduleFullTeamMemberDirectoryBuild();
   return partial;
 }
@@ -1541,7 +1553,7 @@ function teamMemberDirectoryEntryMatchesQuery(entry: TeamMemberDirectoryEntry, r
 
 /** Build and persist the Team Member directory cache (cron / warm-up). */
 export async function warmTeamMemberDirectoryCache(): Promise<{ entryCount: number; partial: boolean }> {
-  const partial = await buildTeamMemberDirectory({ maxPages: 2 });
+  const partial = await buildTeamMemberDirectory({ maxPages: 1 });
   scheduleFullTeamMemberDirectoryBuild();
   return { entryCount: partial.entries.length, partial: true };
 }

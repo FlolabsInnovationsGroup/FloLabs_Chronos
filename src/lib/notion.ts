@@ -1,5 +1,6 @@
 import type { TimeEntry } from "@/types";
 import { getNotionConfig } from "@/lib/app-config";
+import { teamMemberMatchesSearchText } from "@/lib/team-member-search-match";
 
 const NOTION_API_BASE = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
@@ -1175,7 +1176,7 @@ export class TeamMemberLookupConflictError extends Error {
   }
 }
 
-const TEAM_MEMBER_DIRECTORY_KEY = "notion:team-member-directory:v2";
+const TEAM_MEMBER_DIRECTORY_KEY = "notion:team-member-directory:v3";
 const TEAM_INDEX_TTL = 7200;
 
 async function cacheGet(key: string): Promise<string | null> {
@@ -1263,6 +1264,23 @@ function notionPropertySearchPieces(prop: NotionPagePropertyValue | undefined): 
       if (f.type === "string") chunks.push(f.string ?? "");
       else if (f.type === "number" && f.number != null && Number.isFinite(f.number)) chunks.push(String(f.number));
       else if (f.type === "boolean" && f.boolean !== null && f.boolean !== undefined) chunks.push(String(f.boolean));
+      break;
+    }
+    case "rollup": {
+      const roll = (prop as { rollup?: { type?: string; array?: unknown[]; string?: string | null; number?: number | null } })
+        .rollup;
+      if (!roll) break;
+      if (roll.type === "array" && Array.isArray(roll.array)) {
+        for (const item of roll.array) {
+          if (item && typeof item === "object") {
+            const o = item as { plain_text?: string };
+            if (o.plain_text) chunks.push(o.plain_text);
+          }
+        }
+      } else if (roll.type === "string") chunks.push(roll.string ?? "");
+      else if (roll.type === "number" && roll.number != null && Number.isFinite(roll.number)) {
+        chunks.push(String(roll.number));
+      }
       break;
     }
     default:
@@ -1466,9 +1484,6 @@ export async function verifyNotionTeamMemberPageRow(pageId: string): Promise<voi
 }
 
 function teamMemberDirectoryEntryMatchesQuery(entry: TeamMemberDirectoryEntry, rawQ: string): boolean {
-  const q = rawQ.trim().toLowerCase().replace(/\s+/g, " ").trim();
-  if (!q) return true;
-
   const blob =
     entry.searchText ||
     [
@@ -1481,21 +1496,7 @@ function teamMemberDirectoryEntryMatchesQuery(entry: TeamMemberDirectoryEntry, r
       .join("\n")
       .toLowerCase()
       .replace(/\s+/g, " ");
-
-  const idNorm = entry.id.replace(/-/g, "");
-  const qId = q.replace(/-/g, "");
-  if (qId.length >= 8 && qId.length <= idNorm.length && idNorm.includes(qId)) return true;
-
-  if (blob.includes(q)) return true;
-
-  const tokens = q.split(" ").filter((t) => t.length > 0);
-  if (tokens.some((t) => blob.includes(t))) return true;
-
-  const compactBlob = blob.replace(/[^a-z0-9]+/g, "");
-  const compactQ = q.replace(/[^a-z0-9]+/g, "");
-  if (compactQ.length >= 3 && compactBlob.includes(compactQ)) return true;
-
-  return false;
+  return teamMemberMatchesSearchText(blob, rawQ);
 }
 
 /** Search cached Team Member directory (all indexed properties + ID). Permissive token OR matching. */

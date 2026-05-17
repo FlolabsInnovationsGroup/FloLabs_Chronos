@@ -5,8 +5,12 @@ import { getActiveTimersForUserIds } from "@/lib/redis";
 import { db } from "@/lib/db";
 import { projects, timeEntries, userEmailAliases, users as usersTable } from "@/lib/db/schema";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import type { ActiveTimer, ApplicantProgramStatus } from "@/types";
+import { normalizeApplicantStatus, userVisibleOnChronosDirectory } from "@/lib/applicant-status";
+import type { ActiveTimer, ApplicantStatus } from "@/types";
 import { isAdminLikeRole } from "@/lib/role-utils";
+import { effectiveNotionTeamMemberId } from "@/lib/notion-team-member-link";
+import { ensureNotionTeamMemberLinksRepaired } from "@/lib/repair-notion-team-member-links-runtime";
+import { getMergedDuplicateApplicantIds } from "@/lib/duplicate-review";
 
 async function withTimeout<T>(label: string, promise: Promise<T>, fallback: T, timeoutMs = 1500): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -45,6 +49,9 @@ export async function GET() {
         .limit(1);
       effectiveElevated = isAdminLikeRole(sessionDbUser?.role) || isAdminLikeRole(session.user.role);
     }
+    if (db && effectiveElevated) {
+      await ensureNotionTeamMemberLinksRepaired().catch(() => null);
+    }
 
     let rows: Awaited<ReturnType<typeof getAccessibleUsers>> = [];
     try {
@@ -81,7 +88,7 @@ export async function GET() {
 
     // Users page overlay: keep this best-effort only. If shared-applicant enrichment fails in
     // production, the base users directory must still render instead of crashing the page.
-    let programStatusByUserId = new Map<string, ApplicantProgramStatus>();
+    let applicantStatusByUserId = new Map<string, ApplicantStatus>();
     const applicantProfileByUserId = new Map<
       string,
       {
@@ -91,6 +98,7 @@ export async function GET() {
         weeklyTargetHours: number | null;
         profilePictureUrl: string | null;
         notionTeamMemberId: string | null;
+        notionTeamMemberPageUrl: string | null;
         name: string | null;
         email: string | null;
         hubspotRawData: unknown;
@@ -105,6 +113,7 @@ export async function GET() {
     rawApplicantRows,
     rawApplicantCounts,
     aliasRows,
+    mergedDuplicateIds,
   ] = await Promise.all([
     withTimeout("active timer lookup", getActiveTimersForUserIds(userIds), {}),
     db && rows.length > 0
@@ -118,6 +127,7 @@ export async function GET() {
             weeklyTargetHours: usersTable.weeklyTargetHours,
             profilePictureUrl: usersTable.profilePictureUrl,
             notionTeamMemberId: usersTable.notionTeamMemberId,
+            notionTeamMemberPageUrl: usersTable.notionTeamMemberPageUrl,
             name: usersTable.name,
             email: usersTable.email,
             hubspotRawData: usersTable.hubspotRawData,
@@ -144,11 +154,13 @@ export async function GET() {
           .where(inArray(userEmailAliases.userId, userIds))
           .catch(() => [] as Array<{ userId: string; email: string }>)
       : Promise.resolve([] as Array<{ userId: string; email: string }>),
+    withTimeout("merged duplicate lookup", getMergedDuplicateApplicantIds(), new Set<string>()),
   ]);
 
   for (const row of rawApplicantRows) {
     if (!row.chronosUserId) continue;
-    programStatusByUserId.set(row.chronosUserId, row.status as ApplicantProgramStatus);
+    const normalized = normalizeApplicantStatus(row.status);
+    if (normalized) applicantStatusByUserId.set(row.chronosUserId, normalized);
     applicantProfileByUserId.set(row.chronosUserId, {
       role: row.role,
       teamId: row.teamId,
@@ -156,6 +168,7 @@ export async function GET() {
       weeklyTargetHours: row.weeklyTargetHours,
       profilePictureUrl: row.profilePictureUrl,
       notionTeamMemberId: row.notionTeamMemberId,
+      notionTeamMemberPageUrl: row.notionTeamMemberPageUrl,
       name: row.name,
       email: row.email,
       hubspotRawData: row.hubspotRawData,
@@ -234,8 +247,14 @@ export async function GET() {
         isActive: profile?.isActive ?? user.isActive,
         weeklyTargetHours: profile?.weeklyTargetHours ?? user.weeklyTargetHours,
         profilePictureUrl: profile?.profilePictureUrl ?? user.profilePictureUrl,
-        notionTeamMemberId: profile?.notionTeamMemberId ?? user.notionTeamMemberId,
-        requiresNotionProfileLink: !(profile?.notionTeamMemberId ?? user.notionTeamMemberId),
+        notionTeamMemberId: effectiveNotionTeamMemberId({
+          notionTeamMemberId: profile?.notionTeamMemberId ?? user.notionTeamMemberId,
+          notionTeamMemberPageUrl: profile?.notionTeamMemberPageUrl ?? user.notionTeamMemberPageUrl,
+        }),
+        requiresNotionProfileLink: !effectiveNotionTeamMemberId({
+          notionTeamMemberId: profile?.notionTeamMemberId ?? user.notionTeamMemberId,
+          notionTeamMemberPageUrl: profile?.notionTeamMemberPageUrl ?? user.notionTeamMemberPageUrl,
+        }),
         alternateEmails: Array.from(
           new Set([
             ...(aliasesByUserId.get(user.id) ?? []),
@@ -246,7 +265,7 @@ export async function GET() {
               : []),
           ]),
         ),
-        applicantProgramStatus: programStatusByUserId.get(user.id) ?? null,
+        applicantStatus: applicantStatusByUserId.get(user.id) ?? normalizeApplicantStatus((user as { status?: string | null }).status) ?? null,
         applicantCount: applicantCounts.get(user.id) ?? 0,
         activeTimer: activeTimer
           ? (() => {
@@ -268,15 +287,15 @@ export async function GET() {
       };
     });
 
-    // Only surface active (Joined) members who have a linked Notion Team Member page,
-    // plus admin/HR accounts (which may operate without a Notion link).
-    // Users without an applicant record are allowed only if they hold an elevated role.
-    const users = allUsers.filter((user) => {
-      const status = user.applicantProgramStatus;
-      if (status !== "joined" && status !== null) return false;
-      if (isAdminLikeRole(user.role)) return true;
-      return status === "joined" && Boolean(user.notionTeamMemberId);
-    });
+    const users = allUsers.filter((user) =>
+      userVisibleOnChronosDirectory({
+        status: user.applicantStatus,
+        role: user.role,
+        email: user.email,
+        notionTeamMemberId: user.notionTeamMemberId,
+        isMergedDuplicate: mergedDuplicateIds.has(user.id),
+      }),
+    );
 
     console.info("[api/users] response", {
       requesterRole: session.user.role,

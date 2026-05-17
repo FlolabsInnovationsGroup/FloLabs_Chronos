@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { normalizeNotionId } from "@/lib/notion-team-member-link";
 import { Button } from "@/components/ui/Button";
 import { FloatingListPanel } from "@/components/ui/FloatingListPanel";
 import { InlineSearchLoading } from "@/components/ui/InlineSearchLoading";
@@ -235,7 +236,9 @@ export function TeamMemberNotionPicker({
             </div>
           ) : (
             options.map((option) => {
-              const active = option.id === value?.id;
+              const active =
+                Boolean(value?.id) &&
+                normalizeNotionId(option.id) === normalizeNotionId(value?.id ?? "");
               return (
                 <button
                   key={option.id}

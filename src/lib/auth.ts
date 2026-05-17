@@ -2,25 +2,19 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import type { ApplicantProgramStatus, Role } from "@/types";
+import { chronosAccessDisabled, normalizeApplicantStatus } from "@/lib/applicant-status";
+import type { ApplicantStatus, Role } from "@/types";
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
 
-function normalizeApplicantStatus(input: string | null | undefined): ApplicantProgramStatus | null {
-  const value = String(input ?? "").trim().toLowerCase();
-  if (value === "active" || value === "joined" || value === "signed") return "joined";
-  if (value === "graduated") return "graduated";
-  if (value === "terminated") return "terminated";
-  return null;
-}
-
 function applicantAccessEnabled(input: { stage?: string | null; status?: string | null; isActive?: boolean | null }) {
   const stage = String(input.stage ?? "").trim().toLowerCase();
   const status = String(input.status ?? "").trim().toLowerCase();
-  return Boolean(input.isActive) && status !== "terminated" && (stage === "joined" || status === "joined" || status === "active" || status === "signed");
+  if (!Boolean(input.isActive) || chronosAccessDisabled(status)) return false;
+  return stage === "joined" || status === "joined" || status === "active" || status === "signed";
 }
 
 function normalizeRole(input: string | null | undefined): Role {
@@ -100,7 +94,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         t.teamId = (user as { teamId?: string | null }).teamId ?? null;
         t.isActive = (user as { isActive?: boolean }).isActive ?? true;
         t.profilePictureUrl = (user as { profilePictureUrl?: string | null }).profilePictureUrl ?? null;
-        t.applicantStatus = (user as { applicantStatus?: ApplicantProgramStatus | null }).applicantStatus ?? null;
+        t.applicantStatus = (user as { applicantStatus?: ApplicantStatus | null }).applicantStatus ?? null;
         t.chronosUserId = (user as { chronosUserId?: string | null }).chronosUserId ?? null;
         t.roleRefreshedAt = Date.now();
       }
@@ -174,7 +168,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.user.teamId = (t.teamId as string | null | undefined) ?? null;
       session.user.isActive = (t.isActive as boolean | undefined) ?? true;
       session.user.profilePictureUrl = (t.profilePictureUrl as string | null | undefined) ?? null;
-      session.user.applicantStatus = (t.applicantStatus as ApplicantProgramStatus | null | undefined) ?? null;
+      session.user.applicantStatus = (t.applicantStatus as ApplicantStatus | null | undefined) ?? null;
       session.user.chronosUserId = (t.chronosUserId as string | null | undefined) ?? null;
       return session;
     },
@@ -191,7 +185,7 @@ declare module "next-auth" {
       teamId: string | null;
       isActive: boolean;
       profilePictureUrl?: string | null;
-      applicantStatus?: ApplicantProgramStatus | null;
+      applicantStatus?: ApplicantStatus | null;
       chronosUserId?: string | null;
     };
   }

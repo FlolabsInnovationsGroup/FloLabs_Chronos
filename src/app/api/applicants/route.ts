@@ -10,6 +10,7 @@ import { ensureTeamMemberPage } from '@/lib/notion';
 import { addPrimaryEmailAlias } from '@/lib/user-email-aliases';
 import { ensureDiscordResourcesForUser } from '@/lib/discord-provisioning';
 import { syncDuplicateReviews } from '@/lib/duplicate-review';
+import { resolveNotionTeamMemberLink } from '@/lib/notion-team-member-link';
 
 function hasServiceAccess(request: Request) {
   const expected = process.env.CHRONOS_SYNC_TOKEN;
@@ -261,6 +262,33 @@ export async function POST(request: Request) {
   const randomPwd = await bcrypt.hash(randomBytes(24).toString('hex'), 12);
   const visit = body.lastWebsiteVisit ? new Date(body.lastWebsiteVisit) : null;
 
+  const notionPatch: Partial<{
+    notionTeamMemberId: string | null;
+    notionTeamMemberPageUrl: string | null;
+  }> = (() => {
+      const hasNotionKeys = 'notionTeamMemberId' in body || 'notionTeamMemberPageUrl' in body;
+      if (!hasNotionKeys) return {};
+
+      const resolved = resolveNotionTeamMemberLink({
+        notionTeamMemberId:
+          'notionTeamMemberId' in body ? (body.notionTeamMemberId as string | null | undefined) : null,
+        notionTeamMemberPageUrl:
+          'notionTeamMemberPageUrl' in body ? (body.notionTeamMemberPageUrl as string | null | undefined) : null,
+      });
+
+      // Hephaestus sync includes these keys on every call; null/empty must not wipe an existing link.
+      if (resolved.id || resolved.pageUrl) {
+        return {
+          notionTeamMemberId: resolved.id,
+          notionTeamMemberPageUrl: resolved.pageUrl,
+        };
+      }
+      if (body.clearNotionTeamMemberLink === true) {
+        return { notionTeamMemberId: null, notionTeamMemberPageUrl: null };
+      }
+      return {};
+    })();
+
   const inserted = await db
     .insert(users)
     .values({
@@ -301,7 +329,7 @@ export async function POST(request: Request) {
       isActive: body.isActive ?? (body.stage === "joined" || body.stage === "Joined"),
       weeklyTargetHours: body.weeklyTargetHours ?? 40,
       profilePictureUrl: body.profilePictureUrl ?? null,
-      notionTeamMemberId: body.notionTeamMemberId ?? null,
+      ...notionPatch,
     })
     .onConflictDoUpdate({
       target: users.email,
@@ -341,7 +369,7 @@ export async function POST(request: Request) {
         isActive: body.isActive ?? (body.stage === "joined" || body.stage === "Joined"),
         weeklyTargetHours: body.weeklyTargetHours ?? 40,
         profilePictureUrl: body.profilePictureUrl ?? null,
-        notionTeamMemberId: body.notionTeamMemberId ?? null,
+        ...notionPatch,
         updatedAt: new Date(),
       },
     })

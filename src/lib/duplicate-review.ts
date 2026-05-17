@@ -216,3 +216,14 @@ export async function updateDuplicateReview(input: {
 
   return updated ?? null;
 }
+
+/** Secondary applicant ids Hephaestus HR excludes when duplicate review status is `merged`. */
+export async function getMergedDuplicateApplicantIds(): Promise<Set<string>> {
+  if (!db) return new Set();
+  await ensureDuplicateReviewSchema();
+  const rows = await db
+    .select({ duplicateApplicantId: applicantDuplicateReviews.duplicateApplicantId })
+    .from(applicantDuplicateReviews)
+    .where(eq(applicantDuplicateReviews.status, "merged"));
+  return new Set(rows.map((row) => row.duplicateApplicantId));
+}

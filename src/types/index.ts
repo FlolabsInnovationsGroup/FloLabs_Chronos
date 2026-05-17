@@ -1,7 +1,10 @@
+import type { ApplicantStatus } from "@/lib/applicant-status";
+
+export type { ApplicantStatus };
 export type Role = "admin" | "team_lead" | "member" | "hr";
 
-/** Linked `applicants.status` for Chronos users shown on the Users page (joined pipeline). */
-export type ApplicantProgramStatus = "joined" | "graduated" | "terminated";
+/** @deprecated Use `ApplicantStatus` — same as shared `flolabs_users.status`. */
+export type ApplicantProgramStatus = ApplicantStatus;
 
 export interface User {
   id: string;
@@ -12,7 +15,8 @@ export interface User {
   role: Role;
   teamId: string | null;
   isActive: boolean;
-  applicantStatus?: ApplicantProgramStatus | null;
+  /** Canonical pipeline status from shared `flolabs_users.status` (managed on Hephaestus HR). */
+  applicantStatus?: ApplicantStatus | null;
   chronosUserId?: string | null;
   weeklyTargetHours: number | null;
   createdAt: Date;
@@ -29,8 +33,7 @@ export interface User {
   } | null;
   /** Linked Notion Team Members database row (set at invite acceptance or by admin). */
   notionTeamMemberId?: string | null;
-  /** From `applicants` when `chronos_user_id` matches; drives program completion labels on Users. */
-  applicantProgramStatus?: ApplicantProgramStatus | null;
+  notionTeamMemberPageUrl?: string | null;
 }
 
 export interface Team {

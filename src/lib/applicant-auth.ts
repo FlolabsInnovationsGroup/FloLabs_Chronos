@@ -1,4 +1,4 @@
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { findUserByAnyEmail } from "@/lib/user-email-aliases";
@@ -10,7 +10,7 @@ export async function findApplicantForCredentialEmail(normalizedEmail: string) {
   const [byPrimary] = await db
     .select()
     .from(users)
-    .where(and(eq(users.email, normalizedEmail), ne(users.status, "terminated")))
+    .where(and(eq(users.email, normalizedEmail), notInArray(users.status, ["terminated", "graduated"])))
     .limit(1);
   if (byPrimary) return byPrimary;
 
@@ -19,7 +19,7 @@ export async function findApplicantForCredentialEmail(normalizedEmail: string) {
     .from(users)
     .where(
       and(
-        ne(users.status, "terminated"),
+        notInArray(users.status, ["terminated", "graduated"]),
         sql`EXISTS (
           SELECT 1
           FROM jsonb_array_elements_text(COALESCE(${users.hubspotRawData}->'emails', '[]'::jsonb)) AS e(email)
@@ -35,7 +35,7 @@ export async function findApplicantForCredentialEmail(normalizedEmail: string) {
     .from(users)
     .where(
       and(
-        ne(users.status, "terminated"),
+        notInArray(users.status, ["terminated", "graduated"]),
         sql`lower(COALESCE(${users.hubspotRawData}::text, '')) LIKE ${`%${normalizedEmail}%`}`
       )
     )
@@ -48,7 +48,7 @@ export async function findApplicantForCredentialEmail(normalizedEmail: string) {
   const [byLink] = await db
     .select()
     .from(users)
-    .where(and(eq(users.id, linked.id), ne(users.status, "terminated")))
+    .where(and(eq(users.id, linked.id), notInArray(users.status, ["terminated", "graduated"])))
     .limit(1);
   return byLink ?? null;
 }

@@ -56,7 +56,7 @@ export async function GET(
       isActive: users.isActive,
       weeklyTargetHours: users.weeklyTargetHours,
       createdAt: users.createdAt,
-      applicantProgramStatus: users.status,
+      applicantStatus: users.status,
       notionTeamMemberId: users.notionTeamMemberId,
     })
     .from(teamMemberships)
@@ -112,7 +112,7 @@ export async function GET(
       isActive: m.isActive,
       weeklyTargetHours: m.weeklyTargetHours,
       createdAt: m.createdAt,
-      applicantProgramStatus: m.applicantProgramStatus ?? null,
+      applicantStatus: m.applicantStatus ?? null,
       notionTeamMemberId: m.notionTeamMemberId ?? null,
       activeTimer: timer
         ? {

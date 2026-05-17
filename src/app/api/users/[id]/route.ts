@@ -19,6 +19,7 @@ import {
   verifyNotionTeamMemberPageRow,
   pushTeamMemberProfileToNotion,
 } from "@/lib/notion";
+import { resolveNotionTeamMemberLink } from "@/lib/notion-team-member-link";
 
 const deleteUserBodySchema = z.object({
   notionExitStatus: z.enum(["terminated", "graduated"]).optional(),
@@ -36,8 +37,6 @@ const updateSchema = z.object({
   notifyOnStart: z.boolean().optional(),
   notifyOnStop: z.boolean().optional(),
   dailySummary: z.boolean().optional(),
-  /** Updates `flolabs_users.status` (program pipeline) for this account (admin / HR only). */
-  applicantProgramStatus: z.enum(["joined", "graduated", "terminated"]).optional(),
   alternateEmails: z.array(z.string().email()).optional(),
 });
 
@@ -82,9 +81,6 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (parsed.data.applicantProgramStatus !== undefined && !userIsAdmin && !userIsHr) {
-    return NextResponse.json({ error: "Only admins and HR can update applicant program status." }, { status: 403 });
-  }
   if (parsed.data.alternateEmails !== undefined && !userIsAdmin && !userIsHr) {
     return NextResponse.json({ error: "Only admins and HR can update associated emails." }, { status: 403 });
   }
@@ -164,21 +160,23 @@ export async function PATCH(
   if (parsed.data.notionTeamMemberId !== undefined) {
     if (parsed.data.notionTeamMemberId === null) {
       updateData.notionTeamMemberId = null;
+      updateData.notionTeamMemberPageUrl = null;
     } else {
+      const resolved = resolveNotionTeamMemberLink({ notionTeamMemberId: parsed.data.notionTeamMemberId });
+      if (!resolved.id) {
+        return NextResponse.json({ error: "Invalid Notion Team Member page id." }, { status: 400 });
+      }
       try {
-        await verifyNotionTeamMemberPageRow(parsed.data.notionTeamMemberId);
+        await verifyNotionTeamMemberPageRow(resolved.id);
       } catch (err) {
         return NextResponse.json(
           { error: err instanceof Error ? err.message : "Invalid Notion Team Member page." },
           { status: 400 }
         );
       }
-      updateData.notionTeamMemberId = parsed.data.notionTeamMemberId;
+      updateData.notionTeamMemberId = resolved.id;
+      updateData.notionTeamMemberPageUrl = resolved.pageUrl;
     }
-  }
-
-  if (parsed.data.applicantProgramStatus !== undefined) {
-    updateData.status = parsed.data.applicantProgramStatus;
   }
 
   const [user] = await db
@@ -256,7 +254,7 @@ export async function PATCH(
   return NextResponse.json({
     user: {
       ...user,
-      applicantProgramStatus: user.status as "joined" | "graduated" | "terminated" | null,
+      applicantStatus: user.status,
       teams: userTeams,
       team: userTeams[0] ?? null,
     },

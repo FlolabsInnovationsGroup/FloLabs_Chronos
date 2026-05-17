@@ -14,7 +14,13 @@ import { TeamMemberNotionPicker } from "@/components/team/TeamMemberNotionPicker
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useSSE } from "@/hooks/use-sse";
 import { formatDurationHuman } from "@/lib/utils";
-import type { ApplicantProgramStatus, Role, SSEEvent, Team, User } from "@/types";
+import {
+  effectiveNotionTeamMemberId,
+  formatNotionUuid32,
+  tryParseNotionPageId,
+} from "@/lib/notion-team-member-link";
+import { formatApplicantStatusLabel } from "@/lib/applicant-status";
+import type { Role, SSEEvent, Team, User } from "@/types";
 
 interface TeamUser extends User {
   discordWebhookUrl?: string | null;
@@ -34,12 +40,6 @@ const EDIT_ROLES = [
 const TEAM_MEMBER_DELETE_EXIT_OPTIONS = [
   { value: "terminated", label: "Terminated" },
   { value: "graduated", label: "Graduated" },
-];
-
-const APPLICANT_PROGRAM_STATUS_OPTIONS: { value: ApplicantProgramStatus; label: string }[] = [
-  { value: "joined", label: "Joined (in program)" },
-  { value: "graduated", label: "Graduated" },
-  { value: "terminated", label: "Terminated" },
 ];
 
 /** Re-fetch users/teams without blocking the UI — SSE, polling, tab focus. */
@@ -109,7 +109,6 @@ export default function TeamPage() {
   const [editTeamIds, setEditTeamIds] = useState<string[]>([]);
   const [editIsActive, setEditIsActive] = useState(true);
   const [editWeeklyTarget, setEditWeeklyTarget] = useState(40);
-  const [editApplicantProgramStatus, setEditApplicantProgramStatus] = useState<ApplicantProgramStatus>("joined");
   const [editAlternateEmails, setEditAlternateEmails] = useState("");
 
   const [sortKey, setSortKey] = useState<SortKey>("name");
@@ -227,19 +226,30 @@ export default function TeamPage() {
   useEffect(() => {
     if (!editingUser) return;
     setEditName(editingUser.name);
+    const linkedId = effectiveNotionTeamMemberId({
+      notionTeamMemberId: editingUser.notionTeamMemberId,
+      notionTeamMemberPageUrl: editingUser.notionTeamMemberPageUrl,
+    });
     setEditTeamMemberNotion(
-      editingUser.notionTeamMemberId
-        ? { id: editingUser.notionTeamMemberId, title: editingUser.name }
-        : null
+      linkedId ? { id: formatNotionUuid32(linkedId), title: editingUser.name } : null
     );
+    if (linkedId) {
+      void fetch(`/api/notion/team-members/search?q=${encodeURIComponent(linkedId)}&limit=5`)
+        .then((res) => res.json())
+        .then((data: { pages?: Array<{ id: string; name: string }> }) => {
+          const match = (data.pages ?? []).find(
+            (p) => p.id.replace(/-/g, "") === linkedId.replace(/-/g, "")
+          );
+          if (match) {
+            setEditTeamMemberNotion({ id: match.id, title: match.name });
+          }
+        })
+        .catch(() => null);
+    }
     setEditRole(editingUser.role);
     setEditTeamIds((editingUser.teams ?? []).map((team) => team.id));
     setEditIsActive(editingUser.isActive);
     setEditWeeklyTarget(editingUser.weeklyTargetHours ?? 40);
-    const ps = editingUser.applicantProgramStatus;
-    setEditApplicantProgramStatus(
-      ps === "graduated" || ps === "terminated" ? ps : "joined",
-    );
     setEditAlternateEmails(
       Array.from(new Set([editingUser.email, ...(editingUser.alternateEmails ?? [])]))
         .filter(Boolean)
@@ -373,7 +383,6 @@ export default function TeamPage() {
                   ...(editRole !== "admin" ? { teamIds: editTeamIds } : {}),
                   isActive: editIsActive,
                   notionTeamMemberId: editTeamMemberNotion?.id ?? null,
-                  applicantProgramStatus: editApplicantProgramStatus,
                   alternateEmails: editAlternateEmails
                     .split(",")
                     .map((value) => value.trim().toLowerCase())
@@ -939,22 +948,26 @@ export default function TeamPage() {
                   Active account
                 </span>
               </label>
-              <Select
-                label="Applicant status"
-                options={APPLICANT_PROGRAM_STATUS_OPTIONS}
-                value={editApplicantProgramStatus}
-                onChange={(v) => {
-                  if (v === "joined" || v === "graduated" || v === "terminated") {
-                    setEditApplicantProgramStatus(v);
-                  }
-                }}
-              />
-              <p
-                className="text-xs text-on-surface-variant -mt-2"
-                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
-              >
-                Updates the linked applicant record in Chronos. Terminated or Graduated removes them from this directory.
-              </p>
+              <div className="flex flex-col gap-1.5">
+                <span
+                  className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  Applicant status
+                </span>
+                <p
+                  className="text-sm text-on-background"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  {formatApplicantStatusLabel(editingUser?.applicantStatus)}
+                </p>
+                <p
+                  className="text-xs text-on-surface-variant"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  Read-only mirror of <code className="text-[11px]">flolabs_users.status</code>. Change on Hephaestus International HR.
+                </p>
+              </div>
               <Input
                 label="Associated emails"
                 value={editAlternateEmails}

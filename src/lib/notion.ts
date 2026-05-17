@@ -1,5 +1,6 @@
 import type { TimeEntry } from "@/types";
 import { getNotionConfig } from "@/lib/app-config";
+import { tryParseNotionPageId } from "@/lib/notion-team-member-link";
 import { teamMemberMatchesSearchText } from "@/lib/team-member-search-match";
 
 const NOTION_API_BASE = "https://api.notion.com/v1";
@@ -1563,7 +1564,72 @@ export async function warmTeamMemberDirectoryCache(): Promise<{ entryCount: numb
   return { entryCount: partial.entries.length, partial: true };
 }
 
-/** Search cached Team Member directory (all indexed properties + ID). Permissive token OR matching. */
+async function searchTeamMemberPagesLive(
+  notionApiKey: string,
+  notionTeamMembersDbId: string,
+  query: string,
+  limit: number
+): Promise<Array<{ id: string; name: string; email: string | null }>> {
+  const dbNorm = normalizeNotionId(notionTeamMembersDbId);
+  const qLower = query.trim().toLowerCase();
+  const merged = new Map<string, { id: string; name: string; email: string | null }>();
+
+  const pushPage = (page: NotionPageResult) => {
+    const email =
+      page.properties?.Email?.type === "email" ? page.properties.Email.email?.trim() ?? null : null;
+    merged.set(page.id, { id: page.id, name: getPageName(page), email });
+  };
+
+  const searchRes = await fetch(`${NOTION_API_BASE}/search`, {
+    method: "POST",
+    headers: notionHeaders(NOTION_VERSION, notionApiKey),
+    body: JSON.stringify({
+      query,
+      filter: { property: "object", value: "page" },
+      page_size: Math.min(limit, 50),
+    }),
+  });
+  if (searchRes.ok) {
+    const data = (await searchRes.json()) as { results?: NotionPageResult[] };
+    for (const page of data.results ?? []) {
+      const parentDbId = page.parent?.type === "database_id" ? page.parent.database_id : null;
+      const parentDb = parentDbId ? normalizeNotionId(parentDbId) : "";
+      if (parentDb === dbNorm) pushPage(page);
+    }
+  }
+
+  if (merged.size >= limit) {
+    return [...merged.values()].slice(0, limit);
+  }
+
+  let cursor: string | undefined;
+  for (let batch = 0; batch < 8 && merged.size < limit; batch += 1) {
+    const body: Record<string, unknown> = { page_size: 100 };
+    if (cursor) body.start_cursor = cursor;
+    const res = await fetch(`${NOTION_API_BASE}/databases/${notionTeamMembersDbId}/query`, {
+      method: "POST",
+      headers: notionHeaders(NOTION_VERSION, notionApiKey),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) break;
+    const data = (await res.json()) as {
+      results?: NotionPageResult[];
+      has_more?: boolean;
+      next_cursor?: string | null;
+    };
+    for (const page of data.results ?? []) {
+      const blob = teamMemberSearchTextFromPage(page);
+      if (!qLower || teamMemberMatchesSearchText(blob, query)) pushPage(page);
+      if (merged.size >= limit) break;
+    }
+    if (!data.has_more || !data.next_cursor) break;
+    cursor = data.next_cursor ?? undefined;
+  }
+
+  return [...merged.values()].slice(0, limit);
+}
+
+/** Search Team Member pages: cached directory, direct page-id resolve, then live Notion fallback. */
 export async function searchTeamMemberPages(
   query: string,
   limit = 40
@@ -1571,21 +1637,45 @@ export async function searchTeamMemberPages(
   const { notionApiKey, notionTeamMembersDbId } = await getNotionConfig();
   if (!notionApiKey || !notionTeamMembersDbId) return [];
 
-  const directory = await getTeamMemberDirectory();
   const cap = Math.min(Math.max(1, limit), 120);
-
-  let list = directory.entries;
   const qTrim = query.trim();
+  const merged = new Map<string, { id: string; name: string; email: string | null }>();
+
+  const push = (row: { id: string; name: string; email: string | null }) => {
+    if (!merged.has(row.id)) merged.set(row.id, row);
+  };
+
+  const directId = tryParseNotionPageId(qTrim);
+  if (directId) {
+    try {
+      const page = await verifyTeamMemberBelongsToTeamMembersDatabase(
+        directId,
+        notionTeamMembersDbId,
+        notionApiKey
+      );
+      const email =
+        page.properties?.Email?.type === "email" ? page.properties.Email.email?.trim() ?? null : null;
+      push({ id: page.id, name: getPageName(page), email });
+    } catch {
+      /* continue with directory / live search */
+    }
+  }
+
+  const directory = await getTeamMemberDirectory();
+  let list = directory.entries;
   if (qTrim) {
     list = list.filter((entry) => teamMemberDirectoryEntryMatchesQuery(entry, qTrim));
   }
+  for (const entry of list) {
+    push({ id: entry.id, name: entry.name, email: entry.email ?? entry.personalEmail ?? null });
+  }
 
-  list = [...list].sort((a, b) => a.name.localeCompare(b.name));
-  return list.slice(0, cap).map((e) => ({
-    id: e.id,
-    name: e.name,
-    email: e.email ?? e.personalEmail ?? null,
-  }));
+  if (qTrim && merged.size < cap) {
+    const live = await searchTeamMemberPagesLive(notionApiKey, notionTeamMembersDbId, qTrim, cap);
+    for (const row of live) push(row);
+  }
+
+  return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name)).slice(0, cap);
 }
 
 export function buildNotionEntryProperties(

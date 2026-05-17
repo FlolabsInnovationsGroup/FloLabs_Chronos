@@ -11,7 +11,7 @@ import { isAdminLikeRole } from "@/lib/role-utils";
 import { effectiveNotionTeamMemberId } from "@/lib/notion-team-member-link";
 import { ensureNotionTeamMemberLinksRepaired } from "@/lib/repair-notion-team-member-links-runtime";
 import { getMergedDuplicateApplicantIds } from "@/lib/duplicate-review";
-import { listFlolabsUsersInHephaestusJoinedDirectory } from "@/lib/hephaestus-directory-parity";
+import { listFlolabsUsersInHephaestusJoinedDirectory } from "@/lib/hephaestus-directory-query";
 
 async function withTimeout<T>(label: string, promise: Promise<T>, fallback: T, timeoutMs = 1500): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | undefined;

@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { teamMemberships, teams, users } from "@/lib/db/schema";
 import { isAdminLikeRole } from "@/lib/role-utils";
 import { resolveChronosUserIdForSessionUser } from "@/lib/chronos-session";
-import { listFlolabsUsersInHephaestusJoinedDirectory } from "@/lib/hephaestus-directory-parity";
+import { listFlolabsUsersInHephaestusJoinedDirectory } from "@/lib/hephaestus-directory-query";
 
 export interface SessionUserLike {
   /** Canonical applicant id (leads pipeline). */

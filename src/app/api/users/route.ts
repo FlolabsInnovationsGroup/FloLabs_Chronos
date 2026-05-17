@@ -293,15 +293,20 @@ export async function GET() {
       };
     });
 
-    const users = allUsers.filter((user) =>
-      userVisibleOnChronosDirectory({
+    /** Admin/HR directory rows already come from Hephaestus `buildHrWhere({ status: 'joined' })` SQL. */
+    const directoryUsesHephaestusJoinedSql = effectiveElevated;
+
+    const users = allUsers.filter((user) => {
+      if (mergedDuplicateIds.has(user.id)) return false;
+      if (directoryUsesHephaestusJoinedSql) return true;
+      return userVisibleOnChronosDirectory({
         status: user.applicantStatus,
         role: user.role,
         email: user.email,
         notionTeamMemberId: user.notionTeamMemberId,
-        isMergedDuplicate: mergedDuplicateIds.has(user.id),
-      }),
-    );
+        isMergedDuplicate: false,
+      });
+    });
 
     console.info("[api/users] response", {
       requesterRole: session.user.role,

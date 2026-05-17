@@ -11,22 +11,31 @@ async function fetchHephaestusJoinedIds(page: import("@playwright/test").Page): 
   const ids: string[] = [];
   let offset = 0;
   const limit = 200;
+  let expectedTotal: number | null = null;
   for (;;) {
     const res = await page.request.get(
-      `${HEPHAESTUS_URL}/api/admin/leads?status=joined&limit=${limit}&offset=${offset}&fields=minimal`,
+      `${HEPHAESTUS_URL}/api/admin/leads?status=joined&limit=${limit}&offset=${offset}`,
     );
     expect(res.ok()).toBeTruthy();
     const data = (await res.json()) as {
       leads?: Array<{ id: string }>;
       hasMore?: boolean;
+      total?: number;
     };
+    if (expectedTotal === null && typeof data.total === "number") {
+      expectedTotal = data.total;
+    }
     for (const lead of data.leads ?? []) {
       if (lead.id) ids.push(lead.id);
     }
     if (!data.hasMore || (data.leads?.length ?? 0) === 0) break;
     offset += limit;
   }
-  return ids;
+  const unique = [...new Set(ids)];
+  if (expectedTotal !== null) {
+    expect(unique.length, "Hephaestus joined pagination must return every row").toBe(expectedTotal);
+  }
+  return unique;
 }
 
 async function fetchChronosUserIds(page: import("@playwright/test").Page): Promise<string[]> {

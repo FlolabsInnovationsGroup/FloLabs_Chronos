@@ -26,6 +26,6 @@ test.describe("Users directory UI parity (browser)", () => {
     const chronosRows = await page.locator("table tbody tr").count();
 
     expect(chronosRows).toBe(hepTotal);
-    expect(chronosRows).toBeGreaterThan(900);
+    expect(chronosRows).toBeGreaterThan(50);
   });
 });

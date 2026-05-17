@@ -11,6 +11,10 @@ import { addPrimaryEmailAlias } from '@/lib/user-email-aliases';
 import { ensureDiscordResourcesForUser } from '@/lib/discord-provisioning';
 import { syncDuplicateReviews } from '@/lib/duplicate-review';
 import { resolveNotionTeamMemberLink } from '@/lib/notion-team-member-link';
+import {
+  resolveApplicantPipelineStage,
+  resolveApplicantPipelineStatus,
+} from '@/lib/applicant-status-resolution';
 
 function hasServiceAccess(request: Request) {
   const expected = process.env.CHRONOS_SYNC_TOKEN;
@@ -141,17 +145,23 @@ function deriveHubspotPropertyPatch(body: Record<string, unknown>, normalizedEma
   } as Record<string, unknown>;
 }
 
-function normalizeApplicantStage(input: unknown): string {
-  const value = String(input ?? '').trim().toLowerCase();
-  if (!value) return 'application_submitted';
-  return value === 'active' ? 'joined' : value;
+function normalizeApplicantStage(
+  input: unknown,
+  notion: { notionTeamMemberId?: string | null; notionTeamMemberPageUrl?: string | null },
+  status: string,
+) {
+  return resolveApplicantPipelineStage({
+    stage: input,
+    status,
+  });
 }
 
-function normalizeApplicantStatus(input: unknown): string {
-  const value = String(input ?? '').trim().toLowerCase();
-  if (!value) return 'joined';
-  if (value === 'active' || value === 'signed') return 'joined';
-  return value;
+function normalizeApplicantStatus(notion: {
+  notionTeamMemberId?: string | null;
+  notionTeamMemberPageUrl?: string | null;
+  status?: unknown;
+}) {
+  return resolveApplicantPipelineStatus(notion);
 }
 
 export async function GET(request: Request) {
@@ -227,8 +237,6 @@ export async function POST(request: Request) {
   const body = await request.json();
   const normalizedEmail = String(body.email ?? '').toLowerCase();
   const name = String(body.name ?? `${body.firstName ?? ''} ${body.lastName ?? ''}`.trim());
-  const normalizedStage = normalizeApplicantStage(body.stage);
-  const normalizedStatus = normalizeApplicantStatus(body.status);
   if (!body.email || !name) {
     return NextResponse.json({ error: 'email and name are required' }, { status: 400 });
   }
@@ -237,10 +245,51 @@ export async function POST(request: Request) {
     .select({
       roleAppliedFor: users.roleAppliedFor,
       hubspotRawData: users.hubspotRawData,
+      notionTeamMemberId: users.notionTeamMemberId,
+      notionTeamMemberPageUrl: users.notionTeamMemberPageUrl,
     })
     .from(users)
     .where(eq(users.email, normalizedEmail))
     .limit(1);
+
+  const notionPatch: Partial<{
+    notionTeamMemberId: string | null;
+    notionTeamMemberPageUrl: string | null;
+  }> = (() => {
+      const hasNotionKeys = 'notionTeamMemberId' in body || 'notionTeamMemberPageUrl' in body;
+      if (!hasNotionKeys) return {};
+
+      const resolved = resolveNotionTeamMemberLink({
+        notionTeamMemberId:
+          'notionTeamMemberId' in body ? (body.notionTeamMemberId as string | null | undefined) : null,
+        notionTeamMemberPageUrl:
+          'notionTeamMemberPageUrl' in body ? (body.notionTeamMemberPageUrl as string | null | undefined) : null,
+      });
+
+      if (resolved.id || resolved.pageUrl) {
+        return {
+          notionTeamMemberId: resolved.id,
+          notionTeamMemberPageUrl: resolved.pageUrl,
+        };
+      }
+      if (body.clearNotionTeamMemberLink === true) {
+        return { notionTeamMemberId: null, notionTeamMemberPageUrl: null };
+      }
+      return {};
+    })();
+
+  const notionForStatus = {
+    notionTeamMemberId:
+      notionPatch.notionTeamMemberId ?? existingApplicant?.notionTeamMemberId ?? body.notionTeamMemberId ?? null,
+    notionTeamMemberPageUrl:
+      notionPatch.notionTeamMemberPageUrl ??
+      existingApplicant?.notionTeamMemberPageUrl ??
+      body.notionTeamMemberPageUrl ??
+      null,
+    status: body.status,
+  };
+  const normalizedStatus = normalizeApplicantStatus(notionForStatus);
+  const normalizedStage = normalizeApplicantStage(body.stage, notionForStatus, normalizedStatus);
   const mergedRoleHistory = mergeRoleHistory({
     incomingRole: String(body.roleAppliedFor ?? ''),
     existingRole: existingApplicant?.roleAppliedFor ?? null,
@@ -261,33 +310,6 @@ export async function POST(request: Request) {
 
   const randomPwd = await bcrypt.hash(randomBytes(24).toString('hex'), 12);
   const visit = body.lastWebsiteVisit ? new Date(body.lastWebsiteVisit) : null;
-
-  const notionPatch: Partial<{
-    notionTeamMemberId: string | null;
-    notionTeamMemberPageUrl: string | null;
-  }> = (() => {
-      const hasNotionKeys = 'notionTeamMemberId' in body || 'notionTeamMemberPageUrl' in body;
-      if (!hasNotionKeys) return {};
-
-      const resolved = resolveNotionTeamMemberLink({
-        notionTeamMemberId:
-          'notionTeamMemberId' in body ? (body.notionTeamMemberId as string | null | undefined) : null,
-        notionTeamMemberPageUrl:
-          'notionTeamMemberPageUrl' in body ? (body.notionTeamMemberPageUrl as string | null | undefined) : null,
-      });
-
-      // Hephaestus sync includes these keys on every call; null/empty must not wipe an existing link.
-      if (resolved.id || resolved.pageUrl) {
-        return {
-          notionTeamMemberId: resolved.id,
-          notionTeamMemberPageUrl: resolved.pageUrl,
-        };
-      }
-      if (body.clearNotionTeamMemberLink === true) {
-        return { notionTeamMemberId: null, notionTeamMemberPageUrl: null };
-      }
-      return {};
-    })();
 
   const inserted = await db
     .insert(users)
@@ -326,7 +348,7 @@ export async function POST(request: Request) {
       syncedToTeamMembers: Boolean(body.syncedToTeamMembers),
       role: body.role ?? "member",
       teamId: body.teamId ?? null,
-      isActive: body.isActive ?? (body.stage === "joined" || body.stage === "Joined"),
+      isActive: body.isActive ?? normalizedStatus === "joined",
       weeklyTargetHours: body.weeklyTargetHours ?? 40,
       profilePictureUrl: body.profilePictureUrl ?? null,
       ...notionPatch,
@@ -366,7 +388,7 @@ export async function POST(request: Request) {
         syncedToTeamMembers: Boolean(body.syncedToTeamMembers),
         role: body.role ?? "member",
         teamId: body.teamId ?? null,
-        isActive: body.isActive ?? (body.stage === "joined" || body.stage === "Joined"),
+        isActive: body.isActive ?? normalizedStatus === "joined",
         weeklyTargetHours: body.weeklyTargetHours ?? 40,
         profilePictureUrl: body.profilePictureUrl ?? null,
         ...notionPatch,

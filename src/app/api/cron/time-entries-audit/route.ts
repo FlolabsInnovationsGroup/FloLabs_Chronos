@@ -142,11 +142,19 @@ export async function GET(req: Request) {
       UPDATE flolabs_users
       SET status = 'joined', updated_at = now()
       WHERE lower(coalesce(status, '')) = 'active'
+        AND (
+          coalesce(nullif(trim(notion_team_member_id), ''), '') <> ''
+          OR coalesce(nullif(trim(notion_team_member_page_url), ''), '') <> ''
+        )
     `);
     const normalizeActiveStage = await db.execute(sql`
       UPDATE flolabs_users
       SET stage = 'joined', updated_at = now()
       WHERE lower(coalesce(stage, '')) = 'active'
+        AND (
+          coalesce(nullif(trim(notion_team_member_id), ''), '') <> ''
+          OR coalesce(nullif(trim(notion_team_member_page_url), ''), '') <> ''
+        )
     `);
 
     const counts = await db.execute(sql`

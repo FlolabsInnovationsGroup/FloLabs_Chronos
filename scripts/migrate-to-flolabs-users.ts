@@ -54,7 +54,7 @@ const FLOLABS_USER_COLUMNS_SQL = `
   alter table flolabs_users add column if not exists cv_url text;
   alter table flolabs_users add column if not exists role_applied_for text;
   alter table flolabs_users add column if not exists stage text not null default 'application_submitted';
-  alter table flolabs_users add column if not exists status text not null default 'joined';
+  alter table flolabs_users add column if not exists status text not null default 'applying';
   alter table flolabs_users add column if not exists joined_at timestamptz default now();
   alter table flolabs_users add column if not exists last_visited_at timestamptz;
   alter table flolabs_users add column if not exists notes text;

@@ -74,7 +74,7 @@ export const users = pgTable(
     cvUrl: text("cv_url"),
     roleAppliedFor: text("role_applied_for"),
     stage: text("stage").notNull().default("application_submitted"),
-    status: text("status").notNull().default("joined"),
+    status: text("status").notNull().default("applying"),
     joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow(),
     lastVisitedAt: timestamp("last_visited_at", { withTimezone: true }),
     notes: text("notes"),

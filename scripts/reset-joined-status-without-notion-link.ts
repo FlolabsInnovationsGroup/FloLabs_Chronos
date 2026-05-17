@@ -15,6 +15,11 @@ const NOT_LINKED_WHERE = `
   and coalesce(nullif(trim(notion_team_member_id), ''), '') = ''
   and coalesce(nullif(trim(notion_team_member_page_url), ''), '') = ''
   and lower(coalesce(status, '')) not in ('graduated', 'terminated', 'closed')
+  and coalesce(hr_binary_role, false) = false
+  and lower(coalesce(role, '')) not in ('admin', 'hr', 'team_lead')
+  and lower(trim(email)) not like '%@flolabsrd.com'
+  and lower(trim(email)) not like '%@flolabsinnovations.com'
+  and lower(trim(email)) not like '%@flomadlabs.com'
 `;
 
 async function main() {

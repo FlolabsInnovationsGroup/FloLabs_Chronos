@@ -11,6 +11,7 @@ import { isAdminLikeRole } from "@/lib/role-utils";
 import { effectiveNotionTeamMemberId } from "@/lib/notion-team-member-link";
 import { ensureNotionTeamMemberLinksRepaired } from "@/lib/repair-notion-team-member-links-runtime";
 import { getMergedDuplicateApplicantIds } from "@/lib/duplicate-review";
+import { listFlolabsUsersInHephaestusJoinedDirectory } from "@/lib/hephaestus-directory-parity";
 
 async function withTimeout<T>(label: string, promise: Promise<T>, fallback: T, timeoutMs = 1500): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -69,7 +70,10 @@ export async function GET() {
       console.error("[api/users] getAccessibleUsers failed, falling back to base users query", error);
       if (db) {
         try {
-          rows = (await db.select().from(usersTable)) as Awaited<ReturnType<typeof getAccessibleUsers>>;
+          const base = effectiveElevated
+            ? await listFlolabsUsersInHephaestusJoinedDirectory()
+            : await db.select().from(usersTable);
+          rows = base as Awaited<ReturnType<typeof getAccessibleUsers>>;
         } catch (fallbackErr) {
           console.error("[api/users] base users fallback failed", fallbackErr);
           rows = [];
@@ -79,8 +83,10 @@ export async function GET() {
 
     if (db && rows.length === 0 && effectiveElevated) {
       try {
-        rows = (await db.select().from(usersTable)) as Awaited<ReturnType<typeof getAccessibleUsers>>;
-        console.warn("[api/users] elevated user had empty accessible list; using full users table fallback");
+        rows = (await listFlolabsUsersInHephaestusJoinedDirectory()) as Awaited<
+          ReturnType<typeof getAccessibleUsers>
+        >;
+        console.warn("[api/users] elevated user had empty accessible list; using Hephaestus joined directory query");
       } catch (e) {
         console.error("[api/users] full users fallback for elevated user failed", e);
       }
@@ -154,7 +160,7 @@ export async function GET() {
           .where(inArray(userEmailAliases.userId, userIds))
           .catch(() => [] as Array<{ userId: string; email: string }>)
       : Promise.resolve([] as Array<{ userId: string; email: string }>),
-    withTimeout("merged duplicate lookup", getMergedDuplicateApplicantIds(), new Set<string>()),
+    getMergedDuplicateApplicantIds(),
   ]);
 
   for (const row of rawApplicantRows) {

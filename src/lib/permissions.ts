@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { teamMemberships, teams, users } from "@/lib/db/schema";
 import { isAdminLikeRole } from "@/lib/role-utils";
 import { resolveChronosUserIdForSessionUser } from "@/lib/chronos-session";
+import { listFlolabsUsersInHephaestusJoinedDirectory } from "@/lib/hephaestus-directory-parity";
 
 export interface SessionUserLike {
   /** Canonical applicant id (leads pipeline). */
@@ -120,11 +121,12 @@ export async function getAccessibleUsers(user: SessionUserLike) {
   if (!db) return [];
 
   const accessibleUserIds = await getAccessibleUserIds(user);
-  const baseUsers = accessibleUserIds === null
-    ? await db.select().from(users)
-    : accessibleUserIds.length === 0
-      ? []
-      : await db.select().from(users).where(inArray(users.id, accessibleUserIds));
+  const baseUsers =
+    accessibleUserIds === null
+      ? await listFlolabsUsersInHephaestusJoinedDirectory()
+      : accessibleUserIds.length === 0
+        ? []
+        : await db.select().from(users).where(inArray(users.id, accessibleUserIds));
 
   if (baseUsers.length === 0) return [];
 

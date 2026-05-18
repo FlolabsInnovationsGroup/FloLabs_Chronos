@@ -1,13 +1,20 @@
 import { setActiveTimer } from "@/lib/redis";
 import { db } from "@/lib/db";
 import { timeEntries, projects, timeEntryTags } from "@/lib/db/schema";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, lt, sql } from "drizzle-orm";
+import { whereTimeEntriesForLinkedUser } from "@/lib/time-entry-applicant";
 import type { ActiveTimer } from "@/types";
+
+// Entries open longer than this are orphaned (crash / deploy with no stop call).
+// They are closed automatically rather than surfaced as active timers.
+const STALE_TIMER_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
  * Reconstructs an active timer from the running time_entries row when Redis is empty
  * (e.g. after an App Runner redeploy). Re-populates Redis so subsequent calls are fast.
- * Tag IDs are restored from the time_entry_tags join table.
+ *
+ * Entries older than STALE_TIMER_THRESHOLD_MS are treated as orphaned: closed in the DB
+ * with durationMs=0 so they don't block the user with an unstoppable relic.
  */
 export async function restoreTimerFromDb(
   userId: string,
@@ -15,11 +22,28 @@ export async function restoreTimerFromDb(
 ): Promise<ActiveTimer | null> {
   if (!db) return null;
 
-  const queryUserId = applicantId ?? userId;
+  const staleThreshold = new Date(Date.now() - STALE_TIMER_THRESHOLD_MS);
+
+  // Close orphaned entries that have been open for > 24 hours
+  await db
+    .update(timeEntries)
+    .set({
+      stoppedAt: timeEntries.startedAt,
+      durationMs: 0,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        whereTimeEntriesForLinkedUser(userId, applicantId),
+        isNull(timeEntries.stoppedAt),
+        lt(timeEntries.startedAt, staleThreshold)
+      )
+    );
+
+  // Now look for a recent running entry (started within the last 24 hours)
   const [entry] = await db
     .select({
       id: timeEntries.id,
-      userId: timeEntries.userId,
       projectId: timeEntries.projectId,
       description: timeEntries.description,
       notionTaskPageId: timeEntries.notionTaskPageId,
@@ -27,7 +51,12 @@ export async function restoreTimerFromDb(
       startedAt: timeEntries.startedAt,
     })
     .from(timeEntries)
-    .where(and(eq(timeEntries.userId, queryUserId), isNull(timeEntries.stoppedAt)))
+    .where(
+      and(
+        whereTimeEntriesForLinkedUser(userId, applicantId),
+        isNull(timeEntries.stoppedAt)
+      )
+    )
     .orderBy(timeEntries.startedAt)
     .limit(1);
 

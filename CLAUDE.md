@@ -5,7 +5,7 @@ Project context for coding agents working on this repository.
 ## Read Order
 
 1. `ARCHITECTURE.md` — start with **“System architecture (for agents)”**, then the product/data contract (roles, identity, timers, Notion, etc.)
-2. `DEPLOYMENT.md` — how production gets to AWS (GitHub Actions, SSM, App Runner)
+2. `DEPLOYMENT.md` — how production gets to AWS (CodeBuild, ECR, App Runner)
 3. `GAME_MASTER.md` — current implementation status, completed work, and next steps
 4. This `CLAUDE.md` handoff section, especially “Current Mission” and “Access / Credentials Context”
 5. Then inspect the actual code before changing behavior
@@ -61,8 +61,8 @@ Future sessions should know where access currently comes from and how to continu
 - Production domain: `https://athensgreecemarathon.com`
 - **Database:** Neon serverless PostgreSQL (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech/neondb`). URL is in AWS SSM `/flolabs-chronos/DATABASE_URL` and in `.env.local` `DATABASE_URL`. The old AWS RDS instance (`flolabs-chronos-db`) has been **deleted** (2026-05) — `deploy/aws/provision-output.json` is a historical artifact only.
 - Redis details in `.env.local` (`KV_URL` / `FL_KV_REDIS_URL`)
-- Preferred deploy path: GitHub Actions → AWS OIDC → ECR → App Runner on push to `main`; see `.github/workflows/deploy-aws-apprunner.yml`
-- Bootstrap: `deploy/aws/setup-github-actions-deploy.ps1` creates the OIDC provider/role and seeds GitHub Actions secrets from provision output + local env files
+- Deploy path: AWS CodeBuild (`flolabs-chronos-deploy`) → ECR → App Runner; see `DEPLOYMENT.md` for full steps
+- Bootstrap: `deploy/aws/provision.ps1`
 
 ### Vercel access context (legacy / DNS only)
 Production hosting is **AWS App Runner**, not Vercel. A Vercel token may still exist in local env files for occasional API or domain management use only.
@@ -148,7 +148,7 @@ This is not an open signup SaaS. Treat it as an internal operations tool with st
 - **Realtime:** Redis + SSE — **production: AWS ElastiCache** (`KV_URL` / `FL_KV_REDIS_URL`)
 - **Validation:** Zod
 - **Styling:** Tailwind CSS with Vellum Ink tokens; light/dark via CSS variables (`--c-*` on `:root` and `html.dark`)
-- **Deployment (production):** **AWS App Runner** + **ECR** + **GitHub Actions** — see `DEPLOYMENT.md`
+- **Deployment (production):** **AWS App Runner** + **ECR** + **AWS CodeBuild** — see `DEPLOYMENT.md`
 
 ---
 

@@ -6,9 +6,7 @@ This file describes the **current proven deployment method** for Chronos.
 
 ## Status
 
-**Proven working method (2026-05):** AWS CodeBuild → ECR → App Runner → live `/api/health` verification.
-
-**Fallback when GitHub Actions billing is available:** push to `main` runs `.github/workflows/deploy-aws-apprunner.yml` (same ECR/App Runner outcome).
+**Deploy method:** AWS CodeBuild → ECR → App Runner → live `/api/health` verification.
 
 ## The deployment rule
 
@@ -22,7 +20,7 @@ That means:
 
 Operators may still zip source and start CodeBuild from a workstation; the **build and release** run entirely in AWS.
 
-## Primary deploy flow — AWS CodeBuild
+## Deploy flow — AWS CodeBuild
 
 | Item | Value |
 |---|---|
@@ -96,16 +94,9 @@ aws codebuild start-build \
 
 Project definition: `infra/codebuild-project.json`. IAM extras: `infra/codebuild-chronos-policy.json`.
 
-## Fallback deploy flow — GitHub Actions
-
-1. Push to `main`
-2. Workflow `.github/workflows/deploy-aws-apprunner.yml` assumes OIDC, builds on GitHub-hosted runners, pushes ECR, updates App Runner, verifies health
-
-Use this when Actions minutes are available; behavior matches CodeBuild.
-
 ## Runtime secret source of truth
 
-Production values are read from **AWS SSM** during deploy (CodeBuild `pre_build` or GHA workflow):
+Production values are read from **AWS SSM** during CodeBuild `pre_build`:
 
 | SSM parameter | Runtime env var |
 |---|---|
@@ -113,17 +104,15 @@ Production values are read from **AWS SSM** during deploy (CodeBuild `pre_build`
 | `/flolabs-chronos/REDIS_URL` | `KV_URL`, `FL_KV_REDIS_URL` |
 | `/flolabs-chronos/CRON_SECRET` | `CRON_SECRET` |
 | `/flolabs-chronos/RESEND_API_KEY` | `RESEND_API_KEY` |
-| `/flolabs-chronos/EMAIL_FROM` | `EMAIL_FROM` (falls back to `INVITE_FROM_EMAIL` in GHA path) |
-| `/flolabs-chronos/NOTION_API_KEY` | `NOTION_API_KEY` (CodeBuild) |
+| `/flolabs-chronos/EMAIL_FROM` | `EMAIL_FROM` |
+| `/flolabs-chronos/NOTION_API_KEY` | `NOTION_API_KEY` |
 | optional | `/flolabs-chronos/RESET_PASSWORD_TEST_EMAIL`, `RESET_PASSWORD_TEST_SECRET` |
-
-From **GitHub Actions secrets** (GHA path only, or copied forward on App Runner): `AUTH_SECRET`, `NOTION_DATABASE_ID`, `NOTION_ONBOARDINGS_DB_ID`, `NOTION_TASKS_DB_ID`, `NOTION_TEAMS_DB_ID`, `NOTION_TEAM_MEMBERS_DB_ID`.
 
 ## Deployment proof standard
 
 A deployment is proven when all of the following are true:
 
-1. CodeBuild (or GitHub Actions) completed successfully
+1. CodeBuild build completed successfully
 2. App Runner serves the expected `git-<sha>` image
 3. `GET /api/health` returns `"ok":true` with matching `commitSha`
 4. The relevant live production path works
@@ -135,7 +124,7 @@ These are legacy / emergency operator tools, not the default loop:
 - `pnpm aws:deploy` / `deploy/aws/deploy-app.ps1`
 - Local Docker-based production deploys
 
-Bootstrap (one-time): `deploy/aws/provision.ps1`, `deploy/aws/setup-github-actions-deploy.ps1`.
+Bootstrap (one-time): `deploy/aws/provision.ps1`.
 
 ## Shared applicant status (`flolabs_users.status`)
 
@@ -159,5 +148,3 @@ curl -s https://hcmsmnfq5q.us-east-1.awsapprunner.com/api/health | python3 -m js
 ## Current conclusion
 
 **Package source → S3 → CodeBuild (`flolabs-chronos-deploy`) → ECR → App Runner → verify `/api/health` → verify live user path.**
-
-Use GitHub Actions on `main` when available; it targets the same AWS resources.

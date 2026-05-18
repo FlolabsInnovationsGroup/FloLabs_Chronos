@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getActiveTimer, getAllActiveTimers } from "@/lib/redis";
-import { chronosUserIdFromSessionUser } from "@/lib/chronos-session";
+import { chronosUserIdFromSessionUser, applicantIdForSessionLinkedUser } from "@/lib/chronos-session";
+import { restoreTimerFromDb } from "@/lib/timer-recovery";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -18,6 +19,13 @@ export async function GET(req: Request) {
   const chronosUserId = chronosUserIdFromSessionUser(session.user);
   if (!chronosUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const timer = await getActiveTimer(chronosUserId);
+  let timer = await getActiveTimer(chronosUserId);
+
+  // If Redis is empty (e.g. after a deploy), fall back to the running DB entry
+  if (!timer) {
+    const applicantId = applicantIdForSessionLinkedUser(session.user);
+    timer = await restoreTimerFromDb(chronosUserId, applicantId);
+  }
+
   return NextResponse.json({ timer });
 }

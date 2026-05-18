@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getActiveTimer, deleteActiveTimer, broadcastTimerEvent } from "@/lib/redis";
+import { restoreTimerFromDb } from "@/lib/timer-recovery";
 import { db } from "@/lib/db";
 import { timeEntries, timeEntryTags, users, projects } from "@/lib/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
@@ -25,7 +26,11 @@ export async function POST(req: Request) {
   const { discard } = stopSchema.parse(body);
   const userId = chronosUserId;
 
-  const timer = await getActiveTimer(userId);
+  let timer = await getActiveTimer(userId);
+  if (!timer) {
+    const applicantId = applicantIdForSessionLinkedUser(session.user);
+    timer = await restoreTimerFromDb(userId, applicantId);
+  }
   if (!timer) return NextResponse.json({ error: "No active timer" }, { status: 404 });
 
   let timerForValidation = timer;

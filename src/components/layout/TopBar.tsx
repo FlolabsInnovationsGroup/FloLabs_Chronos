@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { cn } from "@/lib/utils";
+import { cn, formatDuration } from "@/lib/utils";
 import { useTimer } from "@/hooks/use-timer";
 import { TimerActionIndicator } from "@/components/timer/TimerActionIndicator";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -24,7 +24,7 @@ interface TopBarProps {
 export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const { activeTimer, start, stop, loading } = useTimer();
+  const { activeTimer, elapsed, start, stop, loading } = useTimer();
 
   const displayName = session?.user?.name?.trim() ?? "";
   const initial = displayName ? displayName.charAt(0).toUpperCase() : "?";
@@ -133,9 +133,19 @@ export function TopBar({ mobileNavOpen = false, onToggleMobileNav }: TopBarProps
             <ThemeToggle />
           </div>
 
-          <Tooltip label={timerActionLabel} delayMs={300}>
-            {actionButton}
-          </Tooltip>
+          <div className="flex items-center gap-2">
+            {activeTimer && (
+              <span
+                className="tabular-nums text-sm font-medium text-on-background"
+                style={{ fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+              >
+                {formatDuration(elapsed)}
+              </span>
+            )}
+            <Tooltip label={timerActionLabel} delayMs={300}>
+              {actionButton}
+            </Tooltip>
+          </div>
 
           <Tooltip label={displayName || "Settings"} delayMs={400} position="bottom">
             <Link

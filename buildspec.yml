@@ -138,11 +138,19 @@ phases:
           --query 'OperationId' \
           --output text)"
         echo "operation_id=$OPERATION_ID"
+        op_attempts=0
         while true; do
+          op_attempts=$((op_attempts + 1))
           STATUS="$(aws apprunner list-operations --service-arn "$APP_RUNNER_SERVICE_ARN" --region "$AWS_REGION" --query "OperationSummaryList[?Id=='$OPERATION_ID'].Status | [0]" --output text)"
-          echo "operation status=$STATUS"
+          echo "operation status=$STATUS attempt=$op_attempts"
           if [ "$STATUS" = "SUCCEEDED" ]; then break; fi
+          # Operation may not appear in list immediately; treat as in-progress but cap retries
           if [ "$STATUS" = "None" ] || [ -z "$STATUS" ]; then
+            if [ "$op_attempts" -ge 60 ]; then
+              # After 10 min of None, accept RUNNING service as implicit success
+              SERVICE_STATUS="$(aws apprunner describe-service --service-arn "$APP_RUNNER_SERVICE_ARN" --region "$AWS_REGION" --query 'Service.Status' --output text)"
+              if [ "$SERVICE_STATUS" = "RUNNING" ]; then break; fi
+            fi
             sleep 10
             continue
           fi

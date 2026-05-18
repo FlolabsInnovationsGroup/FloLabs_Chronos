@@ -1182,7 +1182,7 @@ const TEAM_INDEX_TTL = 7200;
 
 declare global {
   // eslint-disable-next-line no-var
-  var __chronosTeamMemberDirectoryMem: { builtAt: number; directory: TeamMemberDirectory } | undefined;
+  var __chronosTeamMemberDirectoryMem: { builtAt: number; directory: TeamMemberDirectory; partial: boolean } | undefined;
   // eslint-disable-next-line no-var
   var __chronosTeamMemberDirectoryFullBuild: Promise<TeamMemberDirectory> | undefined;
 }
@@ -1409,7 +1409,7 @@ async function buildTeamMemberDirectory(options?: { maxPages?: number }): Promis
   if (!isPartial) {
     await cacheSet(TEAM_MEMBER_DIRECTORY_KEY, serializeTeamMemberDirectory(directory), TEAM_INDEX_TTL);
   }
-  globalThis.__chronosTeamMemberDirectoryMem = { builtAt: Date.now(), directory };
+  globalThis.__chronosTeamMemberDirectoryMem = { builtAt: Date.now(), directory, partial: isPartial };
 
   return directory;
 }
@@ -1434,7 +1434,7 @@ async function getTeamMemberDirectory(): Promise<TeamMemberDirectory> {
   if (cached) {
     const directory = deserializeTeamMemberDirectory(cached);
     if (directory) {
-      globalThis.__chronosTeamMemberDirectoryMem = { builtAt: now, directory };
+      globalThis.__chronosTeamMemberDirectoryMem = { builtAt: now, directory, partial: false };
       return directory;
     }
   }
@@ -1670,7 +1670,7 @@ export async function searchTeamMemberPages(
     push({ id: entry.id, name: entry.name, email: entry.email ?? entry.personalEmail ?? null });
   }
 
-  if (qTrim && merged.size < cap) {
+  if (qTrim && merged.size < cap && globalThis.__chronosTeamMemberDirectoryMem?.partial !== false) {
     const live = await searchTeamMemberPagesLive(notionApiKey, notionTeamMembersDbId, qTrim, cap);
     for (const row of live) push(row);
   }

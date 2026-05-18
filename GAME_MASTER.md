@@ -1,12 +1,13 @@
 # GAME_MASTER.md — FloLabs Chronos Development Tracker
 
 ## Project Status
-**Date:** 2026-05-15
-**Phase:** V1.2 active — shared `flolabs_users` DB unification shipped
-**Stack:** Next.js 16 + Drizzle + **AWS RDS Postgres** + **AWS ElastiCache Redis** + NextAuth v5; **production app on AWS App Runner** (see `ARCHITECTURE.md` → “System architecture (for agents)”)
+**Date:** 2026-05-18
+**Phase:** V1.2 active — shared `flolabs_users` DB unification shipped; Neon migration complete; timer persistence and TopBar duration live
+**Stack:** Next.js 16 + Drizzle + **Neon serverless PostgreSQL** + **AWS ElastiCache Redis** + NextAuth v5; **production app on AWS App Runner** (see `ARCHITECTURE.md` → “System architecture (for agents)”)
 **Public App Runner URL:** https://hcmsmnfq5q.us-east-1.awsapprunner.com — use `/api/health` for deployed commit
-**Custom domain (when cut over):** https://athensgreecemarathon.com
+**Custom domain:** https://athensgreecemarathon.com (live, TLS verified)
 **Legacy Vercel project (optional):** flo-labs-chronos (team: flomad-dev) — not canonical hosting
+**Database note:** AWS RDS (`flolabs-chronos-db`) was **deleted in 2026-05**. Production DB is now **Neon** (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech/neondb`), URL in AWS SSM `/flolabs-chronos/DATABASE_URL`.
 
 ---
 
@@ -198,6 +199,11 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 
 ## Recent Updates
 
+- 2026-05-18: feat(TopBar): live HH:MM:SS timer duration counter added next to stop button in `src/components/layout/TopBar.tsx` using `formatDuration(elapsed)` from `useTimer()` hook. Deployed at commit `54fb14e`.
+- 2026-05-18: feat(timer): `src/lib/timer-recovery.ts` added — `restoreTimerFromDb()` restores active timer from PostgreSQL when Redis is empty after a deploy. Auto-closes stale timers >24h old to prevent ghost entries like the previous 253h phantom timer.
+- 2026-05-18: feat(timer): GET `/api/timer/active` and POST `/api/timer/stop` both now call `restoreTimerFromDb()` on Redis miss so timer state survives deploys without user action.
+- 2026-05-18: fix(build): `buildspec.yml` POST_BUILD operation-wait loop capped at 60 attempts to prevent CodeBuild infinite hang.
+- 2026-05-18: infra(db): AWS RDS instance `flolabs-chronos-db` deleted. Production DB is now **Neon** serverless PostgreSQL (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech/neondb`). 96 users + 17,459 entries migrated. URL in AWS SSM `/flolabs-chronos/DATABASE_URL`.
 - 2026-05-11: ci(deploy): App Runner auto-scaling config (`flolabs-apps`, `MinSize=1, MaxConcurrency=25, MaxSize=3`) is now explicitly pinned in the deploy workflow so updates no longer reset the shared scaling config.
 - 2026-05-11: perf(db): pg connection pool max lowered from 20 to 10 per container (`idleTimeout=20s, connectionTimeout=5s`) to reduce contention on the shared RDS instance.
 - 2026-05-11: fix(users): Users directory now also requires `notionTeamMemberId` to be set for non-admin/HR users to appear in the directory. Admin and HR users bypass this requirement.
@@ -291,9 +297,13 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 - Production deployed at https://athensgreecemarathon.com (AWS App Runner `flolabs-chronos`, `us-east-1`)
 - App Runner instance: 2 vCPU / 4 GB RAM; auto-scaling: `flolabs-apps` config (`MinSize=1, MaxConcurrency=25, MaxSize=3`)
 - pg connection pool: `max=10, idleTimeout=20s, connectionTimeout=5s`
-- Latest deployed commit: `e78182c` (2026-05-15) — full E2E suite green (16 pass, 2 skip)
+- Latest deployed commit: `54fb14e` (2026-05-18) — feat: display live timer duration next to stop button in TopBar
 - **E2E status**: All 16 Playwright tests pass. Fixes applied: strict locators (.first()), removed unregistered emails from test_users.json, fresh browser contexts for multi-account tests (clearCookies() does not reliably clear NextAuth JWT sessions).
 - **Identity**: Chronos now uses `pgTable("flolabs_users", ...)` — shares the single `flolabs_users` table with Hephaestus. No separate `applicants` table; all identity goes through `flolabs_users`.
+- **Database**: Neon serverless PostgreSQL (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech/neondb`). 96 users + 17,459 entries migrated from old AWS RDS (now deleted). URL stored in AWS SSM `/flolabs-chronos/DATABASE_URL`.
+- **Timer persistence**: `src/lib/timer-recovery.ts` added — DB fallback restores active timers from `time_entries` when Redis is empty (e.g. after a fresh deploy). Stale timers older than 24h are auto-closed on restore. GET and STOP timer routes both call `restoreTimerFromDb()` on Redis miss.
+- **TopBar timer duration**: `src/components/layout/TopBar.tsx` shows a live `HH:MM:SS` counter (`formatDuration(elapsed)`) next to the stop button on all pages while a timer is active.
+- **buildspec.yml**: POST_BUILD operation-wait loop capped at 60 attempts to prevent infinite hang on CodeBuild deploy path.
 - **instrumentation.ts**: Runs idempotent ALTER TABLE ADD COLUMN on `flolabs_users` and related tables. Does NOT run `ALTER COLUMN SET DEFAULT` (blocks concurrent reads with ACCESS EXCLUSIVE lock).
 - Database schema migrated: per-user tags, time_entry_tags, optional project_id, entry_discussions, discussion_replies, applicant_duplicate_reviews, app_config, flolabs_id/applicant_id dual columns, discussions applicant FK columns
 - Production role distribution: ~6 admin, ~7 team_lead, ~4 hr, ~1132 member
@@ -345,12 +355,38 @@ NOTION_TEAMS_DB_ID=9828e33b94e64dcba86f8b4ad7a21a23
 
 ---
 
+## ✅ Completed — Neon Migration, Timer Persistence & TopBar Duration (2026-05-18)
+
+### Neon DB Migration ✅
+- [x] AWS RDS (`flolabs-chronos-db`) deleted; production DB is now **Neon** (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech/neondb`)
+- [x] 96 users + 17,459 time entries migrated to Neon with verification
+- [x] `DATABASE_URL` updated in AWS SSM `/flolabs-chronos/DATABASE_URL`
+- [x] Both Chronos and Hephaestus International now share the same Neon database
+
+### Timer Persistence Across Deploys ✅
+- [x] `src/lib/timer-recovery.ts` — new shared helper `restoreTimerFromDb()` that restores the active timer from PostgreSQL `time_entries` (`stoppedAt IS NULL`) when Redis is empty
+- [x] Stale timers older than 24h are auto-closed (description backfilled if empty, entry written as completed) to prevent ghost timers
+- [x] `src/app/api/timer/active/route.ts` — DB fallback added via `restoreTimerFromDb()`
+- [x] `src/app/api/timer/stop/route.ts` — DB fallback added via `restoreTimerFromDb()`
+
+### TopBar Live Timer Duration ✅
+- [x] `src/components/layout/TopBar.tsx` — shows `formatDuration(elapsed)` as a live `HH:MM:SS` counter next to the stop button on all pages while a timer is active
+- [x] Uses existing `useTimer()` hook `elapsed` value; no extra state required
+
+### CodeBuild Hang Fix ✅
+- [x] `buildspec.yml` POST_BUILD operation-wait loop capped at 60 attempts to prevent infinite hang on the CodeBuild deploy path
+
+---
+
 ## What's Next (V1.2 candidates)
 
 - [ ] Email delivery for invitations (Resend integration)
 - [ ] Password change in settings
 - [ ] Team lead ability to invite members to their own team
 - [x] Active timer visibility for team leads/admins on the Users page (Redis-backed state + SSE refresh)
+- [x] Neon DB migration (done — RDS deleted 2026-05)
+- [x] Timer persistence across deploys via `timer-recovery.ts` (done 2026-05-18)
+- [x] TopBar live timer duration display (done 2026-05-18)
 - [ ] Mobile-optimized bottom nav improvements
 - [ ] Audit log for admin actions
 

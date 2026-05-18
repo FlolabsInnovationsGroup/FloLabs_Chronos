@@ -1,8 +1,20 @@
 # Chronos Hetzner Migration Strategy
 
+> **Status as of 2026-05-18: ASPIRATIONAL / NOT CURRENT PRODUCTION**
+>
+> This document describes a possible future direction for self-hosting Chronos on Hetzner + Plesk. It is **not** the current production setup.
+>
+> **Current production (2026-05-18):**
+> - App server: AWS App Runner (`flolabs-chronos`, `us-east-1`)
+> - Database: **Neon serverless PostgreSQL** (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech/neondb`) — shared with Hephaestus International. The old AWS RDS (`flolabs-chronos-db`) was deleted in 2026-05.
+> - Redis: AWS ElastiCache
+> - Deploy: GitHub Actions → ECR → App Runner (see `DEPLOYMENT.md`)
+>
+> If a Hetzner migration is ever re-evaluated, update this document and the infra section of `ARCHITECTURE.md` before treating anything here as operational guidance.
+
 ## Goal
 
-Move Chronos off the currently-charging AWS runtime onto the existing Hetzner + Plesk server, while keeping Chronos isolated from the other hosted domains and avoiding dependency on Neon recovery.
+Move Chronos off the AWS runtime onto the existing Hetzner + Plesk server, while keeping Chronos isolated from the other hosted domains.
 
 ## Target runtime
 
@@ -66,10 +78,10 @@ After historical import succeeds:
 
 ## Data strategy summary
 
-- Historical data: reconstruct from Notion export
-- Identity linkage: Team Member relation -> `users.notion_team_member_id`
-- Live delta: reconcile from the current production DB if needed
-- Neon: no longer part of the plan
+- Historical data: reconstruct from Notion export, or export from current Neon database
+- Identity linkage: Team Member relation -> `flolabs_users.notion_team_member_id`
+- Live delta: reconcile from the current Neon production DB — 96 users + 17,459 entries as of 2026-05-18
+- **Database note:** As of 2026-05, production uses **Neon serverless PostgreSQL** (not AWS RDS, which was deleted). A Hetzner migration would require either migrating from Neon or standing up a local Postgres and importing the Neon dump.
 
 ## Minimum acceptance criteria
 

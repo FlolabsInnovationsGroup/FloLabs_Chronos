@@ -19,7 +19,7 @@ Chronos is a **Next.js 16 App Router** app whose **production** deployment is:
 - **Integrations:** Notion (mirror/sync), Discord (webhooks), Resend (password-reset mail).
 - **Default public service URL:** `https://hcmsmnfq5q.us-east-1.awsapprunner.com` — use **`GET /api/health`** to confirm the running **`commitSha`** matches your change after deploy.
 
-**Not production:** Vercel is a legacy reference only (DNS history). Hetzner+Plesk is described in `deploy/hetzner-migration-strategy.md` as a possible future direction, not live AWS.
+**Not production:** Vercel is a legacy reference only (DNS history).
 
 ## Required Read Order
 

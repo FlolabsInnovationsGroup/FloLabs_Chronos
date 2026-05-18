@@ -1,12 +1,5 @@
 # Chronos Data Model Governance & Canonical Identity Definition
 
-**Version:** 1.1.0
-**Date:** 2026-05-18
-**Owner:** Oliver / FloLabs Engineering
-**Status:** Updated — reflects the `flolabs_users` unified identity model (post-Phase 3 unification).
-
----
-
 ## 1. Canonical Identity Principle
 
 Every person in the FloLabs system has a single authoritative record in the **`flolabs_users`** table (mapped in Drizzle as `users`). This is a **shared table** — both Chronos and Hephaestus International use the same physical `flolabs_users` PostgreSQL table on the shared Neon database.
@@ -16,8 +9,6 @@ There is **no separate `applicants` table** in the current production schema. Th
 **Session mapping (current):**
 - `session.user.id` → `flolabs_users.id` (canonical)
 - `session.user.chronosUserId` → `flolabs_users.id` (same value — both point to `flolabs_users` after unification)
-
-**Legacy note:** Before unification, `session.user.id` pointed to `applicants.id` and `session.user.chronosUserId` pointed to `users.id` as a separate compatibility layer. That two-table model is no longer active. Code still referencing `applicants.id` vs `users.id` as distinct tables is stale.
 
 ---
 
@@ -82,12 +73,7 @@ There is **no separate `applicants` table** in the current production schema. Th
 
 ---
 
-## 5. Phase Summary
+## 5. Pending Cleanup (Phase 4)
 
-| Phase | Status | Summary |
-|-------|--------|---------|
-| Phase 1 | ✅ Complete | Duplicate detection contract defined; detection-only, no auto-merge |
-| Phase 2 | ✅ Complete | `applicants` added as canonical identity; `session.user.id` = applicant id; `chronosUserId` bridge added |
-| Phase 3 | ✅ Complete | All hot paths (timer, entries, reports, discussions, daily summary, settings) migrated to applicant-first resolution |
-| Unification | ✅ Complete (2026-05) | `flolabs_users` single-table unification: Chronos and Hephaestus now share one physical `flolabs_users` table. No separate `applicants` table in production. `session.user.id` = `flolabs_users.id`. |
-| Phase 4 | Future | Remove legacy `applicant_id` alias columns; clean up `flolabs_id` dual-write once all rows are confirmed backfilled |
+- Remove legacy `applicant_id` alias columns on `time_entries`, `tags`, `entry_discussions`, `discussion_replies` once all rows are confirmed backfilled.
+- Clean up `flolabs_id` dual-write once `applicant_id` removal is complete.

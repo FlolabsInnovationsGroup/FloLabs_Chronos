@@ -35,17 +35,7 @@ Read this section first for **where code runs**, **what stores state**, and **ho
 
 Chronos treats **the deployed AWS App Runner service** as the source of truth for “does it work in production?” Local `pnpm dev` is for development only. See **`AGENT.md`** and **`CLAUDE.md`** for the non-negotiable AWS-only validation rule.
 
-### Future / alternate hosting (not current production)
-
-The **Hetzner + Plesk** subsection below describes a **possible** self-hosted layout on an existing FloLabs server. It is **aspirational / migration direction**, not what runs production today unless explicitly switched.
-
----
-
-### Note on Hetzner + Plesk (aspirational only — not production)
-
-A Hetzner + Plesk self-hosted layout was explored as a future direction. **It is not the current production deployment.** AWS App Runner (see **System architecture (for agents)** above) is the canonical production runtime. If a Hetzner migration is revisited, update this section before treating it as operational guidance.
-
-### Current Users Directory Architecture (2026-05)
+### Current Users Directory Architecture
 
 - `GET /api/users` powers the Users page (`/team`).
 - Source of truth is **`flolabs_users`** (pipeline `status` / `stage`, Notion Team Member id, profile fields, credentials).
@@ -905,27 +895,11 @@ FloLabs_Chronos/
 
 ---
 
-## Applicant identity unification (phase 1)
+## Duplicate Person Detection & Merge Sync
 
-Chronos and Hephaestus share applicant and account data, so duplicate handling starts in the shared model.
+Duplicate detection (`applicant_duplicate_reviews`) surfaces likely duplicate accounts for HR review using strong signals first (phone, LinkedIn) and supporting profile overlap signals. No auto-merge is performed automatically.
 
-Phase 1 behavior:
-- detect likely duplicate people across Chronos applicants and shared user-linked applicant views
-- use strong signals first: phone number, LinkedIn URL
-- add weaker supporting signals: same full name, city/country, education, role applied for
-- never auto-merge on name alone
-- surface possible duplicates to HR for manual review
-- do not merge or rewrite records automatically yet
-
-Phase 2 behavior:
-- persist duplicate review pairs in shared Chronos storage (`applicant_duplicate_reviews`)
-- keep confidence score and machine-detected reasons up to date
-- allow HR/admin review states: `pending`, `confirmed_duplicate`, `different_people`, `merged`
-- expose this review state to downstream HR tools like hephaestus so duplicate handling is shared, not local-only
-
-Future merge work should introduce a canonical person or identity layer above account emails.
-
-### Hephaestus merge sync contract (implemented)
+### Hephaestus merge sync contract
 
 When an HR user merges duplicate leads in Hephaestus (`POST /api/admin/leads/merge`), the merge operation propagates to the shared Chronos tables **in the same transaction**, so changes are immediately visible in Chronos:
 
@@ -955,8 +929,6 @@ When an HR user merges duplicate leads in Hephaestus (`POST /api/admin/leads/mer
 - **Discord webhooks** handle branded notification delivery.
 - **Resend** sends password-reset email when configured.
 - **Local Python task linker** may still be used during transition for entries that only contain pasted task URLs in descriptions.
-
-**Historical note:** The app previously ran on **Vercel** + **AWS RDS**. As of 2026-05, both Chronos and Hephaestus use **Neon serverless PostgreSQL** as the shared database. The old RDS instance (`flolabs-chronos-db`) has been deleted. Old env names or deploy scripts may reference the RDS hostname — those are stale and should be ignored.
 
 **Operator references:**
 

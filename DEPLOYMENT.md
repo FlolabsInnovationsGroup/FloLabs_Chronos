@@ -40,14 +40,31 @@ Operators may still zip source and start CodeBuild from a workstation; the **bui
 
 ### Steps
 
-1. From a clean `FloLabs_Chronos` tree, create a source archive (exclude `.git`, `node_modules`, `.next`):
+1. From the `FloLabs_Chronos` repo root, create a source archive **with files at the root of the zip** (not nested under a directory). `git archive` handles this automatically; when uncommitted changes exist, use the PowerShell snippet below:
 
 ```powershell
-cd FloLabs_Chronos
+# Preferred: git archive (files at root, respects .gitignore, includes buildspec.yml)
 git archive -o chronos-source.zip HEAD
-# Or, if you have uncommitted fixes to ship:
-# Compress-Archive -Path * -DestinationPath chronos-source.zip  # after excluding heavy dirs manually
+
+# If you need to include uncommitted changes:
+# Run from INSIDE the FloLabs_Chronos directory, NOT its parent:
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$src = Get-Location   # must be the repo root
+$dest = Join-Path $src "chronos-source.zip"
+if (Test-Path $dest) { Remove-Item $dest }
+$zip = [System.IO.Compression.ZipFile]::Open($dest, 'Create')
+$excludes = @('.git','node_modules','.next','chronos-source.zip')
+Get-ChildItem -Path $src -Recurse -File | Where-Object {
+  $rel = $_.FullName.Substring($src.Path.Length + 1)
+  -not ($rel.Split([IO.Path]::DirectorySeparatorChar) | Where-Object { $excludes -contains $_ })
+} | ForEach-Object {
+  $entry = $_.FullName.Substring($src.Path.Length + 1).Replace('\','/')
+  [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, $entry) | Out-Null
+}
+$zip.Dispose()
 ```
+
+> **Critical**: `Compress-Archive -Path . -DestinationPath ...` nests files under a directory and breaks CodeBuild. Use the snippet above or `git archive` instead.
 
 2. Upload the zip (overwrites the CodeBuild source object):
 
@@ -55,7 +72,7 @@ git archive -o chronos-source.zip HEAD
 aws s3 cp chronos-source.zip s3://flolabs-hephaestus-codebuild/chronos-source.zip --region us-east-1
 ```
 
-3. Start the build (optional `GIT_SHA` override when the zip is not a git checkout):
+3. Start the build. **Always pass `GIT_SHA`** — CodeBuild S3 sources have no git context so `CODEBUILD_RESOLVED_SOURCE_VERSION` is empty without it:
 
 ```bash
 aws codebuild start-build \

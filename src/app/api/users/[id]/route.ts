@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -161,7 +162,8 @@ export async function PATCH(
     if (parsed.data.notionTeamMemberId === null) {
       updateData.notionTeamMemberId = null;
       updateData.notionTeamMemberPageUrl = null;
-    } else {
+    } else if (parsed.data.notionTeamMemberId !== existingUser.notionTeamMemberId) {
+      // Only verify against Notion when the ID is actually changing.
       const resolved = resolveNotionTeamMemberLink({ notionTeamMemberId: parsed.data.notionTeamMemberId });
       if (!resolved.id) {
         return NextResponse.json({ error: "Invalid Notion Team Member page id." }, { status: 400 });
@@ -177,6 +179,7 @@ export async function PATCH(
       updateData.notionTeamMemberId = resolved.id;
       updateData.notionTeamMemberPageUrl = resolved.pageUrl;
     }
+    // else: ID unchanged — no DB write and no Notion round-trip needed.
   }
 
   const [user] = await db
@@ -227,27 +230,38 @@ export async function PATCH(
   }
 
   // Full mirror push: overwrite the Notion Team Member page with all current Chronos data.
+  // Runs after the response is sent so it never delays the save for the user.
   if (notionTeamMemberId && (userIsAdmin || userIsHr)) {
-    try {
-      const userTeamRows = await db
-        .select({ notionPageId: teams.notionPageId })
-        .from(teams)
-        .where(inArray(teams.id, finalTeamIds.length > 0 ? finalTeamIds : [""]))
-        .then((rows) => (finalTeamIds.length > 0 ? rows : []));
-      const notionTeamPageIds = userTeamRows
-        .map((row) => row.notionPageId)
-        .filter((v): v is string => Boolean(v));
-      await pushTeamMemberProfileToNotion({
-        notionTeamMemberPageId: notionTeamMemberId,
-        name: user.name,
-        email: user.email,
-        role: user.role as "admin" | "team_lead" | "member" | "hr",
-        weeklyTargetHours: user.weeklyTargetHours ?? 40,
-        notionTeamPageIds,
-      });
-    } catch {
-      // Non-blocking: DB update succeeds even if Notion mirror fails.
-    }
+    const notionMirrorPayload = {
+      name: user.name,
+      email: user.email,
+      role: user.role as "admin" | "team_lead" | "member" | "hr",
+      weeklyTargetHours: user.weeklyTargetHours ?? 40,
+      finalTeamIds: [...finalTeamIds],
+      notionTeamMemberPageId: notionTeamMemberId,
+    };
+    after(async () => {
+      try {
+        const userTeamRows = await db!
+          .select({ notionPageId: teams.notionPageId })
+          .from(teams)
+          .where(inArray(teams.id, notionMirrorPayload.finalTeamIds.length > 0 ? notionMirrorPayload.finalTeamIds : [""]))
+          .then((rows) => (notionMirrorPayload.finalTeamIds.length > 0 ? rows : []));
+        const notionTeamPageIds = userTeamRows
+          .map((row) => row.notionPageId)
+          .filter((v): v is string => Boolean(v));
+        await pushTeamMemberProfileToNotion({
+          notionTeamMemberPageId: notionMirrorPayload.notionTeamMemberPageId,
+          name: notionMirrorPayload.name,
+          email: notionMirrorPayload.email,
+          role: notionMirrorPayload.role,
+          weeklyTargetHours: notionMirrorPayload.weeklyTargetHours,
+          notionTeamPageIds,
+        });
+      } catch {
+        // Notion mirror is best-effort; DB update already succeeded.
+      }
+    });
   }
   const userTeams = await getUserTeams(id);
   broadcastDataChange("team");

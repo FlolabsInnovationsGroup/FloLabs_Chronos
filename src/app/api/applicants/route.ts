@@ -11,6 +11,7 @@ import { addPrimaryEmailAlias } from '@/lib/user-email-aliases';
 import { ensureDiscordResourcesForUser } from '@/lib/discord-provisioning';
 import { syncDuplicateReviews } from '@/lib/duplicate-review';
 import { resolveNotionTeamMemberLink } from '@/lib/notion-team-member-link';
+import { chronosAccessDisabled } from '@/lib/applicant-status';
 import {
   resolveApplicantPipelineStage,
   resolveApplicantPipelineStatus,
@@ -290,6 +291,8 @@ export async function POST(request: Request) {
   };
   const normalizedStatus = normalizeApplicantStatus(notionForStatus);
   const normalizedStage = normalizeApplicantStage(body.stage, notionForStatus, normalizedStatus);
+  const chronosActive =
+    !chronosAccessDisabled(normalizedStatus) && normalizedStatus === "joined";
   const mergedRoleHistory = mergeRoleHistory({
     incomingRole: String(body.roleAppliedFor ?? ''),
     existingRole: existingApplicant?.roleAppliedFor ?? null,
@@ -348,7 +351,7 @@ export async function POST(request: Request) {
       syncedToTeamMembers: Boolean(body.syncedToTeamMembers),
       role: body.role ?? "member",
       teamId: body.teamId ?? null,
-      isActive: body.isActive ?? normalizedStatus === "joined",
+      isActive: body.isActive ?? chronosActive,
       weeklyTargetHours: body.weeklyTargetHours ?? 40,
       profilePictureUrl: body.profilePictureUrl ?? null,
       ...notionPatch,
@@ -388,7 +391,7 @@ export async function POST(request: Request) {
         syncedToTeamMembers: Boolean(body.syncedToTeamMembers),
         role: body.role ?? "member",
         teamId: body.teamId ?? null,
-        isActive: body.isActive ?? normalizedStatus === "joined",
+        isActive: body.isActive ?? chronosActive,
         weeklyTargetHours: body.weeklyTargetHours ?? 40,
         profilePictureUrl: body.profilePictureUrl ?? null,
         ...notionPatch,
@@ -400,8 +403,9 @@ export async function POST(request: Request) {
   const applicant = inserted[0];
   const accessStage = String(normalizedStage || applicant.stage || '').trim().toLowerCase();
   const accessStatus = String(normalizedStatus || applicant.status || '').trim().toLowerCase();
-  const shouldProvisionChronosUser = true;
-  const shouldEnableChronosAccess = accessStage === 'joined' || accessStatus === 'joined';
+  const shouldProvisionChronosUser = !chronosAccessDisabled(accessStatus);
+  const shouldEnableChronosAccess =
+    shouldProvisionChronosUser && (accessStage === 'joined' || accessStatus === 'joined');
 
   if (shouldProvisionChronosUser) {
     try {

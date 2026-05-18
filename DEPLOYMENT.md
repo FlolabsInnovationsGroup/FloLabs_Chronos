@@ -1,190 +1,146 @@
 # Chronos deployment workflow
 
-This file describes the **current proven deployment method** for Chronos as of 2026-04-23.
+This file describes the **current proven deployment method** for Chronos.
 
 **Architecture context:** For the full system picture (App Runner, RDS, Redis, auth, integrations), read **`ARCHITECTURE.md`** → section **“System architecture (for agents)”**. This file focuses on **how** that stack is released and verified.
 
 ## Status
 
-**Proven working method:** GitHub Actions -> AWS OIDC -> ECR -> App Runner -> live verification on AWS.
+**Proven working method (2026-05):** AWS CodeBuild → ECR → App Runner → live `/api/health` verification.
 
-Latest proven successful run:
-- Commit: `d4a4e40` (2026-05-11) — ci(deploy): pin flolabs-apps auto-scaling config in App Runner update
-- Workflow: `.github/workflows/deploy-aws-apprunner.yml`
-
-This run completed successfully and the live AWS surface verified:
-- App Runner serving the expected git-SHA image
-- `/api/health` returns matching commit/image metadata
-- Custom domain `https://athensgreecemarathon.com` and `https://www.athensgreecemarathon.com` both serve traffic with valid TLS
-
-**App Runner instance config (as of 2026-05-11):**
-- 2 vCPU / 4 GB RAM
-- Auto-scaling: `flolabs-apps` shared config (`MinSize=1, MaxConcurrency=25, MaxSize=3`)
-- Health check: `HTTP /api/health` every 10 s
-- Same `flolabs-apps` auto-scaling config is shared with Hephaestus International App Runner service
+**Fallback when GitHub Actions billing is available:** push to `main` runs `.github/workflows/deploy-aws-apprunner.yml` (same ECR/App Runner outcome).
 
 ## The deployment rule
 
-For Chronos, the normal deploy path must **not** depend on the local machine.
+For Chronos, the normal deploy path must **not** depend on the local machine for runtime proof.
 
 That means:
-- no local Docker build for routine deploys
+
+- no local Docker build as deployment proof
 - no local browser or local app validation as deployment proof
-- no local-machine runtime secrets as the source of truth for production deploys
+- production runtime secrets come from **AWS SSM**, not checked-in env files
 
-The normal production deploy path is now fully AWS-native after initial bootstrap.
+Operators may still zip source and start CodeBuild from a workstation; the **build and release** run entirely in AWS.
 
-## Proven production deploy flow
+## Primary deploy flow — AWS CodeBuild
+
+| Item | Value |
+|---|---|
+| CodeBuild project | `flolabs-chronos-deploy` |
+| Build spec | `buildspec.yml` (repo root) |
+| Source bucket | `s3://flolabs-hephaestus-codebuild/chronos-source.zip` |
+| IAM role | `arn:aws:iam::975049954782:role/hephaestus-international-codebuild` |
+| ECR repository | `flolabs-chronos` |
+| Image tag | `git-<12-char-sha>` |
+| App Runner service | `flolabs-chronos` |
+| Service ARN | `arn:aws:apprunner:us-east-1:975049954782:service/flolabs-chronos/b6416d84200e4c5a9d884f8f4c134aaf` |
+| AWS URL | `https://hcmsmnfq5q.us-east-1.awsapprunner.com` |
+| Production domain | `https://athensgreecemarathon.com` |
+| Region / account | `us-east-1` / `975049954782` |
+
+### Steps
+
+1. From a clean `FloLabs_Chronos` tree, create a source archive (exclude `.git`, `node_modules`, `.next`):
+
+```powershell
+cd FloLabs_Chronos
+git archive -o chronos-source.zip HEAD
+# Or, if you have uncommitted fixes to ship:
+# Compress-Archive -Path * -DestinationPath chronos-source.zip  # after excluding heavy dirs manually
+```
+
+2. Upload the zip (overwrites the CodeBuild source object):
+
+```bash
+aws s3 cp chronos-source.zip s3://flolabs-hephaestus-codebuild/chronos-source.zip --region us-east-1
+```
+
+3. Start the build (optional `GIT_SHA` override when the zip is not a git checkout):
+
+```bash
+aws codebuild start-build \
+  --project-name flolabs-chronos-deploy \
+  --region us-east-1 \
+  --environment-variables-override name=GIT_SHA,value=$(git rev-parse HEAD),type=PLAINTEXT
+```
+
+4. Wait for CodeBuild `SUCCEEDED`. The `post_build` phase updates App Runner and curls `/api/health` until `"ok":true` and `"commitSha"` match.
+
+5. Validate the affected live user path on `https://athensgreecemarathon.com` (or the AWS URL above).
+
+### What CodeBuild does
+
+1. Logs in to ECR and reads runtime secrets from SSM (`/flolabs-chronos/*`)
+2. Preserves Notion/GitHub-only env vars from the current App Runner service when needed
+3. Builds the Docker image with immutable `git-<sha>` tags
+4. Pushes to ECR
+5. Waits for App Runner idle, updates the service (VPC connector + `flolabs-apps` auto-scaling)
+6. Verifies `/api/health`
+
+Project definition: `infra/codebuild-project.json`. IAM extras: `infra/codebuild-chronos-policy.json`.
+
+## Fallback deploy flow — GitHub Actions
 
 1. Push to `main`
-2. GitHub Actions starts `.github/workflows/deploy-aws-apprunner.yml`
-3. The workflow assumes AWS credentials via GitHub OIDC
-4. GitHub-hosted runners build the image with Docker Buildx
-5. The workflow pushes immutable git-SHA image tags to ECR
-6. The workflow reads runtime secrets from AWS SSM:
-   - `/flolabs-chronos/DATABASE_URL`
-   - `/flolabs-chronos/REDIS_URL`
-   - `/flolabs-chronos/CRON_SECRET`
-   - `/flolabs-chronos/RESEND_API_KEY`
-   - `/flolabs-chronos/EMAIL_FROM`
-   - optional canary reset-password test settings:
-     - `/flolabs-chronos/RESET_PASSWORD_TEST_EMAIL`
-     - `/flolabs-chronos/RESET_PASSWORD_TEST_SECRET`
-7. The workflow updates the App Runner service to the exact pushed image
-8. The workflow waits for App Runner to become idle before update
-9. The workflow waits for the App Runner deployment operation to succeed
-10. The workflow waits for the expected image identifier to become current
-11. The workflow verifies `/api/health` returns the matching commit SHA
-12. Post-deploy validation should check one real user-facing path on the live AWS surface when the change affects behavior
+2. Workflow `.github/workflows/deploy-aws-apprunner.yml` assumes OIDC, builds on GitHub-hosted runners, pushes ECR, updates App Runner, verifies health
 
-## Deployment proof standard
-
-A deployment is only considered proven when all of the following are true:
-
-1. GitHub Actions deploy run succeeded
-2. App Runner is serving the expected git-SHA image
-3. `/api/health` matches the deployed commit/image metadata
-4. The relevant live production path is healthy
-
-On 2026-04-23, the critical path used for proof was:
-- `POST /api/auth/forgot-password`
-
-## Reliable reset-password testing
-
-A plain `200 {"ok":true}` from `POST /api/auth/forgot-password` is not enough to prove delivery.
-
-Chronos now supports a safer canary test path for a dedicated reset-password test account:
-- set optional SSM params `/flolabs-chronos/RESET_PASSWORD_TEST_EMAIL` and `/flolabs-chronos/RESET_PASSWORD_TEST_SECRET`
-- trigger the live flow with header `x-reset-password-test-secret`
-- the route will bypass cooldown **only for that configured canary email**, return the Resend email id plus reset token for testing, and log structured success/failure metadata to CloudWatch
-- `pnpm run test:reset-password:live` then verifies:
-  1. live forgot-password route works
-  2. the token can be read back through `GET /api/auth/reset-password`
-  3. Resend reports the message as `delivered`
-  4. optionally, the script can complete `POST /api/auth/reset-password` if `RESET_PASSWORD_TEST_NEW_PASSWORD` is provided
-
-Important:
-- use a dedicated synthetic account for this canary path
-- if email sending fails, Chronos now marks the just-created token used so failed sends do not poison the 2-hour cooldown window
-
-## Files that define the deploy path
-
-- `.github/workflows/deploy-aws-apprunner.yml`
-- `deploy/aws/github-actions-inline-policy.json`
-- `deploy/aws/github-actions-oidc-trust-policy.json`
-- `deploy/aws/setup-github-actions-deploy.ps1`
-- `deploy/aws/README-github-actions.md`
-
-## AWS resources involved
-
-- App Runner service: `flolabs-chronos`
-- Service ARN: `arn:aws:apprunner:us-east-1:975049954782:service/flolabs-chronos/b6416d84200e4c5a9d884f8f4c134aaf`
-- ECR repository: `flolabs-chronos`
-- GitHub Actions deploy role: `arn:aws:iam::975049954782:role/flolabs-chronos-github-actions-deploy`
-- App Runner ECR access role: `arn:aws:iam::975049954782:role/flolabs-chronos-apprunner-ecr-access-role`
-- AWS region: `us-east-1`
-- AWS URL: `https://hcmsmnfq5q.us-east-1.awsapprunner.com`
-- Production domain: `https://athensgreecemarathon.com` (App Runner custom domain)
+Use this when Actions minutes are available; behavior matches CodeBuild.
 
 ## Runtime secret source of truth
 
-Production runtime values for DB/Redis/cron/email are sourced from AWS SSM during deploy, not from GitHub secrets and not from checked-in env files.
+Production values are read from **AWS SSM** during deploy (CodeBuild `pre_build` or GHA workflow):
 
-Current SSM parameters used by the workflow:
-- `/flolabs-chronos/DATABASE_URL`
-- `/flolabs-chronos/REDIS_URL`
-- `/flolabs-chronos/CRON_SECRET`
-- `/flolabs-chronos/RESEND_API_KEY`
-- `/flolabs-chronos/EMAIL_FROM` (if unset or empty, deploy falls back to `/flolabs-chronos/INVITE_FROM_EMAIL` for legacy Vercel-style naming)
-- optional:
-  - `/flolabs-chronos/RESET_PASSWORD_TEST_EMAIL`
-  - `/flolabs-chronos/RESET_PASSWORD_TEST_SECRET`
+| SSM parameter | Runtime env var |
+|---|---|
+| `/flolabs-chronos/DATABASE_URL` | `DATABASE_URL`, `FL_CHRONOS_DATABASE_URL`, … |
+| `/flolabs-chronos/REDIS_URL` | `KV_URL`, `FL_KV_REDIS_URL` |
+| `/flolabs-chronos/CRON_SECRET` | `CRON_SECRET` |
+| `/flolabs-chronos/RESEND_API_KEY` | `RESEND_API_KEY` |
+| `/flolabs-chronos/EMAIL_FROM` | `EMAIL_FROM` (falls back to `INVITE_FROM_EMAIL` in GHA path) |
+| `/flolabs-chronos/NOTION_API_KEY` | `NOTION_API_KEY` (CodeBuild) |
+| optional | `/flolabs-chronos/RESET_PASSWORD_TEST_EMAIL`, `RESET_PASSWORD_TEST_SECRET` |
 
-GitHub secrets are still used for the remaining application secrets such as:
-- `AUTH_SECRET`
-- `NOTION_API_KEY`
-- `NOTION_DATABASE_ID`
-- `NOTION_ONBOARDINGS_DB_ID`
-- `NOTION_TASKS_DB_ID`
-- `NOTION_TEAMS_DB_ID`
-- `NOTION_TEAM_MEMBERS_DB_ID`
+From **GitHub Actions secrets** (GHA path only, or copied forward on App Runner): `AUTH_SECRET`, `NOTION_DATABASE_ID`, `NOTION_ONBOARDINGS_DB_ID`, `NOTION_TASKS_DB_ID`, `NOTION_TEAMS_DB_ID`, `NOTION_TEAM_MEMBERS_DB_ID`.
 
-## Bootstrap vs normal operation
+## Deployment proof standard
 
-### One-time / infrequent bootstrap
+A deployment is proven when all of the following are true:
 
-These steps may still use a trusted operator machine to establish AWS/GitHub wiring:
-- `deploy/aws/provision.ps1`
-- `deploy/aws/setup-github-actions-deploy.ps1`
-
-Those are **bootstrap/infra setup** steps, not the routine deploy loop.
-
-### Normal deployment
-
-Routine deploys must use only:
-- Git push to `main`
-- GitHub Actions
-- AWS OIDC
-- ECR
-- App Runner
-- AWS SSM
-- live AWS verification
+1. CodeBuild (or GitHub Actions) completed successfully
+2. App Runner serves the expected `git-<sha>` image
+3. `GET /api/health` returns `"ok":true` with matching `commitSha`
+4. The relevant live production path works
 
 ## What is no longer the normal method
 
-These are not the standard production workflow anymore:
-- `pnpm aws:deploy`
-- `deploy/aws/deploy-app.ps1`
-- any local Docker-based deploy as the default path
+These are legacy / emergency operator tools, not the default loop:
 
-They may exist as legacy/emergency operator tools, but they are **not** the proven primary workflow.
+- `pnpm aws:deploy` / `deploy/aws/deploy-app.ps1`
+- Local Docker-based production deploys
 
-## Known lessons from 2026-04-23
+Bootstrap (one-time): `deploy/aws/provision.ps1`, `deploy/aws/setup-github-actions-deploy.ps1`.
 
-The working deployment flow was hardened through several real failures:
+## Shared applicant status (`flolabs_users.status`)
 
-1. GitHub Actions AWS auth initially failed until the OIDC role wiring was fixed
-2. App Runner update initially failed due to missing `iam:PassRole`
-3. The workflow initially raced App Runner and needed explicit idle/wait logic
-4. Runtime DB config initially failed when sourced from the wrong place; SSM became the source of truth
-5. The production DB TLS path required normalizing `sslmode=require` handling for `pg`
+- Chronos **displays** pipeline status read-only on **Users → Edit**; Hephaestus HR **owns** edits (including `graduated`, `terminated`, and permanent delete).
+- After a status deploy, verify on production: HR changes a test lead status → Chronos Users edit modal shows the same label; `graduated`/`terminated` users cannot sign in and drop off the Users directory.
+- Automated checks: `e2e/applicant-status-readonly.spec.ts` (requires `E2E_EMAIL` / `E2E_PASSWORD` admin or HR).
 
-## Next-session checklist
+## How to validate a deploy
 
-When resuming deployment work in a future session, use this exact order:
+```bash
+aws codebuild list-builds-for-project --project-name flolabs-chronos-deploy --region us-east-1 --max-items 3
 
-1. Check latest Actions runs:
-   - `gh run list --repo FlomadLabsRD/FloLabs_Chronos --limit 5`
-2. Check App Runner live image/status:
-   - `aws apprunner describe-service ...`
-3. Check live health metadata:
-   - `GET https://hcmsmnfq5q.us-east-1.awsapprunner.com/api/health`
-4. Check the relevant live user path for the change
-5. Only if bootstrap wiring is broken, use the bootstrap scripts
-6. Do not fall back to local-machine deployment unless explicitly handling an emergency and documenting why
+aws apprunner describe-service \
+  --service-arn arn:aws:apprunner:us-east-1:975049954782:service/flolabs-chronos/b6416d84200e4c5a9d884f8f4c134aaf \
+  --region us-east-1 \
+  --query 'Service.{Status:Status,ImageId:SourceConfiguration.ImageRepository.ImageIdentifier}'
+
+curl -s https://hcmsmnfq5q.us-east-1.awsapprunner.com/api/health | python3 -m json.tool
+```
 
 ## Current conclusion
 
-As of the proven run on 2026-04-23, the deployment workflow that should be reused in future sessions is:
+**Package source → S3 → CodeBuild (`flolabs-chronos-deploy`) → ECR → App Runner → verify `/api/health` → verify live user path.**
 
-**push to `main` -> GitHub Actions builds and deploys on AWS -> verify App Runner image -> verify `/api/health` -> verify the affected live AWS endpoint**
+Use GitHub Actions on `main` when available; it targets the same AWS resources.

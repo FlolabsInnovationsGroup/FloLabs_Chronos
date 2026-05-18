@@ -16,7 +16,7 @@ Read this section first for **where code runs**, **what stores state**, and **ho
 |--------|------------------|
 | **App server** | **Next.js 16** (App Router) in a **Docker** image on **AWS App Runner** (`us-east-1`). One container service handles SSR, route handlers (`src/app/api/**`), and Server Components. |
 | **Images & deploy** | Images live in **Amazon ECR** under immutable tags `git-<12-char-sha>`. **GitHub Actions** (`.github/workflows/deploy-aws-apprunner.yml`) builds on every push to `main` or manual `workflow_dispatch`, updates App Runner, and verifies **`GET /api/health`** reports the same **`commitSha`** as the deploy. |
-| **Transactional data** | **AWS RDS PostgreSQL 17** (`db.t4g.small`, 2 vCPU / 2 GB RAM, 20 GB gp3) — shared with Hephaestus International. Canonical person rows live in **`flolabs_users`** (Drizzle export `users` in `src/lib/db/schema.ts`). Access via **Drizzle ORM** + `pg` pool (`max=10` per container). |
+| **Transactional data** | **Neon serverless PostgreSQL** (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech / neondb`) — shared with Hephaestus International. Canonical person rows live in **`flolabs_users`** (Drizzle export `users` in `src/lib/db/schema.ts`). Access via **Drizzle ORM** + `pg` pool (`max=10` per container). URL stored in **AWS SSM** `/flolabs-chronos/DATABASE_URL`. |
 | **Timers / realtime** | **Redis** (AWS ElastiCache Serverless 7.1 in production; env `KV_URL` / `FL_KV_REDIS_URL`) — active timers, pub/sub, SSE fan-out (`src/lib/redis.ts`, `/api/sse/**`). |
 | **Auth** | **NextAuth.js v5** credentials provider (`src/lib/auth.ts`). Session identity uses **`flolabs_users.id`**: `session.user.id` and `session.user.chronosUserId` both reference the same row when populated. Password hashes on **`flolabs_users`**. |
 | **HTTP edge** | **AWS URL:** `https://hcmsmnfq5q.us-east-1.awsapprunner.com` — **Production domain:** `https://athensgreecemarathon.com` (App Runner custom domain). Neither is encoded in application logic. |
@@ -49,12 +49,11 @@ A Hetzner + Plesk self-hosted layout was explored as a future direction. **It is
 
 - `GET /api/users` powers the Users page (`/team`).
 - Source of truth is **`flolabs_users`** (pipeline `status` / `stage`, Notion Team Member id, profile fields, credentials).
-- Directory inclusion rule (applied after role-scoped access):
-  - `applicantProgramStatus === "joined"` **AND** (`notionTeamMemberId` is set OR `role` is `admin`/`hr`)
-  - Effectively: **active team members** (Joined + Notion Team Member page linked) plus elevated accounts (admin/HR) that may operate without a Notion link.
-  - Users with `graduated` or `terminated` program status are excluded from the directory regardless of isActive.
-  - The old `active` applicant status has been fully migrated to other statuses and is no longer a valid value.
-- **Hephaestus** updates the same **`flolabs_users`** row when HR edits a lead; Chronos sees changes immediately (no separate `applicants` / `website_applicants` sync lag).
+- Directory inclusion rule (applied after role-scoped access) via `userVisibleOnChronosDirectory()` in `src/lib/applicant-status.ts`:
+  - **`flolabs_users.status === "joined"`** AND **`notionTeamMemberId` is set**, OR **`role` is `admin`/`hr`**
+  - **`graduated`** and **`terminated`** are excluded from the directory and cannot sign in to Chronos.
+- **Applicant status on Chronos is read-only** in the Users edit modal; it mirrors **`flolabs_users.status`** (same column Hephaestus HR edits). Canonical values: `applying`, `waiting`, `approved`, `rejected`, `signed`, `joined`, `graduated`, `terminated`.
+- **Hephaestus** updates the same **`flolabs_users`** row when HR edits a lead (including status and permanent delete); Chronos sees changes immediately (no separate `applicants` / `website_applicants` sync lag).
 - Visibility is role-scoped:
   - admin / HR: global scope (all users passing the inclusion rule)
   - team lead: team scope
@@ -247,7 +246,7 @@ The entry-list edit experience must be considered authoritative for user-facing 
 |---|---|---|
 | Frontend + API | **Next.js 16** (App Router), deployed as a **container on AWS App Runner** | SSR, route handlers, Server Components; production deploy via GitHub Actions → ECR |
 | Auth | **NextAuth.js v5** credentials flow | Session enrichment and app-level role checks |
-| Database | **PostgreSQL** (production: **AWS RDS**; local/dev: any Postgres URL) | Durable relational source of truth |
+| Database | **PostgreSQL** (production: **Neon serverless**; local/dev: any Postgres URL) | Durable relational source of truth |
 | ORM | **Drizzle ORM** | Type-safe schema and query layer |
 | Real-time | **Redis** + **SSE** | Active timer state + fan-out (production Redis: **ElastiCache**) |
 | Styling | **Tailwind CSS** with Vellum Ink tokens + CSS variables | Editorial UI; light/dark palettes via `--c-*` on `:root` and `html.dark` |
@@ -950,14 +949,14 @@ When an HR user merges duplicate leads in Hephaestus (`POST /api/admin/leads/mer
 **Production (canonical):**
 
 - **AWS App Runner** (`flolabs-chronos`, us-east-1) runs the Next.js container. Instance config: **2 vCPU / 4 GB RAM**. Auto-scaling: `flolabs-apps` config (`MinSize=1, MaxConcurrency=25, MaxSize=3`). Health check: **HTTP `/api/health`** every 10 s. The same `flolabs-apps` auto-scaling config is shared with the **Hephaestus International** App Runner service.
-- **AWS RDS PostgreSQL 17** (`db.t4g.small`, 2 vCPU / 2 GB RAM, 20 GB gp3) stores durable app data. Both Chronos and Hephaestus International connect to the same RDS instance. pg connection pool per container: `max=10, idleTimeout=20s, connectionTimeout=5s`.
+- **Neon serverless PostgreSQL** (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech / neondb`) stores durable app data. Both Chronos and Hephaestus International connect to the same Neon database. URL injected from AWS SSM `/flolabs-chronos/DATABASE_URL` at deploy time. pg connection pool per container: `max=10, idleTimeout=20s, connectionTimeout=5s`.
 - **AWS ElastiCache Serverless Redis 7** stores active timers and SSE pub/sub state.
 - **Notion** is used for operational sync / mirror databases.
 - **Discord webhooks** handle branded notification delivery.
 - **Resend** sends password-reset email when configured.
 - **Local Python task linker** may still be used during transition for entries that only contain pasted task URLs in descriptions.
 
-**Historical note:** The app previously ran on **Vercel** with **Neon**; that stack is **not** the current production target. DNS or old env names may still reference Vercel during migration.
+**Historical note:** The app previously ran on **Vercel** + **AWS RDS**. As of 2026-05, both Chronos and Hephaestus use **Neon serverless PostgreSQL** as the shared database. The old RDS instance (`flolabs-chronos-db`) has been deleted. Old env names or deploy scripts may reference the RDS hostname — those are stale and should be ignored.
 
 **Operator references:**
 

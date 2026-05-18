@@ -59,7 +59,8 @@ Future sessions should know where access currently comes from and how to continu
 - Service ARN: `arn:aws:apprunner:us-east-1:975049954782:service/flolabs-chronos/b6416d84200e4c5a9d884f8f4c134aaf`
 - AWS URL: `https://hcmsmnfq5q.us-east-1.awsapprunner.com`
 - Production domain: `https://athensgreecemarathon.com`
-- RDS + Redis details available in `deploy/aws/provision-output.json` and local env files
+- **Database:** Neon serverless PostgreSQL (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech/neondb`). URL is in AWS SSM `/flolabs-chronos/DATABASE_URL` and in `.env.local` `DATABASE_URL`. The old AWS RDS instance (`flolabs-chronos-db`) has been **deleted** (2026-05) — `deploy/aws/provision-output.json` is a historical artifact only.
+- Redis details in `.env.local` (`KV_URL` / `FL_KV_REDIS_URL`)
 - Preferred deploy path: GitHub Actions → AWS OIDC → ECR → App Runner on push to `main`; see `.github/workflows/deploy-aws-apprunner.yml`
 - Bootstrap: `deploy/aws/setup-github-actions-deploy.ps1` creates the OIDC provider/role and seeds GitHub Actions secrets from provision output + local env files
 

@@ -193,7 +193,8 @@ export async function GET(req: Request) {
           role = COALESCE(${normalizedRole}, u.role),
           is_active = true,
           updated_at = now()
-        WHERE u.notion_team_member_id = ${page.id}
+        WHERE (
+          u.notion_team_member_id = ${page.id}
           OR lower(u.email) = ANY(${emailArray})
           OR EXISTS (
             SELECT 1
@@ -206,6 +207,8 @@ export async function GET(req: Request) {
             WHERE ua.user_id = u.id
               AND lower(ua.email) = ANY(${emailArray})
           )
+        )
+          AND lower(coalesce(u.status, '')) NOT IN ('terminated', 'graduated', 'closed')
       `);
 
       const rows =

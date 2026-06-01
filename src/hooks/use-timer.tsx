@@ -120,7 +120,7 @@ export function TimerProvider({ children, userId }: TimerProviderProps) {
           body: JSON.stringify(payload),
         });
 
-        const data = (await res.json()) as { error?: string; timer?: ActiveTimer };
+        const data = (await res.json().catch(() => ({ error: "Failed to start timer" }))) as { error?: string; timer?: ActiveTimer };
         if (!res.ok || !data.timer) {
           throw new Error(data.error ?? "Failed to start timer");
         }

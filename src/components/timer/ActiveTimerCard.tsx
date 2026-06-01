@@ -26,8 +26,7 @@ export function ActiveTimerCard({ weekEntries = [], weeklyTargetHours = 40 }: Ac
   // Active project name
   const activeProjectName =
     activeTimer
-      ? weekEntries.find((e) => e.projectId === activeTimer.projectId)?.project?.name ??
-        "No project"
+      ? (activeTimer.projectName ?? "No project")
       : null;
   const sessionCount = weekEntries.length + (activeTimer ? 1 : 0);
 

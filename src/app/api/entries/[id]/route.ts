@@ -205,10 +205,7 @@ export async function PATCH(
       );
     }
     if (!syncResult.notified) {
-      return NextResponse.json(
-        { error: `Entry synced to Notion, but Discord notification failed: ${syncResult.reason ?? "unknown"}` },
-        { status: 500 }
-      );
+      return NextResponse.json({ entry: updated, warning: `Discord notification failed: ${syncResult.reason ?? "unknown"}` });
     }
   }
 

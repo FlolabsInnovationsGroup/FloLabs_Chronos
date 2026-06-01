@@ -1,5 +1,7 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { extractEmails, loadTestUsers, signInProduction } from "./lib/production-auth";
+import { markStories } from "./lib/notion-reporter";
+import { STORIES } from "./lib/story-ids";
 
 const lifecycleDescriptionPrefix = "E2E Chronos session lifecycle";
 const preferredRole = process.env.E2E_ROLE?.trim().toLowerCase();
@@ -146,6 +148,10 @@ const selectedCases = runAll
       if (preferredRole) return tc.role.toLowerCase() === preferredRole;
       return tc.role.toLowerCase().includes("human") || tc.email.includes("oliver");
     }).slice(0, 1);
+
+let suitePass = true;
+test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
+test.afterAll(async () => { await markStories([STORIES.START_TIMER, STORIES.NOTION_SYNC], suitePass); });
 
 test.describe("Production — session lifecycle acceptance", () => {
   test.skip(selectedCases.length === 0, "No matching accounts found in test_assets/test_users.json");

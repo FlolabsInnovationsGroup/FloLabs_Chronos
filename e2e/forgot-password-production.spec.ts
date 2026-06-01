@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { loadTestUsers } from "./lib/production-auth";
+import { markStory } from "./lib/notion-reporter";
+import { STORIES } from "./lib/story-ids";
 
 // These are injected by the CI job from SSM. When absent the tests are skipped.
 const testEmail = process.env.E2E_RESET_TEST_EMAIL?.trim() ?? "";
@@ -8,6 +10,10 @@ const testSecret = process.env.E2E_RESET_TEST_SECRET?.trim() ?? "";
 const users = loadTestUsers();
 const adminUser = users.find((u) => u.role.toLowerCase() === "admin");
 const memberUser = users.find((u) => u.role.toLowerCase() === "member");
+
+let suitePass = true;
+test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
+test.afterAll(async () => { await markStory(STORIES.AUTH, suitePass); });
 
 test.describe("Forgot password (production)", () => {
   test.setTimeout(120_000);

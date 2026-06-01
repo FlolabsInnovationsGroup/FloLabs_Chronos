@@ -1,9 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { extractEmails, loadTestUsers, signInProduction } from "./lib/production-auth";
+import { markStory } from "./lib/notion-reporter";
+import { STORIES } from "./lib/story-ids";
 
 function roleKey(role: string): string {
   return role.trim().toLowerCase();
 }
+
+let suitePass = true;
+test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
+test.afterAll(async () => { await markStory(STORIES.AUTH, suitePass); });
 
 test.describe("Production — all test_users.json accounts (browser)", () => {
   const users = loadTestUsers();

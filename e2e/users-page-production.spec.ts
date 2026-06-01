@@ -1,7 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { markStory } from "./lib/notion-reporter";
+import { STORIES } from "./lib/story-ids";
 
 const email = process.env.E2E_EMAIL;
 const password = process.env.E2E_PASSWORD;
+
+let suitePass = true;
+test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
+test.afterAll(async () => { await markStory(STORIES.USERS_PAGE, suitePass); });
 
 test.describe("Production Chronos — Users page", () => {
   test("/api/users returns 200 after sign-in (no readJson failure path)", async ({ page }) => {

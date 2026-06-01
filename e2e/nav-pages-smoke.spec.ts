@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { extractEmails, loadTestUsers, signInProduction } from "./lib/production-auth";
+import { markStories } from "./lib/notion-reporter";
+import { STORIES } from "./lib/story-ids";
 
 const users = loadTestUsers();
 
@@ -32,6 +34,12 @@ const ERROR_PATTERNS = [
   /500/,
   /failed to load/i,
 ];
+
+let suitePass = true;
+test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
+test.afterAll(async () => {
+  await markStories([STORIES.NAV_SMOKE, STORIES.TAGS, STORIES.PROJECTS, STORIES.TEAMS_PAGE], suitePass);
+});
 
 test.describe("Production — nav-pages smoke (no crashes)", () => {
   test.skip(!primaryUser, "No test accounts found in test_assets/test_users.json");

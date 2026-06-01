@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { extractEmails, loadTestUsers, signInProduction } from "./lib/production-auth";
+import { markStory } from "./lib/notion-reporter";
+import { STORIES } from "./lib/story-ids";
 
 const users = loadTestUsers();
 const firstUser = users.find(
@@ -8,6 +10,10 @@ const firstUser = users.find(
     u.role.toLowerCase() === "admin" ||
     u.role.toLowerCase() === "member"
 ) ?? users[0];
+
+let suitePass = true;
+test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
+test.afterAll(async () => { await markStory(STORIES.TOPBAR_PERSISTENCE, suitePass); });
 
 test.describe("Production — TopBar live timer duration display", () => {
   test.skip(!firstUser, "No test accounts found in test_assets/test_users.json");

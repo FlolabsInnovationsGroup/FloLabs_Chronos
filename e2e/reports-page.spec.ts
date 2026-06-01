@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { extractEmails, loadTestUsers, signInProduction } from "./lib/production-auth";
+import { markStory } from "./lib/notion-reporter";
+import { STORIES } from "./lib/story-ids";
 
 const users = loadTestUsers();
 
@@ -8,6 +10,10 @@ const primaryUser =
   users.find((u) => u.role.toLowerCase() === "admin") ??
   users.find((u) => u.role.toLowerCase().includes("human")) ??
   users[0];
+
+let suitePass = true;
+test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
+test.afterAll(async () => { await markStory(STORIES.REPORTS, suitePass); });
 
 test.describe("Production — Reports page", () => {
   test.skip(!primaryUser, "No test accounts found in test_assets/test_users.json");

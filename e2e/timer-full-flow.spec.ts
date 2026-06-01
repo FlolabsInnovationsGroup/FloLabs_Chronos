@@ -139,18 +139,21 @@ test.describe("Production — timer full-flow with all fields retained", () => {
       .last();
     await expect(lastProjectCell).toHaveText(projectName, { timeout: 15_000 });
 
-    // ── Cleanup ────────────────────────────────────────────────────────────
-    await page.getByRole("button", { name: "Delete this entry" }).last().click();
-    await expect(page.getByText(/are you sure/i)).toBeVisible({ timeout: 10_000 });
-    await page.evaluate(() => {
-      const btns = Array.from(document.querySelectorAll("button"));
-      btns.find((b) => b.textContent?.trim() === "Delete")?.click();
-    });
-    await page.waitForResponse(
-      (r) => r.url().includes("/api/entries/") && r.request().method() === "DELETE",
-      { timeout: 30_000 }
-    );
-    await expect(page.getByText(description)).not.toBeVisible({ timeout: 10_000 });
+    // ── Cleanup: delete the specific entry via API ────────────────────────
+    const deleted = await page.evaluate(async (desc) => {
+      const r = await fetch("/api/entries?limit=50");
+      const d = await r.json();
+      const entry = (d.entries ?? []).find((e: { description: string; id: string }) =>
+        e.description === desc
+      );
+      if (!entry) return false;
+      await fetch(`/api/entries/${entry.id}`, { method: "DELETE" });
+      return true;
+    }, description);
+    expect(deleted, `Could not find entry "${description}" to delete`).toBe(true);
+
+    await page.goto("/timer", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText(description)).not.toBeVisible({ timeout: 15_000 });
 
     // Cleanup: delete the created tag via API
     await page.evaluate(async (name) => {

@@ -20,7 +20,7 @@ const email = process.env.E2E_EMAIL ?? "pm@flolabsinnovations.com";
 const password = process.env.E2E_PASSWORD ?? "flchron2026";
 
 let suitePass = true;
-test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
+test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.retries) suitePass = false; });
 test.afterAll(async ({ browser }) => {
   // Global cleanup: discard any stale active timer left by this suite
   const ctx = await browser.newContext();

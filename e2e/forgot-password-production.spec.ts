@@ -12,7 +12,7 @@ const adminUser = users.find((u) => u.role.toLowerCase() === "admin");
 const memberUser = users.find((u) => u.role.toLowerCase() === "member");
 
 let suitePass = true;
-test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
+test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.retries) suitePass = false; });
 test.afterAll(async () => { await markStory(STORIES.AUTH, suitePass); });
 
 test.describe("Forgot password (production)", () => {

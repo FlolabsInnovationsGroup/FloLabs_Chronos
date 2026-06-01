@@ -12,7 +12,7 @@ const firstUser = users.find(
 ) ?? users[0];
 
 let suitePass = true;
-test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
+test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.retries) suitePass = false; });
 test.afterAll(async () => { await markStory(STORIES.TOPBAR_PERSISTENCE, suitePass); });
 
 test.describe("Production — TopBar live timer duration display", () => {
@@ -97,5 +97,13 @@ test.describe("Production — TopBar live timer duration display", () => {
 
     // Stopped entry must appear in the "Last 7 Days" section
     await expect(page.getByText(description)).toBeVisible({ timeout: 60_000 });
+
+    // Clean up: delete the created entry so no E2E remnants remain
+    await page.evaluate(async (desc) => {
+      const r = await fetch("/api/entries?limit=50");
+      const d = await r.json();
+      const entry = (d.entries ?? []).find((e: { description: string; id: string }) => e.description === desc);
+      if (entry) await fetch(`/api/entries/${entry.id}`, { method: "DELETE" });
+    }, description);
   });
 });

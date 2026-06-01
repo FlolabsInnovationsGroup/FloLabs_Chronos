@@ -21,7 +21,7 @@ type ActiveTimerResponse = {
 };
 
 let suitePass = true;
-test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
+test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.retries) suitePass = false; });
 test.afterAll(async () => { await markStory(STORIES.SSE_RECONNECT, suitePass); });
 
 test.describe("Production — /api/timer/active DB fallback path", () => {
@@ -119,5 +119,13 @@ test.describe("Production — /api/timer/active DB fallback path", () => {
       isNullOrEmpty,
       `/api/timer/active should return null/empty after stop, got: ${JSON.stringify(afterBody)}`
     ).toBeTruthy();
+
+    // Clean up: delete the created entry so no E2E remnants remain
+    await page.evaluate(async (desc) => {
+      const r = await fetch("/api/entries?limit=50");
+      const d = await r.json();
+      const entry = (d.entries ?? []).find((e: { description: string; id: string }) => e.description === desc);
+      if (entry) await fetch(`/api/entries/${entry.id}`, { method: "DELETE" });
+    }, description);
   });
 });

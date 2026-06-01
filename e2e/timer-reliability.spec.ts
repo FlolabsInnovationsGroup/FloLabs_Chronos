@@ -92,7 +92,8 @@ test.describe("Timer reliability — deploy resilience and ghost prevention", ()
     // Now: the DB fallback reconstructs and re-populates Redis so all calls agree.
     test.setTimeout(90_000);
 
-    await startTimerWithProject(page, `E2E deploy-resilience — ${new Date().toISOString()}`);
+    const desc1 = `E2E deploy-resilience — ${new Date().toISOString()}`;
+    await startTimerWithProject(page, desc1);
 
     const [res1, res2, res3] = await Promise.all([
       page.request.get("/api/timer/active"),
@@ -112,6 +113,14 @@ test.describe("Timer reliability — deploy resilience and ghost prevention", ()
     expect(b1.userId).toBe(b2.userId);
 
     await stopTimer(page);
+
+    // Clean up
+    await page.evaluate(async (desc) => {
+      const r = await fetch("/api/entries?limit=50");
+      const d = await r.json();
+      const entry = (d.entries ?? []).find((e: { description: string; id: string }) => e.description === desc);
+      if (entry) await fetch(`/api/entries/${entry.id}`, { method: "DELETE" });
+    }, desc1);
   });
 
   test("deploy resilience: /api/timer/stop succeeds via direct API call (stop route DB fallback)", async ({ page }) => {
@@ -119,7 +128,8 @@ test.describe("Timer reliability — deploy resilience and ghost prevention", ()
     // the time_entries row was still open. The DB fallback now handles this.
     test.setTimeout(90_000);
 
-    await startTimerWithProject(page, `E2E stop-db-fallback — ${new Date().toISOString()}`);
+    const desc2 = `E2E stop-db-fallback — ${new Date().toISOString()}`;
+    await startTimerWithProject(page, desc2);
 
     // Verify the timer is running
     const activeRes = await page.request.get("/api/timer/active");
@@ -138,6 +148,14 @@ test.describe("Timer reliability — deploy resilience and ghost prevention", ()
     const afterRes = await page.request.get("/api/timer/active");
     const afterBody = await afterRes.json();
     expect(!afterBody || !afterBody.startedAt).toBeTruthy();
+
+    // Clean up
+    await page.evaluate(async (desc) => {
+      const r = await fetch("/api/entries?limit=50");
+      const d = await r.json();
+      const entry = (d.entries ?? []).find((e: { description: string; id: string }) => e.description === desc);
+      if (entry) await fetch(`/api/entries/${entry.id}`, { method: "DELETE" });
+    }, desc2);
   });
 
   // --- Problem 2: Ghost timer prevention (253h stuck timers) ---
@@ -146,7 +164,8 @@ test.describe("Timer reliability — deploy resilience and ghost prevention", ()
     // would silently fail or leave the timer stuck. Now: the second stop must 404.
     test.setTimeout(90_000);
 
-    await startTimerWithProject(page, `E2E ghost-prevention — ${new Date().toISOString()}`);
+    const desc3 = `E2E ghost-prevention — ${new Date().toISOString()}`;
+    await startTimerWithProject(page, desc3);
     await stopTimer(page);
 
     // Second stop via direct API — no ghost to stop, must be 404
@@ -164,6 +183,14 @@ test.describe("Timer reliability — deploy resilience and ghost prevention", ()
       !activeBody || !activeBody.startedAt,
       `After stop, /api/timer/active must return null/empty. Got: ${JSON.stringify(activeBody)}`
     ).toBeTruthy();
+
+    // Clean up
+    await page.evaluate(async (desc) => {
+      const r = await fetch("/api/entries?limit=50");
+      const d = await r.json();
+      const entry = (d.entries ?? []).find((e: { description: string; id: string }) => e.description === desc);
+      if (entry) await fetch(`/api/entries/${entry.id}`, { method: "DELETE" });
+    }, desc3);
   });
 
   // --- Problem 3: No blocking orphan after stop ---
@@ -172,18 +199,29 @@ test.describe("Timer reliability — deploy resilience and ghost prevention", ()
     // Now: start → stop → start → stop must all succeed cleanly.
     test.setTimeout(150_000);
 
-    const desc1 = `E2E recovery-first — ${new Date().toISOString()}`;
-    await startTimerWithProject(page, desc1);
+    const descA = `E2E recovery-first — ${new Date().toISOString()}`;
+    await startTimerWithProject(page, descA);
     await stopTimer(page);
 
     // Immediately start a second timer — must succeed without delay or error
-    const desc2 = `E2E recovery-second — ${new Date().toISOString()}`;
-    await startTimerWithProject(page, desc2);
+    const descB = `E2E recovery-second — ${new Date().toISOString()}`;
+    await startTimerWithProject(page, descB);
     await expect(page.getByRole("button", { name: /stop session/i })).toBeVisible({ timeout: 30_000 });
     await stopTimer(page);
 
     // Both entries must appear in Last 7 Days
-    await expect(page.getByText(desc1)).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText(desc2)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(descA)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(descB)).toBeVisible({ timeout: 60_000 });
+
+    // Clean up both entries
+    await page.evaluate(async ([d1, d2]) => {
+      const r = await fetch("/api/entries?limit=50");
+      const data = await r.json();
+      const entries = data.entries ?? [];
+      for (const desc of [d1, d2]) {
+        const entry = entries.find((e: { description: string; id: string }) => e.description === desc);
+        if (entry) await fetch(`/api/entries/${entry.id}`, { method: "DELETE" });
+      }
+    }, [descA, descB]);
   });
 });

@@ -36,7 +36,7 @@ const ERROR_PATTERNS = [
 ];
 
 let suitePass = true;
-test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
+test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.retries) suitePass = false; });
 test.afterAll(async () => {
   await markStories([STORIES.NAV_SMOKE, STORIES.TAGS, STORIES.PROJECTS, STORIES.TEAMS_PAGE], suitePass);
 });

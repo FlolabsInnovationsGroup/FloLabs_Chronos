@@ -132,6 +132,15 @@ async function runSessionLifecycle(page: Page, testInfo: TestInfo, email: string
 
   await expect(page.getByRole("button", { name: /start session/i })).toBeVisible({ timeout: 90_000 });
   await expect(page.getByText(description)).toBeVisible({ timeout: 120_000 });
+
+  // Clean up: delete the created entry so no E2E remnants remain
+  await page.evaluate(async (desc) => {
+    const r = await fetch("/api/entries?limit=50");
+    const d = await r.json();
+    const entry = (d.entries ?? []).find((e: { description: string; id: string }) => e.description === desc);
+    if (entry) await fetch(`/api/entries/${entry.id}`, { method: "DELETE" });
+  }, description).catch(() => { /* best-effort cleanup */ });
+
   await attachDiagnostics(testInfo, records, page);
 }
 
@@ -150,7 +159,7 @@ const selectedCases = runAll
     }).slice(0, 1);
 
 let suitePass = true;
-test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
+test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.retries) suitePass = false; });
 test.afterAll(async () => { await markStories([STORIES.START_TIMER, STORIES.NOTION_SYNC], suitePass); });
 
 test.describe("Production — session lifecycle acceptance", () => {

@@ -12,11 +12,13 @@ const firstUser = users.find(
 ) ?? users[0];
 
 type ActiveTimerResponse = {
-  userId?: string;
-  startedAt?: number;
-  description?: string;
-  projectId?: string | null;
-} | null;
+  timer?: {
+    userId?: string;
+    startedAt?: number;
+    description?: string;
+    projectId?: string | null;
+  } | null;
+};
 
 let suitePass = true;
 test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
@@ -81,10 +83,11 @@ test.describe("Production — /api/timer/active DB fallback path", () => {
     expect(activeRes.status(), `/api/timer/active returned ${activeRes.status()} after start`).toBe(200);
 
     const activeBody = (await activeRes.json()) as ActiveTimerResponse;
-    expect(activeBody, "/api/timer/active must return a non-null object when a timer is running").not.toBeNull();
-    expect(typeof (activeBody as NonNullable<ActiveTimerResponse>).startedAt).toBe("number");
-    expect((activeBody as NonNullable<ActiveTimerResponse>).startedAt).toBeGreaterThan(0);
-    expect(typeof (activeBody as NonNullable<ActiveTimerResponse>).userId).toBe("string");
+    const activeTimer = activeBody?.timer;
+    expect(activeTimer, "/api/timer/active must return a non-null timer when running").not.toBeNull();
+    expect(typeof activeTimer?.startedAt, "startedAt must be a number").toBe("number");
+    expect(activeTimer?.startedAt).toBeGreaterThan(0);
+    expect(typeof activeTimer?.userId, "userId must be a string").toBe("string");
 
     // Stop the session
     const stopResponsePromise = page.waitForResponse(
@@ -106,12 +109,12 @@ test.describe("Production — /api/timer/active DB fallback path", () => {
     const afterRes = await page.request.get("/api/timer/active");
     expect(afterRes.status(), `/api/timer/active returned ${afterRes.status()} after stop`).toBe(200);
 
-    const afterBody = await afterRes.json() as ActiveTimerResponse | Record<string, never>;
+    const afterBody = await afterRes.json() as ActiveTimerResponse;
     const isNullOrEmpty =
       afterBody === null ||
       afterBody === undefined ||
-      (typeof afterBody === "object" && Object.keys(afterBody as object).length === 0) ||
-      (typeof afterBody === "object" && !(afterBody as NonNullable<ActiveTimerResponse>).startedAt);
+      afterBody?.timer === null ||
+      afterBody?.timer === undefined;
     expect(
       isNullOrEmpty,
       `/api/timer/active should return null/empty after stop, got: ${JSON.stringify(afterBody)}`

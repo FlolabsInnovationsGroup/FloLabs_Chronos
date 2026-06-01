@@ -26,18 +26,7 @@ test.describe("Production — Reports page", () => {
 
     await signInProduction(page, email!, primaryUser!.password);
 
-    // Navigate to /reports
-    const reportsResponsePromise = page.waitForResponse(
-      (r) => {
-        try {
-          const u = new URL(r.url());
-          return u.pathname.startsWith("/api/reports") && r.request().method() === "GET";
-        } catch {
-          return false;
-        }
-      },
-      { timeout: 60_000 }
-    );
+    // Navigate to /reports — data is server-rendered, no client-side API call to wait for
     await page.goto("/reports", { waitUntil: "domcontentloaded" });
 
     // Page heading must be visible — confirms no hard 500
@@ -46,13 +35,6 @@ test.describe("Production — Reports page", () => {
     // No error page text
     await expect(page.getByText("Something went wrong")).toBeHidden({ timeout: 10_000 });
     await expect(page.getByText(/internal server error/i)).toBeHidden();
-
-    // Wait for the reports API response and assert it returns 200
-    const reportsRes = await reportsResponsePromise;
-    expect(
-      reportsRes.status(),
-      `/api/reports returned ${reportsRes.status()}: ${await reportsRes.text().catch(() => "")}`
-    ).toBe(200);
 
     // At least one entry row OR an explicit empty/no-entries message must be present
     const hasEntries = await page.locator("table tbody tr").first().isVisible({ timeout: 20_000 }).catch(() => false);

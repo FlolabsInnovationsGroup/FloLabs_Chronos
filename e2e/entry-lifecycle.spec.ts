@@ -79,11 +79,7 @@ async function getLastEntryId(page: Page): Promise<string | null> {
 test.describe("Production — entry edit, delete, and restart", () => {
   test.beforeEach(async ({ page }) => {
     test.setTimeout(300_000);
-    await page.goto("/login", { waitUntil: "domcontentloaded" });
-    await page.getByLabel(/email/i).fill(email);
-    await page.getByLabel(/password/i).fill(password);
-    await page.getByRole("button", { name: /sign in/i }).click();
-    await expect(page).toHaveURL(/\/timer/, { timeout: 60_000 });
+    await signInProduction(page, email, password);
   });
 
   // ---------------------------------------------------------------------------

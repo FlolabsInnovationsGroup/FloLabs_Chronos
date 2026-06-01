@@ -21,7 +21,26 @@ const password = process.env.E2E_PASSWORD ?? "flchron2026";
 
 let suitePass = true;
 test.afterEach(({}, info) => { if (info.status !== "passed") suitePass = false; });
-test.afterAll(async () => {
+test.afterAll(async ({ browser }) => {
+  // Global cleanup: discard any stale active timer left by this suite
+  const ctx = await browser.newContext();
+  const p = await ctx.newPage();
+  try {
+    await signInProduction(p, email, password);
+    await p.evaluate(async () => {
+      const r = await fetch("/api/timer/active");
+      const d = await r.json();
+      if (d.timer) {
+        await fetch("/api/timer/stop", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ discard: true }),
+        });
+      }
+    });
+  } catch { /* best-effort */ }
+  finally { await ctx.close(); }
+
   await markStories(
     [STORIES.ENTRY_EDIT, STORIES.DISCORD_NON_FATAL, STORIES.ENTRY_DELETE,
      STORIES.ONE_BOUNDARY_RULE, STORIES.RESTART_FROM_ENTRY],
@@ -338,14 +357,15 @@ test.describe("Production — entry edit, delete, and restart", () => {
 
     await expect(page.getByText("Live", { exact: true })).toBeVisible({ timeout: 15_000 });
 
-    // Discard the restarted timer
-    await page.evaluate(() =>
-      fetch("/api/timer/stop", {
+    // Properly await the discard to prevent stale timers leaking into other tests
+    await page.evaluate(async () => {
+      const r = await fetch("/api/timer/stop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ discard: true }),
-      })
-    );
+      });
+      return r.status;
+    });
 
     // Clean up original entry
     await deleteEntryById(page, entryId, desc);

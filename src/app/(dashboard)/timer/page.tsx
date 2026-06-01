@@ -289,12 +289,12 @@ export default async function TimerPage() {
   const linkedApplicantId = applicantIdForSessionLinkedUser(sessionUser);
 
   const [projectsList, tagsList, weekEntries, recentEntries, weeklyTarget, initialDiscussions] = await Promise.all([
-    getProjects(),
-    getUserTags(userId, linkedApplicantId),
-    getWeekEntries(userId, linkedApplicantId),
-    getRecentEntries(userId, linkedApplicantId),
-    getUserWeeklyTarget(userId, linkedApplicantId),
-    getInitialDiscussions(sessionUser, userId, linkedApplicantId),
+    getProjects().catch((e) => { console.error(`[timer/page] getProjects failed for ${userId}:`, e); return [] as Project[]; }),
+    getUserTags(userId, linkedApplicantId).catch((e) => { console.error(`[timer/page] getUserTags failed for ${userId}:`, e); return [] as Tag[]; }),
+    getWeekEntries(userId, linkedApplicantId).catch((e) => { console.error(`[timer/page] getWeekEntries failed for ${userId}:`, e); return [] as TimeEntry[]; }),
+    getRecentEntries(userId, linkedApplicantId).catch((e) => { console.error(`[timer/page] getRecentEntries failed for ${userId}:`, e); return [] as TimeEntry[]; }),
+    getUserWeeklyTarget(userId, linkedApplicantId).catch((e) => { console.error(`[timer/page] getUserWeeklyTarget failed for ${userId}:`, e); return 40; }),
+    getInitialDiscussions(sessionUser, userId, linkedApplicantId).catch((e) => { console.error(`[timer/page] getInitialDiscussions failed for ${userId}:`, e); return [] as EntryDiscussion[]; }),
   ]);
 
   return (

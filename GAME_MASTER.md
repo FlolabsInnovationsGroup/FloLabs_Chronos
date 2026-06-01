@@ -2,16 +2,16 @@
 
 ## Current Status
 
-**Stack:** Next.js 16 + Drizzle + Neon serverless PostgreSQL + AWS ElastiCache Redis + NextAuth v5; production on AWS App Runner
+**Stack:** Next.js 16 + Drizzle + AWS RDS PostgreSQL 16 + AWS ElastiCache Redis + NextAuth v5; production on AWS App Runner
 **App Runner URL:** https://hcmsmnfq5q.us-east-1.awsapprunner.com
 **Production domain:** https://athensgreecemarathon.com
-**Database:** Neon (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech/neondb`), URL in AWS SSM `/flolabs-chronos/DATABASE_URL`
-**Latest deployed commit:** `54fb14e` (2026-05-18) — live timer duration in TopBar
+**Database:** AWS RDS PostgreSQL 16 (`flolabs-db.ccxceiswgkrj.us-east-1.rds.amazonaws.com/neondb`). Migrated from Neon 2026-06-01. URL in AWS SSM `/flolabs-chronos/DATABASE_URL`.
+**Latest deployed commit:** `3ef4cd1` (2026-06-01) — fix HR user TimerPage crash
 
 **Identity:** `flolabs_users` single shared table with Hephaestus. No separate `applicants` table. `session.user.id` = `flolabs_users.id`.
 **Timer persistence:** `src/lib/timer-recovery.ts` — `restoreTimerFromDb()` on Redis miss; stale timers >24h auto-closed.
 **TopBar:** shows live `HH:MM:SS` counter next to stop button while timer is active.
-**E2E:** All 16 Playwright tests pass.
+**E2E:** All 24 Playwright story-covering tests pass (1 skipped — forgot-password API test-mode requires env vars). All 27 Notion QA stories are "Fixed". Tests have proper DB cleanup — no remnants after runs.
 
 **Known lint issues:** pre-existing ESLint warnings in auth/control, tooltip, report-filter, timer-dashboard, and Discord-provisioning files. `pnpm exec tsc --noEmit` and `pnpm build` are green.
 

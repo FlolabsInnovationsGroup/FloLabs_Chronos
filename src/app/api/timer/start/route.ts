@@ -18,6 +18,18 @@ const startSchema = z.object({
 });
 
 export async function POST(req: Request) {
+  try {
+    return await handleTimerStart(req);
+  } catch (error) {
+    console.error("[timer/start] unhandled error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to start timer" },
+      { status: 500 }
+    );
+  }
+}
+
+async function handleTimerStart(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

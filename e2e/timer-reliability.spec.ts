@@ -106,11 +106,11 @@ test.describe("Timer reliability — deploy resilience and ghost prevention", ()
     }
 
     const [b1, b2, b3] = await Promise.all([res1.json(), res2.json(), res3.json()]);
-    expect(typeof b1.startedAt).toBe("number");
-    expect(b1.startedAt).toBeGreaterThan(0);
-    expect(b1.startedAt).toBe(b2.startedAt);
-    expect(b1.startedAt).toBe(b3.startedAt);
-    expect(b1.userId).toBe(b2.userId);
+    expect(typeof b1.timer?.startedAt).toBe("number");
+    expect(b1.timer?.startedAt).toBeGreaterThan(0);
+    expect(b1.timer?.startedAt).toBe(b2.timer?.startedAt);
+    expect(b1.timer?.startedAt).toBe(b3.timer?.startedAt);
+    expect(b1.timer?.userId).toBe(b2.timer?.userId);
 
     await stopTimer(page);
 
@@ -135,7 +135,7 @@ test.describe("Timer reliability — deploy resilience and ghost prevention", ()
     const activeRes = await page.request.get("/api/timer/active");
     expect(activeRes.status()).toBe(200);
     const active = await activeRes.json();
-    expect(active.startedAt).toBeGreaterThan(0);
+    expect(active.timer?.startedAt).toBeGreaterThan(0);
 
     // Stop via direct API (simulates server-side path, same as page button)
     const stopRes = await page.request.post("/api/timer/stop", { data: {} });
@@ -147,7 +147,7 @@ test.describe("Timer reliability — deploy resilience and ghost prevention", ()
     // Timer must be gone
     const afterRes = await page.request.get("/api/timer/active");
     const afterBody = await afterRes.json();
-    expect(!afterBody || !afterBody.startedAt).toBeTruthy();
+    expect(!afterBody || !afterBody.timer?.startedAt).toBeTruthy();
 
     // Clean up
     await page.evaluate(async (desc) => {

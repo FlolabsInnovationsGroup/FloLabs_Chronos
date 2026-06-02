@@ -33,7 +33,7 @@ export async function loginHephaestusHr(page: Page, baseUrl: string) {
     throw new Error(`Hephaestus preview-login failed: ${body.error ?? "ok=false"}`);
   }
   await page.goto(`${baseUrl}/me/hr?status=joined`, { waitUntil: "domcontentloaded", timeout: 120_000 });
-  await page.locator('select[name="status"]').waitFor({ state: "visible", timeout: 120_000 });
+  await page.locator('select[name="status"]').first().waitFor({ state: "visible", timeout: 120_000 });
 }
 
 export async function loginChronosAdmin(page: Page, baseUrl: string) {

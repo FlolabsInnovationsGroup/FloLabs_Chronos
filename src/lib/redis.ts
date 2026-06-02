@@ -1,15 +1,9 @@
-import { kv } from "@vercel/kv";
 import { createClient } from "redis";
 import type { ActiveTimer } from "@/types";
 
-// Fallback in-memory store for local dev without Vercel KV
 const memStore = new Map<string, string>();
 const TIMER_CHANNEL = "timers:updates";
 const redisUrl = process.env.FL_KV_REDIS_URL ?? process.env.KV_URL;
-
-const isKvAvailable = Boolean(
-  process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN
-);
 
 type CommandClient = ReturnType<typeof createClient>;
 
@@ -55,13 +49,6 @@ async function kvGet(key: string): Promise<string | null> {
     const client = getRedisClient();
     if (client) return await withRedisTimeout((await withRedisTimeout(client, "connect")).get(key), "get");
   } catch {}
-  if (isKvAvailable) {
-    try {
-      return await withRedisTimeout(kv.get<string>(key), "kv get");
-    } catch (error) {
-      console.error('[redis] kv get failed', error);
-    }
-  }
   return memStore.get(key) ?? null;
 }
 
@@ -73,14 +60,6 @@ async function kvSet(key: string, value: string): Promise<void> {
       return;
     }
   } catch {}
-  if (isKvAvailable) {
-    try {
-      await withRedisTimeout(kv.set(key, value), "kv set");
-      return;
-    } catch (error) {
-      console.error('[redis] kv set failed', error);
-    }
-  }
   memStore.set(key, value);
 }
 
@@ -92,14 +71,6 @@ async function kvDel(key: string): Promise<void> {
       return;
     }
   } catch {}
-  if (isKvAvailable) {
-    try {
-      await withRedisTimeout(kv.del(key), "kv del");
-      return;
-    } catch (error) {
-      console.error('[redis] kv del failed', error);
-    }
-  }
   memStore.delete(key);
 }
 
@@ -108,13 +79,6 @@ async function kvKeys(pattern: string): Promise<string[]> {
     const client = getRedisClient();
     if (client) return await withRedisTimeout((await withRedisTimeout(client, "connect")).keys(pattern), "keys");
   } catch {}
-  if (isKvAvailable) {
-    try {
-      return await withRedisTimeout(kv.keys(pattern), "kv keys");
-    } catch (error) {
-      console.error('[redis] kv keys failed', error);
-    }
-  }
   const prefix = pattern.replace("*", "");
   return [...memStore.keys()].filter((k) => k.startsWith(prefix));
 }
@@ -125,13 +89,6 @@ async function kvMGet(keys: string[]): Promise<Array<string | null>> {
     const client = getRedisClient();
     if (client) return await withRedisTimeout((await withRedisTimeout(client, "connect")).mGet(keys), "mget");
   } catch {}
-  if (isKvAvailable) {
-    try {
-      return await withRedisTimeout(kv.mget<string[]>(...keys), "kv mget");
-    } catch (error) {
-      console.error('[redis] kv mget failed', error);
-    }
-  }
   return keys.map((key) => memStore.get(key) ?? null);
 }
 

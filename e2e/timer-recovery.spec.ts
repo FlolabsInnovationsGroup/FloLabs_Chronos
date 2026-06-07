@@ -21,7 +21,7 @@ type ActiveTimerResponse = {
 };
 
 let suitePass = true;
-test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.retries) suitePass = false; });
+test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.project.retries) suitePass = false; });
 test.afterAll(async () => { await markStory(STORIES.SSE_RECONNECT, suitePass); });
 
 test.describe("Production — /api/timer/active DB fallback path", () => {

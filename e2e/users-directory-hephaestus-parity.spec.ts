@@ -1,11 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { credentialsForRole, loginChronosAdmin, loginHephaestusHr } from "./lib/auth";
+import { credentialsForRole, chronosBaseUrl, hephaestusBaseUrl, loginChronosAdmin, loginHephaestusHr } from "./lib/auth";
 
-const HEPHAESTUS_URL =
-  process.env.HEPHAESTUS_BASE_URL?.trim() || "https://fykgssqbvg.us-east-1.awsapprunner.com";
-const CHRONOS_URL = process.env.CHRONOS_BASE_URL?.trim() || "https://athensgreecemarathon.com";
+const HEPHAESTUS_URL = hephaestusBaseUrl();
+const CHRONOS_URL = chronosBaseUrl();
 
 async function fetchHephaestusJoinedIds(page: import("@playwright/test").Page): Promise<string[]> {
   const ids: string[] = [];

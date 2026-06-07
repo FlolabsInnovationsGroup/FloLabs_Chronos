@@ -159,7 +159,7 @@ const selectedCases = runAll
     }).slice(0, 1);
 
 let suitePass = true;
-test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.retries) suitePass = false; });
+test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.project.retries) suitePass = false; });
 test.afterAll(async () => { await markStories([STORIES.START_TIMER, STORIES.NOTION_SYNC], suitePass); });
 
 test.describe("Production — session lifecycle acceptance", () => {

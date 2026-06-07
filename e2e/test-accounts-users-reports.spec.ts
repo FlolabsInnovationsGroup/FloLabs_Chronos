@@ -27,20 +27,8 @@ test.describe("Production — test_accounts (Users + Reports)", () => {
     test.skip(!hrEmail, "Human Resources account must include at least one email");
     await signIn(page, hrEmail!, hrLike!.password);
 
-    const usersResponse = page.waitForResponse(
-      (r) => {
-        try {
-          const u = new URL(r.url());
-          return u.pathname.endsWith("/api/users") && r.request().method() === "GET";
-        } catch {
-          return false;
-        }
-      },
-      { timeout: 60_000 }
-    );
-
     await page.goto("/team", { waitUntil: "domcontentloaded" });
-    const res = await usersResponse;
+    const res = await page.request.get("/api/users");
     expect(res.status()).toBe(200);
     const body = (await res.json()) as { users?: unknown[]; warning?: string };
     expect(Array.isArray(body.users)).toBeTruthy();

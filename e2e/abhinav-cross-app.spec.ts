@@ -1,11 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { loginChronosAdmin, loginHephaestusHr } from "./lib/auth";
+import { chronosBaseUrl, hephaestusBaseUrl, loginChronosAdmin, loginHephaestusHr } from "./lib/auth";
 
-const chronosBase =
-  process.env.CHRONOS_BASE_URL ?? "https://hcmsmnfq5q.us-east-1.awsapprunner.com";
-const hephBase =
-  process.env.HEPHAESTUS_BASE_URL ?? "https://fykgssqbvg.us-east-1.awsapprunner.com";
-const TARGET = "Abhinav Singamaneni";
+const chronosBase = chronosBaseUrl();
+const hephBase = hephaestusBaseUrl();const TARGET = "Abhinav Singamaneni";
 
 test.describe("Abhinav cross-app parity", () => {
   test.setTimeout(300_000);

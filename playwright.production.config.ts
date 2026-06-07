@@ -47,6 +47,7 @@ const baseURL =
   "https://athensgreecemarathon.com";
 
 function chromiumHostResolverArgs(url: string): string[] {
+  if (process.platform === "win32") return [];
   try {
     const host = new URL(url).hostname;
     const firstIp = execSync(`getent hosts ${host} | awk 'NR==1 {print $1}'`, { encoding: "utf8" }).trim();

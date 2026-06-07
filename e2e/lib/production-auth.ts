@@ -22,55 +22,58 @@ export function loadTestUsers(): TestUserEntry[] {
   return Array.isArray(data.users) ? data.users : [];
 }
 
-/** Sign in; lands on /timer on success. Uses #email / #password (controlled React inputs). */
+/** Sign in via NextAuth API; lands on /timer on success. */
 export async function signInProduction(page: Page, email: string, password: string) {
-  await page.goto("/login", { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
-  await expect(page.locator("#email")).toBeVisible({ timeout: 90_000 });
-  await page.locator("#email").fill(email);
-  await page.locator("#password").fill(password);
+  await page.context().clearCookies();
 
-  const authTimeoutMs = 240_000;
-
-  /** Wait for the credentials handshake first so we do not bail while NextAuth is still in flight (reduces flaky /login timeouts). */
-  const credWait = page
-    .waitForResponse(
-      (r) => {
-        try {
-          const u = new URL(r.url());
-          return (
-            r.request().method() === "POST" &&
-            u.pathname.includes("/api/auth/callback/credentials")
-          );
-        } catch {
-          return false;
-        }
-      },
-      { timeout: authTimeoutMs }
-    )
-    .catch(() => undefined);
-
-  await page.getByRole("button", { name: "Sign In" }).click();
-  await credWait;
-
-  /** Do not use Promise.race with waitForURL — on timeout it rejects and hides credential error messages. */
-  try {
-    await page.waitForURL(/\/timer/, { timeout: authTimeoutMs });
-    return;
-  } catch {
-    /* still on /login or slow client navigation */
+  const csrfRes = await page.request.get("/api/auth/csrf");
+  if (!csrfRes.ok()) {
+    throw new Error(`Sign-in csrf HTTP ${csrfRes.status()} for ${email}.`);
+  }
+  const { csrfToken } = (await csrfRes.json()) as { csrfToken?: string };
+  if (!csrfToken) {
+    throw new Error(`Sign-in csrf token missing for ${email}.`);
   }
 
-  if (await page.getByText("Invalid email or password.").isVisible().catch(() => false)) {
+  const signInRes = await page.request.post("/api/auth/callback/credentials", {
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    data: new URLSearchParams({
+      csrfToken,
+      email: email.toLowerCase().trim(),
+      password,
+      redirect: "false",
+      json: "true",
+    }).toString(),
+  });
+
+  const signInText = await signInRes.text();
+  const location = signInRes.headers().location ?? "";
+  if (location.includes("error=CredentialsSignin")) {
     throw new Error(`Sign-in failed (invalid credentials) for ${email}.`);
   }
-  if (await page.getByText("Something went wrong. Please try again.").isVisible().catch(() => false)) {
-    throw new Error(`Sign-in failed (server error) for ${email}.`);
+  if (!signInRes.ok() && signInRes.status() !== 302) {
+    throw new Error(`Sign-in HTTP ${signInRes.status()} for ${email}: ${signInText.slice(0, 200)}`);
   }
-  if (page.url().includes("/timer")) {
-    return;
+  const contentType = signInRes.headers()["content-type"] ?? "";
+  if (contentType.includes("application/json")) {
+    const signInBody = JSON.parse(signInText) as { error?: string; url?: string };
+    if (signInBody.error) {
+      throw new Error(`Sign-in failed (${signInBody.error}) for ${email}.`);
+    }
+    if (signInBody.url?.includes("error=CredentialsSignin")) {
+      throw new Error(`Sign-in failed (invalid credentials) for ${email}.`);
+    }
   }
-  throw new Error(
-    `Sign-in timed out (expected redirect to /timer) for ${email}. Still at: ${page.url()}`
-  );
+
+  const storage = await page.request.storageState();
+  await page.context().addCookies(storage.cookies);
+
+  const sessionRes = await page.request.get("/api/auth/session");
+  const session = (await sessionRes.json()) as { user?: { email?: string } };
+  if (!session.user?.email) {
+    throw new Error(`Sign-in failed (no session) for ${email}.`);
+  }
+
+  await page.goto("/timer", { waitUntil: "domcontentloaded", timeout: 120_000 });
+  await expect(page.getByPlaceholder("Search Notion tasks…")).toBeVisible({ timeout: 90_000 });
 }

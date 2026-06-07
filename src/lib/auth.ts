@@ -10,10 +10,27 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-function applicantAccessEnabled(input: { stage?: string | null; status?: string | null; isActive?: boolean | null }) {
+function chronosRoleBypassesPipelineGate(role: string | null | undefined): boolean {
+  const value = String(role ?? "").trim().toLowerCase();
+  return (
+    value === "admin" ||
+    value === "administrator" ||
+    value === "hr" ||
+    value === "human resources" ||
+    value === "human_resources"
+  );
+}
+
+function applicantAccessEnabled(input: {
+  stage?: string | null;
+  status?: string | null;
+  isActive?: boolean | null;
+  role?: string | null;
+}) {
   const stage = String(input.stage ?? "").trim().toLowerCase();
   const status = String(input.status ?? "").trim().toLowerCase();
   if (!Boolean(input.isActive) || chronosAccessDisabled(status)) return false;
+  if (chronosRoleBypassesPipelineGate(input.role)) return true;
   return stage === "joined" || status === "joined" || status === "active" || status === "signed";
 }
 
@@ -149,7 +166,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               t.chronosUserId = fresh.id;
               t.roleRefreshedAt = Date.now();
 
-              if (!applicantAccessEnabled({ status: fresh.status, isActive: fresh.isActive })) {
+              if (!applicantAccessEnabled({ status: fresh.status, isActive: fresh.isActive, role: fresh.role })) {
                 return null as unknown as typeof token;
               }
             }

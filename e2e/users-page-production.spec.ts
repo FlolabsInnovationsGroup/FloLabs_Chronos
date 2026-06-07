@@ -10,7 +10,7 @@ const primaryUser =
   users[0];
 
 let suitePass = true;
-test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.retries) suitePass = false; });
+test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.project.retries) suitePass = false; });
 test.afterAll(async () => { await markStory(STORIES.USERS_PAGE, suitePass); });
 
 test.describe("Production Chronos — Users page", () => {

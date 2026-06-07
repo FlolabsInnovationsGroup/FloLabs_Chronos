@@ -12,7 +12,7 @@ const firstUser = users.find(
 ) ?? users[0];
 
 let suitePass = true;
-test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.retries) suitePass = false; });
+test.afterEach(({}, info) => { if ((info.status === "failed" || info.status === "timedOut") && info.retry >= info.project.retries) suitePass = false; });
 test.afterAll(async () => { await markStory(STORIES.TOPBAR_PERSISTENCE, suitePass); });
 
 test.describe("Production — TopBar live timer duration display", () => {

@@ -1,9 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { loginChronosAdmin, loginHephaestusHr } from "./lib/auth";
+import { chronosBaseUrl, hephaestusBaseUrl, loginChronosAdmin, loginHephaestusHr } from "./lib/auth";
 
-const HEPHAESTUS_URL =
-  process.env.HEPHAESTUS_BASE_URL?.trim() || "https://fykgssqbvg.us-east-1.awsapprunner.com";
-const CHRONOS_URL = process.env.CHRONOS_BASE_URL?.trim() || "https://athensgreecemarathon.com";
+const HEPHAESTUS_URL = hephaestusBaseUrl();
+const CHRONOS_URL = chronosBaseUrl();
 
 test.describe("Users directory UI parity (browser)", () => {
   test("Chronos Users tab row count matches Hephaestus joined HR list total", async ({ page }) => {

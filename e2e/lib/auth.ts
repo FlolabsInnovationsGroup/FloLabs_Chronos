@@ -10,6 +10,20 @@ function readTestUsers(): { baseUrl?: string; users?: TestUser[] } {
   return JSON.parse(readFileSync(path, "utf8")) as { baseUrl?: string; users?: TestUser[] };
 }
 
+export function chronosBaseUrl(): string {
+  const fromEnv = process.env.CHRONOS_BASE_URL?.trim();
+  if (fromEnv?.startsWith("http")) return fromEnv.replace(/\/$/, "");
+  const fromFile = readTestUsers().baseUrl?.trim();
+  if (fromFile?.startsWith("http")) return fromFile.replace(/\/$/, "");
+  return "https://athensgreecemarathon.com";
+}
+
+export function hephaestusBaseUrl(): string {
+  const fromEnv = process.env.HEPHAESTUS_BASE_URL?.trim();
+  if (fromEnv?.startsWith("http")) return fromEnv.replace(/\/$/, "");
+  return "https://efestos.international";
+}
+
 export function credentialsForRole(role: string): { email: string; password: string } {
   const u = readTestUsers().users?.find((user) => user.role === role);
   const email = (u?.emails?.[0] ?? "").split(",")[0].trim();

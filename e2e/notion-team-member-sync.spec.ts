@@ -1,9 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { loginChronosAdmin } from "./lib/auth";
+import { chronosBaseUrl, loginChronosAdmin } from "./lib/auth";
 
-const baseUrl =
-  process.env.CHRONOS_BASE_URL ?? "https://hcmsmnfq5q.us-east-1.awsapprunner.com";
-
+const baseUrl = chronosBaseUrl();
 test.describe("Notion team member link parity", () => {
   test.setTimeout(180_000);
 

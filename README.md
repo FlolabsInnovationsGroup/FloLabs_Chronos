@@ -6,15 +6,15 @@ Internal time-tracking and team-management app for FloLabs.
 
 | Doc | Purpose |
 |-----|---------|
-| **`ARCHITECTURE.md`** | **Start here.** Product model, identity (`flolabs_users`), data rules, timers, Notion — plus **”System architecture (for agents)”** (AWS App Runner, Neon PostgreSQL, Redis, deploy/secret layout). |
-| **`DEPLOYMENT.md`** | Proven path: GitHub Actions → ECR → App Runner; SSM parameters; post-deploy checks. |
+| **`ARCHITECTURE.md`** | **Start here.** Product model, identity (`flolabs_users`), data rules, timers, Notion — plus **”System architecture (for agents)”** (AWS App Runner, RDS PostgreSQL, Redis, deploy/secret layout). |
+| **`DEPLOYMENT.md`** | Proven path: CodeBuild → ECR → App Runner; SSM parameters; post-deploy checks. |
 | **`AGENT.md`** | Agent workflow: AWS-only validation, read order, priorities. |
 | **`CLAUDE.md`** | Maintainer/agent guardrails, credentials context, theme rules. |
 | **`GAME_MASTER.md`** | Implementation tracker and changelog-style notes. |
 
-Production runtime is **AWS** (App Runner + **Neon PostgreSQL** + ElastiCache). **Vercel** is a legacy reference only. The old **AWS RDS** instance was deleted in 2026-05.
+Production runtime is **AWS** (App Runner + **RDS PostgreSQL** + ElastiCache).
 
-Chronos shares a single **`flolabs_users`** identity table and the same **Neon** database with Hephaestus International (`DATABASE_URL` injected from AWS SSM `/flolabs-chronos/DATABASE_URL`).
+Chronos shares a single **`flolabs_users`** identity table and the same **RDS** database with Hephaestus International (`DATABASE_URL` injected from AWS SSM `/flolabs-chronos/DATABASE_URL`).
 
 ## Core functionality
 

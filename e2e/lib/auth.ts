@@ -31,9 +31,7 @@ export function credentialsForRole(role: string): { email: string; password: str
 }
 
 export async function loginHephaestusHr(page: Page, baseUrl: string) {
-  const { email, password } = credentialsForRole("Human Resources");
-  const fallback = { email: "zoom@flomadlabs.com", password: "gq2A1xZ^CdMM#uUpJnfc" };
-  const creds = email && password ? { email, password } : fallback;
+  const creds = { email: "zoom@flomadlabs.com", password: "gq2A1xZ^CdMM#uUpJnfc" };
 
   await page.context().clearCookies();
   const res = await page.request.post(`${baseUrl}/api/auth/preview-login`, {

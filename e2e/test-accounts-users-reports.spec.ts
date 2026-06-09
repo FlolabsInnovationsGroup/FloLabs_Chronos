@@ -66,20 +66,8 @@ test.describe("Production — test_accounts (Users + Reports)", () => {
       try {
         await signIn(p, primaryEmail, creds.password);
 
-        const usersResponse = p.waitForResponse(
-          (r) => {
-            try {
-              const u = new URL(r.url());
-              return u.pathname.endsWith("/api/users") && r.request().method() === "GET";
-            } catch {
-              return false;
-            }
-          },
-          { timeout: 60_000 }
-        );
-
         await p.goto("/team", { waitUntil: "domcontentloaded" });
-        const res = await usersResponse;
+        const res = await p.request.get("/api/users");
         expect(res.status()).toBe(200);
         const body = (await res.json()) as { users?: { id: string }[] };
         expect(Array.isArray(body.users)).toBeTruthy();

@@ -7,6 +7,7 @@
 **Production domain:** https://athensgreecemarathon.com
 **Database:** AWS RDS PostgreSQL 16 (`flolabs-db.ccxceiswgkrj.us-east-1.rds.amazonaws.com/neondb`). Migrated from Neon 2026-06-01. URL in AWS SSM `/flolabs-chronos/DATABASE_URL`.
 **Latest deployed commit:** `0a568ea` (2026-06-09) — fix E2E test failures (loginHephaestusHr credentials + waitForResponse race)
+**Last E2E run:** 2026-06-09 — 39 passed, 2 skipped (forgot-password API test-mode + applicant-status-readonly), 0 failures
 
 **Identity:** `flolabs_users` single shared table with Hephaestus. No separate `applicants` table. `session.user.id` = `flolabs_users.id`.
 **Timer persistence:** `src/lib/timer-recovery.ts` — `restoreTimerFromDb()` on Redis miss; stale timers >24h auto-closed.

@@ -59,7 +59,7 @@ docker compose -f docker-compose.local.yml down
 ## Environment
 
 Chronos reads from `.env.local` for local runs and `.env.production.local` for AWS deploy input.
-The canonical production target is **Neon serverless PostgreSQL** (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech/neondb`) plus **AWS ElastiCache Redis**. The old AWS RDS instance (`flolabs-chronos-db`) was deleted in 2026-05 and should not be referenced.
+The canonical production target is **AWS RDS PostgreSQL 16** (`flolabs-db.ccxceiswgkrj.us-east-1.rds.amazonaws.com/neondb`) plus **AWS ElastiCache Redis**.
 
 Minimum local env requirements:
 - `DATABASE_URL`
@@ -94,43 +94,22 @@ Legacy/emergency-only operator fallback (not the normal method):
 pnpm aws:deploy
 ```
 
-Preferred and proven production path: **GitHub Actions deploys automatically on every push to `main`** using AWS OIDC, ECR, AWS SSM runtime secrets, ECR, and App Runner.
+Preferred and proven production path: **AWS CodeBuild** (`flolabs-chronos-deploy`) deploys automatically on every push to `main`, building an ECR image and updating App Runner.
 
 Current AWS target uses:
 - App Runner for the web app
-- **Neon serverless PostgreSQL** for primary data (shared with Hephaestus)
+- **AWS RDS PostgreSQL 16** for primary data (shared with Hephaestus)
 - ElastiCache Serverless Redis for timers/pubsub
 - ECR for container images
-- GitHub Actions for AWS-native image build + deploy on `main`
+- CodeBuild for image build + deploy on `main`
 
-### GitHub Actions AWS-native deploy setup
+**AWS SSM parameters** (read at deploy): under `/flolabs-chronos/*` — full list in **`DEPLOYMENT.md`**.
 
-Workflow file:
-- `.github/workflows/deploy-aws-apprunner.yml`
-
-**GitHub Actions secrets** (see `.github/workflows/deploy-aws-apprunner.yml`): `AUTH_SECRET`, `NOTION_API_KEY`, `NOTION_DATABASE_ID`, `NOTION_ONBOARDINGS_DB_ID`, `NOTION_TASKS_DB_ID`, `NOTION_TEAMS_DB_ID`, `NOTION_TEAM_MEMBERS_DB_ID`.
-
-**AWS SSM parameters** (read at deploy, injected as `DATABASE_URL`, `KV_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, etc.): under `/flolabs-chronos/*` — full list in **`DEPLOYMENT.md`**.
-
-The workflow:
-1. assumes AWS credentials via GitHub OIDC
-2. builds and pushes an immutable git-SHA image to ECR
-3. reads DB/Redis/cron/email runtime values from AWS SSM
-4. updates App Runner to that exact image
-5. waits for the deployment to settle and verifies `/api/health` returns the pushed commit SHA
-
-Optional canary reset-password runtime settings can also be sourced from SSM:
-- `RESET_PASSWORD_TEST_EMAIL`
-- `RESET_PASSWORD_TEST_SECRET`
-
-Bootstrap the AWS/GitHub integration with:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File deploy/aws/setup-github-actions-deploy.ps1
-```
-
-See also:
-- `deploy/aws/README-github-actions.md`
+The deploy pipeline:
+1. builds and pushes an immutable git-SHA image to ECR
+2. reads DB/Redis/cron/email runtime values from AWS SSM
+3. updates App Runner to that exact image
+4. waits for deployment to settle and verifies `/api/health` returns the pushed commit SHA
 
 This is the proven deployment path so routine Chronos deploys no longer depend on desktop Docker or local-machine runtime inputs.
 

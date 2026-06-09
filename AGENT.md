@@ -10,10 +10,10 @@ Finish Chronos safely and quickly, with AWS as the only authoritative validation
 
 Chronos is a **Next.js 16 App Router** app whose **production** deployment is:
 
-- **AWS App Runner** (container) in **`us-east-1`**, fed by **Amazon ECR** images built in **GitHub Actions** on pushes to **`main`** (workflow: `.github/workflows/deploy-aws-apprunner.yml`).
-- **Neon serverless PostgreSQL** (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech/neondb`) for all relational data (Drizzle ORM). Shared with Hephaestus International. URL injected from AWS SSM `/flolabs-chronos/DATABASE_URL`. **Note:** The old AWS RDS instance (`flolabs-chronos-db`) was deleted in 2026-05 — any references to it in old scripts are stale artifacts.
+- **AWS App Runner** (container) in **`us-east-1`**, fed by **Amazon ECR** images built by **AWS CodeBuild** (`flolabs-chronos-deploy`) on pushes to **`main`**.
+- **AWS RDS PostgreSQL 16** (`flolabs-db.ccxceiswgkrj.us-east-1.rds.amazonaws.com/neondb`) for all relational data (Drizzle ORM). Shared with Hephaestus International. URL injected from AWS SSM `/flolabs-chronos/DATABASE_URL`.
 - **AWS ElastiCache Serverless Redis** for timers, pub/sub, and SSE-related state (`KV_URL` / `FL_KV_REDIS_URL`).
-- **Secrets:** runtime DB/Redis/cron/email from **AWS SSM** under `/flolabs-chronos/*`; app secrets (e.g. `AUTH_SECRET`, Notion keys) from **GitHub Actions secrets** at deploy time — see `DEPLOYMENT.md`.
+- **Secrets:** runtime DB/Redis/cron/email from **AWS SSM** under `/flolabs-chronos/*`; app secrets (e.g. `AUTH_SECRET`, Notion keys) sourced at deploy time — see `DEPLOYMENT.md`.
 - **Auth:** NextAuth v5 **credentials**; canonical identity is **`flolabs_users`** (single shared table with Hephaestus). `session.user.id` and `session.user.chronosUserId` both reference `flolabs_users.id`. No separate `applicants` table in the current production schema. See `src/lib/auth.ts`.
 - **Timer persistence:** `src/lib/timer-recovery.ts` — `restoreTimerFromDb()` restores active timer from PostgreSQL `time_entries` (`stoppedAt IS NULL`) when Redis is empty after a deploy. Stale timers >24h old are auto-closed. Called by GET `/api/timer/active` and POST `/api/timer/stop` on Redis miss.
 - **Integrations:** Notion (mirror/sync), Discord (webhooks), Resend (password-reset mail).
@@ -24,7 +24,7 @@ Chronos is a **Next.js 16 App Router** app whose **production** deployment is:
 ## Required Read Order
 
 1. `ARCHITECTURE.md` — especially **“System architecture (for agents)”**, then product and data rules
-2. `DEPLOYMENT.md` — production deploy and SSM/GitHub split
+2. `DEPLOYMENT.md` — production deploy and SSM/secrets layout
 3. `GAME_MASTER.md` — what is done vs in flight
 4. `CLAUDE.md` — validation rules and credentials context
 5. Then inspect the relevant code

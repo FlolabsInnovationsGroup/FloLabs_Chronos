@@ -15,8 +15,8 @@ Read this section first for **where code runs**, **what stores state**, and **ho
 | Concern | Implementation |
 |--------|------------------|
 | **App server** | **Next.js 16** (App Router) in a **Docker** image on **AWS App Runner** (`us-east-1`). One container service handles SSR, route handlers (`src/app/api/**`), and Server Components. |
-| **Images & deploy** | Images live in **Amazon ECR** under immutable tags `git-<12-char-sha>`. **GitHub Actions** (`.github/workflows/deploy-aws-apprunner.yml`) builds on every push to `main` or manual `workflow_dispatch`, updates App Runner, and verifies **`GET /api/health`** reports the same **`commitSha`** as the deploy. |
-| **Transactional data** | **Neon serverless PostgreSQL** (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech / neondb`) — shared with Hephaestus International. Canonical person rows live in **`flolabs_users`** (Drizzle export `users` in `src/lib/db/schema.ts`). Access via **Drizzle ORM** + `pg` pool (`max=10` per container). URL stored in **AWS SSM** `/flolabs-chronos/DATABASE_URL`. |
+| **Images & deploy** | Images live in **Amazon ECR** under immutable tags `git-<12-char-sha>`. **AWS CodeBuild** (`flolabs-chronos-deploy`) builds on every push to `main`, updates App Runner, and verifies **`GET /api/health`** reports the same **`commitSha`** as the deploy. |
+| **Transactional data** | **AWS RDS PostgreSQL 16** (`flolabs-db.ccxceiswgkrj.us-east-1.rds.amazonaws.com/neondb`) — shared with Hephaestus International. Canonical person rows live in **`flolabs_users`** (Drizzle export `users` in `src/lib/db/schema.ts`). Access via **Drizzle ORM** + `pg` pool (`max=10` per container). URL stored in **AWS SSM** `/flolabs-chronos/DATABASE_URL`. |
 | **Timers / realtime** | **Redis** (AWS ElastiCache Serverless 7.1 in production; env `KV_URL` / `FL_KV_REDIS_URL`) — active timers, pub/sub, SSE fan-out (`src/lib/redis.ts`, `/api/sse/**`). |
 | **Auth** | **NextAuth.js v5** credentials provider (`src/lib/auth.ts`). Session identity uses **`flolabs_users.id`**: `session.user.id` and `session.user.chronosUserId` both reference the same row when populated. Password hashes on **`flolabs_users`**. |
 | **HTTP edge** | **AWS URL:** `https://hcmsmnfq5q.us-east-1.awsapprunner.com` — **Production domain:** `https://athensgreecemarathon.com` (App Runner custom domain). Neither is encoded in application logic. |
@@ -234,9 +234,9 @@ The entry-list edit experience must be considered authoritative for user-facing 
 
 | Layer | Technology | Why |
 |---|---|---|
-| Frontend + API | **Next.js 16** (App Router), deployed as a **container on AWS App Runner** | SSR, route handlers, Server Components; production deploy via GitHub Actions → ECR |
+| Frontend + API | **Next.js 16** (App Router), deployed as a **container on AWS App Runner** | SSR, route handlers, Server Components; production deploy via CodeBuild → ECR |
 | Auth | **NextAuth.js v5** credentials flow | Session enrichment and app-level role checks |
-| Database | **PostgreSQL** (production: **Neon serverless**; local/dev: any Postgres URL) | Durable relational source of truth |
+| Database | **PostgreSQL** (production: **AWS RDS PostgreSQL 16**; local/dev: any Postgres URL) | Durable relational source of truth |
 | ORM | **Drizzle ORM** | Type-safe schema and query layer |
 | Real-time | **Redis** + **SSE** | Active timer state + fan-out (production Redis: **ElastiCache**) |
 | Styling | **Tailwind CSS** with Vellum Ink tokens + CSS variables | Editorial UI; light/dark palettes via `--c-*` on `:root` and `html.dark` |
@@ -923,7 +923,7 @@ When an HR user merges duplicate leads in Hephaestus (`POST /api/admin/leads/mer
 **Production (canonical):**
 
 - **AWS App Runner** (`flolabs-chronos`, us-east-1) runs the Next.js container. Instance config: **2 vCPU / 4 GB RAM**. Auto-scaling: `flolabs-apps` config (`MinSize=1, MaxConcurrency=25, MaxSize=3`). Health check: **HTTP `/api/health`** every 10 s. The same `flolabs-apps` auto-scaling config is shared with the **Hephaestus International** App Runner service.
-- **Neon serverless PostgreSQL** (`ep-broad-shadow-anqzuaqr.c-6.us-east-1.aws.neon.tech / neondb`) stores durable app data. Both Chronos and Hephaestus International connect to the same Neon database. URL injected from AWS SSM `/flolabs-chronos/DATABASE_URL` at deploy time. pg connection pool per container: `max=10, idleTimeout=20s, connectionTimeout=5s`.
+- **AWS RDS PostgreSQL 16** (`flolabs-db.ccxceiswgkrj.us-east-1.rds.amazonaws.com/neondb`) stores durable app data. Both Chronos and Hephaestus International connect to the same RDS database. URL injected from AWS SSM `/flolabs-chronos/DATABASE_URL` at deploy time. pg connection pool per container: `max=10, idleTimeout=20s, connectionTimeout=5s`.
 - **AWS ElastiCache Serverless Redis 7** stores active timers and SSE pub/sub state.
 - **Notion** is used for operational sync / mirror databases.
 - **Discord webhooks** handle branded notification delivery.
@@ -932,7 +932,7 @@ When an HR user merges duplicate leads in Hephaestus (`POST /api/admin/leads/mer
 
 **Operator references:**
 
-- GitHub → AWS deploy: **`DEPLOYMENT.md`**, workflow **`.github/workflows/deploy-aws-apprunner.yml`**
+- AWS deploy: **`DEPLOYMENT.md`**, via **AWS CodeBuild** (`flolabs-chronos-deploy`)
 - AWS URL: `https://hcmsmnfq5q.us-east-1.awsapprunner.com`
 - Production domain: `https://athensgreecemarathon.com` (App Runner custom domain)
 

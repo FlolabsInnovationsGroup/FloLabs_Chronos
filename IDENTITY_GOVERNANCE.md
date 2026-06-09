@@ -2,7 +2,7 @@
 
 ## 1. Canonical Identity Principle
 
-Every person in the FloLabs system has a single authoritative record in the **`flolabs_users`** table (mapped in Drizzle as `users`). This is a **shared table** — both Chronos and Hephaestus International use the same physical `flolabs_users` PostgreSQL table on the shared Neon database.
+Every person in the FloLabs system has a single authoritative record in the **`flolabs_users`** table (mapped in Drizzle as `users`). This is a **shared table** — both Chronos and Hephaestus International use the same physical `flolabs_users` PostgreSQL table on the shared **AWS RDS PostgreSQL 16** database (`flolabs-db`).
 
 There is **no separate `applicants` table** in the current production schema. The Phase 3 identity refactor consolidated all applicant-canonical data into `flolabs_users`. References to `applicants.id` or `applicants` table in older notes are historical artifacts from before the unification.
 

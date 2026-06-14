@@ -1,0 +1,7 @@
+merge-legacy-and-hubspot-csv-contacts (LIVE)
+CSV path: C:\Users\olire\Documents\workspace_python\FloLabs_Hermes\old_workflow_assets\all-contacts_2026-04-12.csv
+Legacy merge: inserted 10 rows from website_applicants_legacy.
+Legacy enrich: updated 41 existing flolabs_users rows from legacy.
+Stopped at HUBSPOT_CSV_MAX_ROWS=3
+CSV: processed 3 rows, skipped (no email) 0.
+Done.

@@ -1,0 +1,2 @@
+
+An error occurred (InvalidRequestException) when calling the DescribeService operation: The service arn provided in the request does not belong to the current region: arn:aws:apprunner:us-east-1:975049954782:service/flolabs-chronos/b6416d84200e4c5a9d884f8f4c134aaf.

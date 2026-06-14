@@ -1,0 +1,24 @@
+merge-legacy-and-hubspot-csv-contacts (LIVE)
+CSV path: C:\Users\olire\Documents\workspace_python\FloLabs_Hermes\old_workflow_assets\all-contacts_2026-04-12.csv
+CSV batch size: 300
+Legacy merge: inserted 0 rows from website_applicants_legacy.
+Legacy enrich: updated 41 existing flolabs_users rows from legacy.
+CSV upsert progress: 2000ÔÇª
+CSV upsert progress: 4000ÔÇª
+CSV upsert progress: 6000ÔÇª
+CSV upsert progress: 8000ÔÇª
+CSV upsert progress: 10000ÔÇª
+CSV upsert progress: 12000ÔÇª
+CSV upsert progress: 14000ÔÇª
+CSV upsert progress: 16000ÔÇª
+CSV upsert progress: 18000ÔÇª
+CSV upsert progress: 20000ÔÇª
+CSV upsert progress: 22000ÔÇª
+CSV upsert progress: 24000ÔÇª
+CSV upsert progress: 26000ÔÇª
+CSV upsert progress: 28000ÔÇª
+CSV upsert progress: 30000ÔÇª
+CSV upsert progress: 32000ÔÇª
+CSV upsert progress: 34000ÔÇª
+CSV: processed 35088 rows, skipped (no email) 11.
+Done.

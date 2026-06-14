@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useSSE } from "@/hooks/use-sse";
 import { useTimer } from "@/hooks/use-timer";
@@ -29,6 +30,7 @@ export function TimerDashboardClient({
   weeklyTargetHours,
   initialDiscussions,
 }: TimerDashboardClientProps) {
+  const router = useRouter();
   const { data: session } = useSession();
   const { activeTimer, start, stop } = useTimer();
   const userId = session?.user.chronosUserId ?? session?.user.id;
@@ -79,18 +81,24 @@ export function TimerDashboardClient({
     setDiscussions(initialDiscussions);
   }, [initialDiscussions]);
 
+  const onSessionStopped = useCallback(async () => {
+    await refreshEntries();
+    router.refresh();
+  }, [refreshEntries, router]);
+
   useSSE(
     useCallback(
       (event: SSEEvent) => {
         if (!userId) return;
         if ((event.type === "timer:start" || event.type === "timer:stop") && event.userId === userId) {
           void refreshEntries();
+          if (event.type === "timer:stop") router.refresh();
         }
         if (event.type === "discussion:new" || event.type === "discussion:resolved") {
           void refreshDiscussions();
         }
       },
-      [refreshEntries, refreshDiscussions, userId]
+      [refreshEntries, refreshDiscussions, userId, router]
     )
   );
 
@@ -113,7 +121,7 @@ export function TimerDashboardClient({
       <div className="grid grid-cols-12 gap-5 md:gap-8 min-w-0">
         <div className="col-span-12 md:col-span-7 flex min-w-0 flex-col gap-6 md:gap-8">
           <TimerDisplay />
-          <TimerControls projects={projects} tags={tags} onSessionStopped={refreshEntries} />
+          <TimerControls projects={projects} tags={tags} onSessionStopped={onSessionStopped} />
         </div>
 
         <div className="col-span-12 md:col-span-5 min-w-0 flex flex-col gap-5">

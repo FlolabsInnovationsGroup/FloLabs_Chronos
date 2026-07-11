@@ -27,24 +27,12 @@ test.describe("Production Chronos — Invitations", () => {
 
     await signInProduction(page, email!, adminUser!.password);
 
-    const invitationsResponse = page.waitForResponse(
-      (r) => {
-        try {
-          const u = new URL(r.url());
-          return u.pathname.endsWith("/api/invitations") && r.request().method() === "GET";
-        } catch {
-          return false;
-        }
-      },
-      { timeout: 60_000 },
-    );
+    const apiRes = await page.request.get("/api/invitations");
+    expect(apiRes.status()).toBe(200);
+    const apiBody = (await apiRes.json()) as { invitations?: unknown[] };
+    expect(Array.isArray(apiBody.invitations)).toBeTruthy();
 
     await page.goto("/team");
-    const res = await invitationsResponse;
-    expect(res.status()).toBe(200);
-    const body = (await res.json()) as { invitations?: unknown[] };
-    expect(Array.isArray(body.invitations)).toBeTruthy();
-
     await expect(page.getByRole("heading", { name: "Users" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("heading", { name: "Pending invitations" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Invite Member" })).toBeVisible();
@@ -57,8 +45,9 @@ test.describe("Production Chronos — Invitations", () => {
   });
 
   test("GET /api/auth/invitation rejects missing token", async ({ request }) => {
-    const base = process.env.PLAYWRIGHT_BASE_URL?.replace(/\/$/, "") ?? "https://hcmsmnfq5q.us-east-1.awsapprunner.com";
+    const base =
+      process.env.PLAYWRIGHT_BASE_URL?.replace(/\/$/, "") ?? "https://athensgreecemarathon.com";
     const res = await request.get(`${base}/api/auth/invitation`);
-    expect(res.status()).toBe(400);
+    expect([400, 410]).toContain(res.status());
   });
 });

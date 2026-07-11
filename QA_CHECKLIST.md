@@ -233,6 +233,7 @@ Story: All users can read projects for timer selection. Only admins can create, 
 <!--
 Story: Admins and HR can see and manage all users. Team leads see only members within their team scope.
   Members cannot access /team (redirected). Active timer indicators show who is working live.
+  Admins can create invitation links from the Users page (Notion Team Member picker + multi-team assign).
 -->
 
 | Check | Coverage |
@@ -245,6 +246,12 @@ Story: Admins and HR can see and manage all users. Team leads see only members w
 | Edit user modal shows Applicant status as read-only | **[AUTO]** `applicant-status-readonly.spec.ts` |
 | `/api/users` returns 200 after sign-in | **[AUTO]** `users-page-production.spec.ts` |
 | Terminated/Graduated user cannot log in | **[MANUAL]** set status in Hephaestus HR; attempt login |
+| Admin sees **Pending invitations** section and **Invite Member** button on `/team` | **[AUTO]** `invitations-production.spec.ts` |
+| `GET /api/invitations` returns 200 with `{ invitations: [] }` for admin | **[AUTO]** `invitations-production.spec.ts` |
+| Invalid `/register?invite=<token>` shows rejection (not valid / expired / used) | **[AUTO]** `invitations-production.spec.ts` |
+| Admin creates invite (Notion existing page or create-new) → copy link → register → sign in | **[MANUAL]** full Notion-backed flow |
+| Disable/delete pending invite from Users page | **[MANUAL]** disable link; confirm register rejects token |
+| Invite form only shows `isActive = true` teams | **[MANUAL]** archive team in Notion; sync; confirm absent from dropdown |
 
 ---
 
@@ -261,7 +268,7 @@ Story: Teams come from Notion sync. Admin can view all teams with member stats.
 | Inactive teams show "Inactive" badge | **[BROWSER]** verified 2026-06-01 |
 | Team detail shows member list with Active/Inactive status | **[BROWSER]** verified 2026-06-01 |
 | Teams sync cron (`/api/cron/teams-sync`) requires `CRON_SECRET` | **[MANUAL]** call with valid and invalid secret; assert 401 vs 200 |
-| Invite form only shows `isActive = true` teams after sync | **[MANUAL]** archive a team in Notion; run sync; confirm it disappears from invite dropdown |
+| Invite team dropdown only shows active teams after sync | **[MANUAL]** archive a team in Notion; run sync; confirm it disappears from invite dropdown |
 
 ---
 
@@ -313,7 +320,8 @@ Story: Login is credentials-based. Registration is invite-only.
 | Login page has "Forgot password" link | **[AUTO]** `forgot-password-production.spec.ts` |
 | Forgot-password accepts any email without leaking account existence | **[AUTO]** `forgot-password-production.spec.ts` |
 | Second reset request within cooldown returns `cooldown: true` | **[AUTO]** `forgot-password-production.spec.ts` |
-| `/register?invite=<token>` requires a valid token | **[MANUAL]** attempt with expired/invalid token; expect rejection |
+| `/register?invite=<token>` requires a valid token; invalid/expired returns error | **[AUTO]** `invitations-production.spec.ts` |
+| `/register?invite=<token>` acceptance creates account with `status`/`stage` joined and signs in | **[MANUAL]** complete invite registration flow |
 | `/register?reset=<token>` sets new password; user can then log in | **[MANUAL]** use test-mode token; complete reset; verify login |
 
 ---

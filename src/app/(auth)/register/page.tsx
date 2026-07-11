@@ -71,6 +71,14 @@ function RegisterForm() {
   const resetToken = searchParams.get("reset") ?? "";
   const forgotMode = searchParams.get("forgot") === "1";
 
+  interface InvitationPayload {
+    name: string;
+    email: string;
+    role: string;
+    teams?: { name: string }[];
+  }
+
+  const [invitation, setInvitation] = useState<InvitationPayload | null>(null);
   const [loadingInvite, setLoadingInvite] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -119,16 +127,23 @@ function RegisterForm() {
       if (inviteToken) {
         try {
           const res = await fetch(`/api/auth/invitation?token=${encodeURIComponent(inviteToken)}`);
-          const data = (await res.json()) as { error?: string };
+          const data = await res.json();
+
+          if (!res.ok) {
+            if (!cancelled) {
+              setError(data.error ?? "This invitation is not valid.");
+              setInvitation(null);
+            }
+            return;
+          }
+
           if (!cancelled) {
-            setError(
-              typeof data.error === "string" && data.error.trim()
-                ? data.error
-                : "Invitation links are no longer used. Sign in with the account your team provisioned.",
-            );
+            setInvitation(data.invitation);
+            setName(data.invitation.name ?? "");
+            setEmail(data.invitation.email ?? "");
           }
         } catch {
-          if (!cancelled) setError("Could not validate this link.");
+          if (!cancelled) setError("Could not validate this invitation.");
         } finally {
           if (!cancelled) setLoadingInvite(false);
         }
@@ -145,7 +160,8 @@ function RegisterForm() {
     };
   }, [forgotMode, inviteToken, resetToken]);
 
-  const showAccountHelp = !forgotMode && !resetToken && !loadingInvite;
+  const showAccountHelp = !forgotMode && !resetToken && !inviteToken && !loadingInvite;
+  const showInviteForm = !forgotMode && !resetToken && Boolean(inviteToken) && !loadingInvite && Boolean(invitation);
   const showPasswordForm = !loadingInvite && (forgotMode || resetToken);
   const passwordsReady = !needsPasswordSetup || (password.length >= 8 && password === confirmPassword);
 
@@ -154,8 +170,13 @@ function RegisterForm() {
     setError("");
     setStatusMessage("");
 
-    if (!forgotMode && !resetToken) {
+    if (!forgotMode && !resetToken && !inviteToken) {
       setError("Sign in if you already have an account, or use Forgot password on the login page.");
+      return;
+    }
+
+    if (inviteToken && !invitation) {
+      setError("A valid invitation is required.");
       return;
     }
 
@@ -172,10 +193,16 @@ function RegisterForm() {
     setLoading(true);
 
     try {
-      const endpoint = forgotMode ? "/api/auth/forgot-password" : "/api/auth/reset-password";
+      const endpoint = forgotMode
+        ? "/api/auth/forgot-password"
+        : resetToken
+          ? "/api/auth/reset-password"
+          : "/api/auth/register";
       const payload = forgotMode
         ? { email: email.toLowerCase().trim() }
-        : { token: resetToken, password };
+        : resetToken
+          ? { token: resetToken, password }
+          : { token: inviteToken, name: name.trim(), email: email.toLowerCase().trim(), password };
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -239,9 +266,11 @@ function RegisterForm() {
               ? "Reset your password"
               : resetToken
                 ? "Choose a new password"
-                : inviteToken
-                  ? "This link is no longer valid"
-                  : "Get access to your account"}
+                : invitation
+                  ? "Accept your invitation"
+                  : inviteToken
+                    ? "This invitation is not valid"
+                    : "Get access to your account"}
           </p>
         </div>
 
@@ -260,6 +289,111 @@ function RegisterForm() {
               >
                 Chronos accounts are provisioned when someone reaches the Joined stage in FloLabs / Hephaestus. If you were onboarded, sign in with the email and password your team set up. Use Forgot password on the login page if you need to reset it.
               </p>
+              {error && (
+                <p
+                  className="text-sm text-error bg-warm-surface px-3 py-2 rounded-lg"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  {error}
+                </p>
+              )}
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center w-full py-2.5 px-4 text-sm font-medium rounded-md bg-primary text-on-primary hover:bg-primary-dim transition-colors"
+                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+              >
+                Go to sign in
+              </Link>
+            </div>
+          ) : showInviteForm ? (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="name"
+                  className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  Full Name
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Jane Smith"
+                  required
+                  autoFocus
+                  className="w-full px-3 py-2.5 text-sm text-on-background bg-surface-container-low rounded-lg outline-none placeholder:text-outline-variant focus:bg-background focus:ring-2 focus:ring-primary/20 transition-all"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="invite-email"
+                  className="text-xs font-medium text-on-surface-variant uppercase tracking-wide"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  Email
+                </label>
+                <input
+                  id="invite-email"
+                  type="email"
+                  value={email}
+                  readOnly
+                  className="w-full px-3 py-2.5 text-sm text-on-surface-variant bg-surface-container rounded-lg outline-none"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                />
+              </div>
+
+              {(invitation?.teams ?? []).length > 0 && (
+                <p
+                  className="text-xs text-on-surface-variant"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  Teams: {(invitation?.teams ?? []).map((t) => t.name).join(", ")}
+                </p>
+              )}
+
+              <PasswordField
+                id="password"
+                label="Password"
+                value={password}
+                onChange={setPassword}
+                placeholder="At least 8 characters"
+                minLength={8}
+              />
+              <PasswordField
+                id="confirm-password"
+                label="Confirm Password"
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                placeholder="Repeat your password"
+              />
+
+              {error && (
+                <p
+                  className="text-sm text-error bg-warm-surface px-3 py-2 rounded-lg"
+                  style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+                >
+                  {error}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={
+                  loading ||
+                  (password.length > 0 && confirmPassword.length > 0 && !passwordsReady)
+                }
+                className="w-full py-2.5 px-4 text-sm font-medium rounded-md bg-primary text-on-primary hover:bg-primary-dim active:brightness-95 disabled:opacity-50 transition-colors cursor-pointer"
+                style={{ fontFamily: "var(--font-work-sans, 'Work Sans'), sans-serif" }}
+              >
+                {loading ? "Creating account..." : "Create account"}
+              </button>
+            </form>
+          ) : inviteToken && !loadingInvite && !invitation ? (
+            <div className="flex flex-col gap-4">
               {error && (
                 <p
                   className="text-sm text-error bg-warm-surface px-3 py-2 rounded-lg"

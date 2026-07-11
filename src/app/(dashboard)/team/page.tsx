@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { Select } from "@/components/ui/Select";
+import { TeamInvitationsSection } from "@/components/team/TeamInvitationsSection";
 import { TeamMemberNotionPicker } from "@/components/team/TeamMemberNotionPicker";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useSSE } from "@/hooks/use-sse";
@@ -113,6 +114,7 @@ export default function TeamPage() {
 
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [inviteRefreshToken, setInviteRefreshToken] = useState(0);
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -190,6 +192,7 @@ export default function TeamPage() {
           event.type === "timer:stop"
         ) {
           void refresh({ silent: true });
+          setInviteRefreshToken((n) => n + 1);
         }
       },
       [refresh]
@@ -898,6 +901,15 @@ export default function TeamPage() {
                 </tbody>
               </table>
             </div>
+
+            {role === "admin" && (
+              <TeamInvitationsSection
+                teams={teams}
+                activeTeamOptions={activeTeamOptions}
+                refreshToken={inviteRefreshToken}
+                onError={(message) => setError(message)}
+              />
+            )}
           </>
         )}
 

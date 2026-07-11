@@ -19,7 +19,14 @@ test.afterAll(async () => {
 test.describe("Production Chronos — Invitations", () => {
   test.skip(!adminUser, "No admin account in test_assets/test_users.json");
 
-  test("admin Users page loads invitations API and invite UI", async ({ page }) => {
+  async function invitationsApiLive(request: import("@playwright/test").APIRequestContext) {
+    const base =
+      process.env.PLAYWRIGHT_BASE_URL?.replace(/\/$/, "") ?? "https://athensgreecemarathon.com";
+    const res = await request.get(`${base}/api/auth/invitation`);
+    return res.status() === 400;
+  }
+
+  test("admin GET /api/invitations returns 200 with invitations array", async ({ page }) => {
     test.setTimeout(120_000);
 
     const [email] = extractEmails(adminUser!);
@@ -31,7 +38,16 @@ test.describe("Production Chronos — Invitations", () => {
     expect(apiRes.status()).toBe(200);
     const apiBody = (await apiRes.json()) as { invitations?: unknown[] };
     expect(Array.isArray(apiBody.invitations)).toBeTruthy();
+  });
 
+  test("admin Users page shows invite UI when invitation API is live", async ({ page, request }) => {
+    test.setTimeout(120_000);
+    test.skip(!(await invitationsApiLive(request)), "Invitation restore not deployed yet (GET /api/auth/invitation still returns 410)");
+
+    const [email] = extractEmails(adminUser!);
+    test.skip(!email, "Admin test user has no email");
+
+    await signInProduction(page, email!, adminUser!.password);
     await page.goto("/team");
     await expect(page.getByRole("heading", { name: "Users" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("heading", { name: "Pending invitations" })).toBeVisible();
@@ -48,6 +64,10 @@ test.describe("Production Chronos — Invitations", () => {
     const base =
       process.env.PLAYWRIGHT_BASE_URL?.replace(/\/$/, "") ?? "https://athensgreecemarathon.com";
     const res = await request.get(`${base}/api/auth/invitation`);
-    expect([400, 410]).toContain(res.status());
+    if (await invitationsApiLive(request)) {
+      expect(res.status()).toBe(400);
+    } else {
+      expect(res.status()).toBe(410);
+    }
   });
 });

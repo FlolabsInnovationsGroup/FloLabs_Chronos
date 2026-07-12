@@ -2,7 +2,7 @@ import { eq, inArray, isNotNull } from "drizzle-orm";
 import type { Role, Team } from "@/types";
 import { db } from "@/lib/db";
 import { teamMemberships, teams, users } from "@/lib/db/schema";
-import { isAdminLikeRole } from "@/lib/role-utils";
+import { canManageInvitationsRole, isAdminLikeRole } from "@/lib/role-utils";
 import { resolveChronosUserIdForSessionUser } from "@/lib/chronos-session";
 import { listFlolabsUsersInHephaestusJoinedDirectory } from "@/lib/hephaestus-directory-query";
 
@@ -51,7 +51,7 @@ export function canManageTeams(user?: Pick<SessionUserLike, "role"> | null): boo
 }
 
 export function canManageInvitations(user?: Pick<SessionUserLike, "role"> | null): boolean {
-  return isAdmin(user);
+  return canManageInvitationsRole(user?.role);
 }
 
 export function canViewTeamDirectory(user?: SessionUserLike | null): boolean {

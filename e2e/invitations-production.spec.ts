@@ -17,8 +17,6 @@ test.afterAll(async () => {
 });
 
 test.describe("Production Chronos — Invitations", () => {
-  test.skip(!adminUser, "No admin account in test_assets/test_users.json");
-
   async function invitationsApiLive(request: import("@playwright/test").APIRequestContext) {
     const base =
       process.env.PLAYWRIGHT_BASE_URL?.replace(/\/$/, "") ?? "https://athensgreecemarathon.com";
@@ -27,6 +25,7 @@ test.describe("Production Chronos — Invitations", () => {
   }
 
   test("admin GET /api/invitations returns 200 with invitations array", async ({ page }) => {
+    test.skip(!adminUser, "No admin account in test_assets/test_users.json");
     test.setTimeout(120_000);
 
     const [email] = extractEmails(adminUser!);
@@ -41,6 +40,7 @@ test.describe("Production Chronos — Invitations", () => {
   });
 
   test("admin Users page shows invite UI when invitation API is live", async ({ page, request }) => {
+    test.skip(!adminUser, "No admin account in test_assets/test_users.json");
     test.setTimeout(120_000);
     test.skip(!(await invitationsApiLive(request)), "Invitation restore not deployed yet (GET /api/auth/invitation still returns 410)");
 
@@ -50,6 +50,7 @@ test.describe("Production Chronos — Invitations", () => {
     await signInProduction(page, email!, adminUser!.password);
     await page.goto("/team");
     await expect(page.getByRole("heading", { name: "Users" })).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: "Invites" }).click();
     await expect(page.getByRole("heading", { name: "Pending invitations" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Invite Member" })).toBeVisible();
   });
@@ -58,6 +59,22 @@ test.describe("Production Chronos — Invitations", () => {
     test.setTimeout(60_000);
     await page.goto("/register?invite=invalid-token-not-real");
     await expect(page.getByText(/invitation|not valid|invalid/i)).toBeVisible({ timeout: 30_000 });
+  });
+
+  test("Invites tab is hidden for non-admin roles", async ({ page, request }) => {
+    test.setTimeout(120_000);
+    test.skip(!(await invitationsApiLive(request)), "Invitation restore not deployed yet");
+
+    const teamLead = users.find((u) => u.role.toLowerCase() === "team_lead");
+    test.skip(!teamLead, "No team_lead account in test_assets/test_users.json");
+
+    const [email] = extractEmails(teamLead!);
+    test.skip(!email, "Team lead test user has no email");
+
+    await signInProduction(page, email!, teamLead!.password);
+    await page.goto("/team");
+    await expect(page.getByRole("heading", { name: "Users" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: "Invites" })).toHaveCount(0);
   });
 
   test("GET /api/auth/invitation rejects missing token", async ({ request }) => {

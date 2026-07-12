@@ -137,6 +137,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Your session is invalid. Please sign in again." }, { status: 401 });
     }
 
+    const [inviterRow] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, invitedById))
+      .limit(1);
+    if (!inviterRow) {
+      return NextResponse.json(
+        { error: "Your account is not provisioned in Chronos yet. Sign out and sign in again, or contact support." },
+        { status: 403 },
+      );
+    }
+
     let body: unknown;
     try {
       body = await req.json();

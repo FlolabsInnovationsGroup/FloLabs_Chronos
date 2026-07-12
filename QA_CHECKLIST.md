@@ -246,7 +246,7 @@ Story: Admins and HR can see and manage all users. Team leads see only members w
 | Edit user modal shows Applicant status as read-only | **[AUTO]** `applicant-status-readonly.spec.ts` |
 | `/api/users` returns 200 after sign-in | **[AUTO]** `users-page-production.spec.ts` |
 | Terminated/Graduated user cannot log in | **[MANUAL]** set status in Hephaestus HR; attempt login |
-| Admin sees **Pending invitations** section and **Invite Member** button on `/team` | **[AUTO]** `invitations-production.spec.ts` |
+| Admin sees **Invites** tab on `/team` with **Pending invitations** and **Invite Member** | **[AUTO]** `invitations-production.spec.ts` |
 | `GET /api/invitations` returns 200 with `{ invitations: [] }` for admin | **[AUTO]** `invitations-production.spec.ts` |
 | Invalid `/register?invite=<token>` shows rejection (not valid / expired / used) | **[AUTO]** `invitations-production.spec.ts` |
 | Admin creates invite (Notion existing page or create-new) → copy link → register → sign in | **[MANUAL]** full Notion-backed flow |

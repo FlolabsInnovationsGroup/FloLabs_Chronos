@@ -21,6 +21,7 @@ import {
   tryParseNotionPageId,
 } from "@/lib/notion-team-member-link";
 import { formatApplicantStatusLabel } from "@/lib/applicant-status";
+import { canManageInvitationsRole } from "@/lib/role-utils";
 import type { Role, SSEEvent, Team, User } from "@/types";
 
 interface TeamUser extends User {
@@ -95,7 +96,8 @@ export default function TeamPage() {
   const [userSearch, setUserSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"teams" | "users">("users");
+  const [activeTab, setActiveTab] = useState<"teams" | "users" | "invites">("users");
+  const canManageInvites = canManageInvitationsRole(role);
   const [now, setNow] = useState(Date.now());
 
   const [editingUser, setEditingUser] = useState<TeamUser | null>(null);
@@ -517,6 +519,14 @@ export default function TeamPage() {
         >
           Users
         </button>
+        {canManageInvites && (
+          <button
+            className={`px-4 py-2 rounded-lg text-sm ${activeTab === "invites" ? "bg-surface-container-lowest text-on-background shadow-sm" : "text-on-surface-variant"}`}
+            onClick={() => setActiveTab("invites")}
+          >
+            Invites
+          </button>
+        )}
       </div>
 
       {error && (
@@ -902,16 +912,17 @@ export default function TeamPage() {
               </table>
             </div>
 
-            {role === "admin" && (
-              <TeamInvitationsSection
-                teams={teams}
-                activeTeamOptions={activeTeamOptions}
-                refreshToken={inviteRefreshToken}
-                onError={(message) => setError(message)}
-              />
-            )}
           </>
         )}
+
+      {activeTab === "invites" && canManageInvites && (
+        <TeamInvitationsSection
+          teams={teams}
+          activeTeamOptions={activeTeamOptions}
+          refreshToken={inviteRefreshToken}
+          onError={(message) => setError(message)}
+        />
+      )}
 
       <Modal
         open={!!editingUser}

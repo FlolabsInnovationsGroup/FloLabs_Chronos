@@ -26,12 +26,14 @@ if ! swapon --show | grep -q swapfile; then
 fi
 
 docker image prune -af || true
-rm -rf /tmp/chronos-build /tmp/chronos-deploy.tar.gz
+BUILD_DIR="/var/lib/chronos-build"
+rm -rf "$BUILD_DIR" /tmp/chronos-deploy.tar.gz
 
 aws s3 cp "s3://flolabs-chronos-backups/hosting-ec2/chronos-deploy.tar.gz" /tmp/chronos-deploy.tar.gz --region "$AWS_REGION"
-mkdir -p /tmp/chronos-build
-tar -xzf /tmp/chronos-deploy.tar.gz -C /tmp/chronos-build
-cd /tmp/chronos-build
+mkdir -p "$BUILD_DIR"
+tar -xzf /tmp/chronos-deploy.tar.gz -C "$BUILD_DIR"
+rm -f /tmp/chronos-deploy.tar.gz
+cd "$BUILD_DIR"
 
 aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
 

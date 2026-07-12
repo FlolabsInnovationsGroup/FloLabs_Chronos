@@ -75,6 +75,12 @@ for key in BUILD_COMMIT_SHA BUILD_COMMIT_REF BUILD_IMAGE_TAG BUILD_TIMESTAMP; do
   else
     echo "${key}=${val}" >> "$CHRONOS_ENV"
   fi
+  pub="NEXT_PUBLIC_${key}"
+  if grep -q "^${pub}=" "$CHRONOS_ENV" 2>/dev/null; then
+    sed -i "s|^${pub}=.*|${pub}=${val}|" "$CHRONOS_ENV"
+  else
+    echo "${pub}=${val}" >> "$CHRONOS_ENV"
+  fi
 done
 
 cd /opt/hosting

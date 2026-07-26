@@ -1,0 +1,21 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "dependabot/npm_and_yarn/auth/core-0.41.3",
+    "dependabot/npm_and_yarn/next-16.2.11",
+    "dependabot/npm_and_yarn/next-auth-5.0.0-beta.32",
+    "main"
+  ],
+  "parent": {
+    "dependabot/npm_and_yarn/auth/core-0.41.3": "main",
+    "dependabot/npm_and_yarn/next-16.2.11": "main",
+    "dependabot/npm_and_yarn/next-auth-5.0.0-beta.32": "main",
+    "main": null
+  },
+  "order": [
+    "main",
+    "dependabot/npm_and_yarn/auth/core-0.41.3",
+    "dependabot/npm_and_yarn/next-16.2.11",
+    "dependabot/npm_and_yarn/next-auth-5.0.0-beta.32"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+    "CommandId": "f7ca428a-e79e-4fab-b112-a086fc198944",
+    "InstanceId": "i-08938dfb495f8d3de",
+    "Comment": "",
+    "DocumentName": "AWS-RunShellScript",
+    "DocumentVersion": "$DEFAULT",
+    "PluginName": "aws:runShellScript",
+    "ResponseCode": 0,
+    "ExecutionStartDateTime": "2026-07-12T23:43:50.443Z",
+    "ExecutionElapsedTime": "PT0.018S",
+    "ExecutionEndDateTime": "2026-07-12T23:43:50.443Z",
+    "Status": "Success",
+    "StatusDetails": "Success",
+
+'charmap' codec can't encode character '\u2502' in position 51: character maps to <undefined>
+    "StandardOutputContent": 

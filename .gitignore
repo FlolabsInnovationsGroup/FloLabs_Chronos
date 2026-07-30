@@ -58,3 +58,6 @@ scripts/hubspot-import.checkpoint
 /deploy/aws/apprunner-source.json
 /deploy/aws/apprunner-service.json
 /deploy/aws/apprunner-ecr-trust-policy.json
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
